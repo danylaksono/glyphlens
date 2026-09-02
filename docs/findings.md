@@ -779,6 +779,56 @@ discrepancy was 2%, small enough to shrug at and large enough to be a real bug.
 And a projection chosen for *display* is almost never the right one for
 *measurement*.
 
+### F-25. Two label bugs that only long names exposed
+
+Recorded 2026-09-02.
+
+Reported from the areal demo: names and numbers printed through each other.
+Two separate faults, both present for a long time, both invisible on the data
+they had been tested against.
+
+**The value and the label were 3px apart.** The label sat at
+`mark tip + 12`, the value at `mark tip + 9`. Three pixels is less than the
+height of either, so any labelled mark drew its name across its number. It had
+never been noticed because the point demos label four short category names on a
+150px ring, where the collision looks like tight kerning. Eleven Indonesian
+district names made it unmistakable. They are now stacked — value nearest the
+mark, label beyond it — with both gaps as style tokens.
+
+**Arc text flipped on the wrong half.** `drawArcText` reversed the text where
+`cos(angle) < 0`, i.e. the *left* half. Tangential text is upright at the top of
+a ring and upside down at the bottom, so the half needing reversal is where
+`sin(angle) > 0` — the bottom. Labels along the lower arc had been printing
+inverted. Again invisible in earlier demos, whose labels clustered near the top
+because the data did.
+
+The pattern in both: **a rendering bug that depends on the data will hide behind
+a fixture that does not vary**. Every demo until now used the same four short
+category names on the same city. The first genuinely different labels — long,
+numerous, distributed right around the ring — found both faults immediately.
+
+### F-26. A resolved style cannot take a new preset
+
+Recorded 2026-09-02.
+
+Adding a basemap switcher to the demos meant swapping the lens between the
+`paper` and `night` presets at runtime, and nothing happened.
+
+`resolveStyle` merges `{ ...DEFAULT_STYLE, ...preset, ...explicit }`, which is
+right. But `setStyle` was merging the new options into the *already resolved*
+style — so every key the first resolve had filled in, resolved from `paper`,
+sat in the "explicit" position and overrode the incoming preset. Presets were
+therefore one-way: whichever was set at construction was permanent.
+
+The renderer now keeps the unresolved options and re-resolves from them, so a
+preset can be replaced while genuinely explicit overrides still win over it.
+Exposed as a `options` getter, since "what was actually asked for" is different
+information from "what it resolved to" and the distinction was what went wrong.
+
+Worth generalising: **merging into a resolved value destroys the layering the
+resolution encoded.** If defaults, presets and overrides have a precedence
+order, the unresolved inputs are what has to be kept.
+
 ---
 
 ## Open questions

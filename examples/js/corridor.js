@@ -11,6 +11,9 @@
 import { addLens } from '../../src/adapters/maplibre.js';
 import { CATEGORICAL } from '../../src/render/style.js';
 
+import { BASEMAPS, DEFAULT_BASEMAP } from './basemaps.js';
+import { mountDisplay } from './display.js';
+
 const $ = (id) => document.getElementById(id);
 
 const CATEGORY_ORDER = ['food', 'retail', 'civic', 'health'];
@@ -25,7 +28,7 @@ const TRANSECT = [
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/positron',
+  style: BASEMAPS[DEFAULT_BASEMAP].url,
   center: [110.3695, -7.7930],
   zoom: 13,
   dragRotate: false,
@@ -76,6 +79,8 @@ map.on('load', async () => {
 });
 
 function bindControls() {
+  mountDisplay($('display'), { map, lens: lens, marks: ['bar', 'disc', 'rose'] });
+
   $('width').addEventListener('input', (e) => {
     const width = Number(e.target.value);
     $('width-out').value = width;

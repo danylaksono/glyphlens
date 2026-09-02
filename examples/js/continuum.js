@@ -11,6 +11,9 @@
 import { addField } from '../../src/adapters/maplibre.js';
 import { CATEGORICAL } from '../../src/render/style.js';
 
+import { BASEMAPS, DEFAULT_BASEMAP } from './basemaps.js';
+import { mountDisplay } from './display.js';
+
 const $ = (id) => document.getElementById(id);
 
 const CATEGORY_ORDER = ['food', 'retail', 'civic', 'health'];
@@ -32,7 +35,7 @@ const STAGES = [
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/positron',
+  style: BASEMAPS[DEFAULT_BASEMAP].url,
   center: [110.3695, -7.7956],
   zoom: 12.2,
   dragRotate: false,
@@ -75,6 +78,10 @@ map.on('load', async () => {
 });
 
 function bindControls() {
+  // No ring control: a field's ring size comes from the lattice spacing, so
+  // the slider would do nothing.
+  mountDisplay($('display'), { map, lens: field, marks: [], ring: false });
+
   $('count').addEventListener('input', (e) => {
     const count = countFor(Number(e.target.value));
     $('count-out').value = count.toLocaleString();

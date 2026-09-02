@@ -13,6 +13,9 @@ import { CATEGORICAL } from '../../src/render/style.js';
 import { select } from '../../src/core/selection.js';
 import { elasticityProfile } from '../../src/core/distribution.js';
 
+import { BASEMAPS, DEFAULT_BASEMAP } from './basemaps.js';
+import { mountDisplay } from './display.js';
+
 const $ = (id) => document.getElementById(id);
 const status = $('status');
 
@@ -40,7 +43,7 @@ const map = new maplibregl.Map({
   container: 'map',
   // OpenFreeMap: no API key, and a quiet enough basemap that the lens reads as
   // the figure rather than competing with it.
-  style: 'https://tiles.openfreemap.org/styles/positron',
+  style: BASEMAPS[DEFAULT_BASEMAP].url,
   center: [110.3695, -7.7956],
   zoom: 13.5,
   dragRotate: false,
@@ -153,6 +156,8 @@ async function fetchAmenities(center, radiusM) {
 // --------------------------------------------------------------- controls
 
 function bindControls() {
+  mountDisplay($('display'), { map, lens: lens, marks: ['bar', 'disc', 'rose'] });
+
   $('search-form').addEventListener('submit', (e) => {
     e.preventDefault();
     loadPlace($('search').value.trim());

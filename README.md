@@ -109,7 +109,8 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `marks.type` | `bar` · `disc` · `rose` | `disc` sizes by area (classic necklace); `rose` is a directional profile |
 | `marks.sizeBy` | `value` · `equal` | which reading owns size; roses default to `equal` |
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
-| `style.preset` | `paper` · `night` · `minimal` · `structure` | |
+| `style.preset` | `paper` · `night` · `minimal` · `structure` · `forensic` | switchable at runtime |
+| `style` toggles | `showLabels` · `showValues` · `compass` · `dimExterior` · `ringRadius` · `labelGap` · `valueGap` | all live-updatable via `lens.update({ style })` |
 
 ### Fields: one lens, or a glyphmap
 

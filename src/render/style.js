@@ -50,6 +50,10 @@ export const DEFAULT_STYLE = {
   showValues: 'auto', // true | false | 'auto' (label only the bars that carry the reading)
   valueFloor: 0.35,   // 'auto' threshold, as a fraction of the largest mark
   showLabels: true,
+  // Distance beyond the mark's tip for each. The label must clear the value,
+  // not merely the mark, or the two overlap (docs/findings.md F-25).
+  valueGap: 10,
+  labelGap: 24,
   maxLabels: 12,      // beyond this many marks, drop per-mark labels
   lod: true,          // shed chrome as the ring shrinks (see resolveLod)
   lodFull: 60,        // px: full chrome at or above this ring radius

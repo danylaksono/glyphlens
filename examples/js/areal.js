@@ -15,6 +15,8 @@
 
 import { addLens } from '../../src/adapters/maplibre.js';
 import { CATEGORICAL } from '../../src/render/style.js';
+import { BASEMAPS, DEFAULT_BASEMAP } from './basemaps.js';
+import { mountDisplay, layerToggle } from './display.js';
 
 const $ = (id) => document.getElementById(id);
 const SOURCE = 'data/yogyakarta-districts.json';
@@ -55,7 +57,7 @@ const MEASURES = {
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/positron',
+  style: BASEMAPS[DEFAULT_BASEMAP].url,
   center: [110.3695, -7.7956],
   zoom: 12.6,
   dragRotate: false,
@@ -124,6 +126,8 @@ function weightedTotal(bins, measure) {
 }
 
 function drawBoundaries(list) {
+  // Called again after every basemap swap, since `setStyle` discards these.
+  if (map.getSource('units')) return;
   map.addSource('units', {
     type: 'geojson',
     data: {
@@ -150,6 +154,20 @@ function drawBoundaries(list) {
 }
 
 function bindControls() {
+  mountDisplay($('display'), {
+    map,
+    lens,
+    marks: ['bar', 'disc'],
+    // `setStyle` discards the district outlines, so they have to be re-added
+    // after every basemap swap.
+    restore: () => drawBoundaries(units),
+    extras: [{
+      id: 'boundaries',
+      label: 'District outlines',
+      onChange: layerToggle(map, ['unit-fill', 'unit-line']),
+    }],
+  });
+
   $('measure').addEventListener('change', (e) => {
     const measure = MEASURES[e.target.value];
     $('measure-note').textContent = measure.spec.kind === 'extensive'

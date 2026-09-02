@@ -18,11 +18,22 @@ const TAU = Math.PI * 2;
 
 export class LensRenderer {
   constructor(style = {}) {
-    this.style = resolveStyle(style);
+    // The *unresolved* options are kept, not just the resolved result. Merging
+    // into a resolved style makes presets one-way: every key the first resolve
+    // filled in would then override the new preset, so switching from `paper`
+    // to `night` would change nothing (docs/findings.md F-26).
+    this._options = { ...style };
+    this.style = resolveStyle(this._options);
   }
 
   setStyle(style) {
-    this.style = resolveStyle({ ...this.style, ...style });
+    this._options = { ...this._options, ...style };
+    this.style = resolveStyle(this._options);
+  }
+
+  /** The options as given, before defaults and presets were applied. */
+  get options() {
+    return { ...this._options };
   }
 
   /**
@@ -573,7 +584,12 @@ export class LensRenderer {
     if (bin.raw === 0) return;
 
     const track = bin.ringOffset ?? 0;
-    const offset = bin.signed < 0 ? 10 : this._markExtent(bin, layout) + 12;
+    // Value first, label beyond it. These used to sit 3px apart, which is
+    // less than the height of either, so a labelled bar always drew its name
+    // through its number (docs/findings.md F-25).
+    const extent = this._markExtent(bin, layout);
+    const gap = s.labelGap ?? 24;
+    const offset = bin.signed < 0 ? -(extent + gap) : extent + gap;
     if (curve.kind === 'circle') {
       drawArcText(ctx, bin.label, cx, cy, ring + track + offset, bin.angle, {
         font: s.font,
@@ -614,7 +630,8 @@ export class LensRenderer {
     const s = this._s ?? this.style;
     if (Math.abs(bin.size ?? 0) < this._valueFloor) return;
     const extent = this._markExtent(bin, layout);
-    const along = (bin.ringOffset ?? 0) + (bin.signed < 0 ? -extent - 9 : extent + 9);
+    const gap = s.valueGap ?? 10;
+    const along = (bin.ringOffset ?? 0) + (bin.signed < 0 ? -(extent + gap) : extent + gap);
     const [bx, by] = curve.pointAt(bin.t);
     const [nx, ny] = curve.normalAt(bin.t);
     const [x, y] = [bx + nx * along, by + ny * along];
@@ -690,7 +707,13 @@ export function drawArcText(ctx, text, cx, cy, radius, angle, { font, color } = 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const flip = Math.cos(angle) < 0;
+  // Flip on the *lower* half, not the left. Tangential text is upright at the
+  // top and upside down at the bottom, so the half that needs reversing is the
+  // one where sin is positive (canvas y points down). Testing cos instead
+  // flipped the left half, which left labels at the bottom of the ring
+  // inverted — subtle with short names near the top, obvious with a ring of
+  // district names (docs/findings.md F-25).
+  const flip = Math.sin(angle) > 0;
   const chars = [...text];
   const widths = chars.map((c) => ctx.measureText(c).width);
   const total = widths.reduce((s, w) => s + w, 0);
