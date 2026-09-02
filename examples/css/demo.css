@@ -99,6 +99,20 @@ button {
 
 button:hover { background: #2b2f38; }
 
+.shape-row { display: flex; gap: 6px; }
+
+button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+button.ghost:hover { background: #efece6; }
+
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+
+#radius-field[hidden] { display: none; }
+
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 
 /* The radius control carries its own MAUP profile: the canvas sits directly

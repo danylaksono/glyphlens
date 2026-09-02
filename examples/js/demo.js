@@ -218,6 +218,9 @@ function bindControls() {
   });
 
   window.addEventListener('resize', () => drawProfile());
+
+  $('draw').addEventListener('click', () => (drawing ? finishShape() : startDrawing()));
+  $('reset-shape').addEventListener('click', backToDisc);
 }
 
 /**
@@ -251,6 +254,111 @@ function applyPlacement(animate = true) {
   });
 }
 
+// --------------------------------------------------------- lasso / polygon
+
+// A drawn shape, an admin boundary and an isochrone are the same thing to the
+// library: a polygon. Only where the polygon comes from differs, and producing
+// an isochrone is a routing problem that stays outside this library.
+let drawing = false;
+let vertices = [];
+
+function startDrawing() {
+  drawing = true;
+  vertices = [];
+  $('draw').textContent = 'Finish (or double-click)';
+  $('draw').setAttribute('aria-pressed', 'true');
+  $('draw-hint').textContent = 'Click to place points. Double-click, or press Finish, to close the shape.';
+  map.getCanvas().style.cursor = 'crosshair';
+  map.on('click', onDrawClick);
+  map.on('dblclick', onDrawDone);
+  map.doubleClickZoom.disable();
+  // The lens would fight the drawing gesture for pointer events.
+  lens.update({ draggable: false });
+  renderSketch();
+}
+
+function onDrawClick(e) {
+  vertices.push([e.lngLat.lng, e.lngLat.lat]);
+  renderSketch();
+}
+
+function onDrawDone(e) {
+  e?.preventDefault?.();
+  finishShape();
+}
+
+function finishShape() {
+  const enough = vertices.length >= 3;
+  stopDrawing();
+  if (!enough) {
+    $('draw-hint').textContent = 'A shape needs at least three points. Try again.';
+    return;
+  }
+  $('radius-field').hidden = true;
+  $('reset-shape').hidden = false;
+  $('draw-hint').textContent = 'Lensing the drawn shape. Bearings are measured from its centroid.';
+  lens.update({
+    selection: { type: 'polygon', rings: [vertices] },
+    center: undefined,
+    draggable: true,
+  });
+}
+
+function stopDrawing() {
+  drawing = false;
+  map.off('click', onDrawClick);
+  map.off('dblclick', onDrawDone);
+  map.doubleClickZoom.enable();
+  map.getCanvas().style.cursor = '';
+  $('draw').textContent = 'Draw a shape';
+  $('draw').setAttribute('aria-pressed', 'false');
+  clearSketch();
+}
+
+function backToDisc() {
+  $('radius-field').hidden = false;
+  $('reset-shape').hidden = true;
+  $('draw-hint').textContent = 'Click the map to trace a boundary, then double-click to close it.';
+  lens.update({
+    selection: { type: 'disc', radius: Number($('radius').value) },
+    center: map.getCenter().toArray(),
+    draggable: true,
+  });
+  profileKey = '';
+}
+
+/** The in-progress outline, drawn with MapLibre rather than the lens canvas. */
+function renderSketch() {
+  const data = {
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: vertices.length ? vertices : [] },
+  };
+  if (map.getSource('sketch')) {
+    map.getSource('sketch').setData(data);
+    return;
+  }
+  map.addSource('sketch', { type: 'geojson', data });
+  map.addLayer({
+    id: 'sketch-line',
+    type: 'line',
+    source: 'sketch',
+    paint: { 'line-color': '#0072b2', 'line-width': 1.5, 'line-dasharray': [2, 2] },
+  });
+  map.addLayer({
+    id: 'sketch-pts',
+    type: 'circle',
+    source: 'sketch',
+    paint: { 'circle-radius': 3, 'circle-color': '#0072b2' },
+  });
+}
+
+function clearSketch() {
+  if (!map.getSource('sketch')) return;
+  map.getSource('sketch').setData({
+    type: 'Feature', geometry: { type: 'LineString', coordinates: [] },
+  });
+}
+
 // ------------------------------------------------------- MAUP profile
 
 // The elasticity curve depends only on the distance distribution around the
@@ -262,6 +370,9 @@ let profileKey = '';
 function refreshProfile() {
   // `onChange` fires once from inside `addLens`, before `lens` is assigned.
   if (!lens) return;
+  // The profile annotates the radius control, so it means nothing for a shape
+  // that has no radius.
+  if (lens.options.selection?.type === 'polygon') return;
   const slider = $('radius');
   const maxRadius = Number(slider.max);
   const centre = lens.options.center;

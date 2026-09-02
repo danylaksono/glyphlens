@@ -25,6 +25,7 @@
 import { computeLens, lerpLayout } from '../core/layout.js';
 import { LensRenderer } from '../render/LensRenderer.js';
 import { destination, distance, pathLength } from '../core/geo.js';
+import { normaliseRings } from '../core/selection.js';
 import { polylineCurve } from '../core/curve.js';
 
 export class LensOverlay {
@@ -239,6 +240,19 @@ export class LensOverlay {
         corridorHalfWidthPx: Math.hypot(b.x - a.x, b.y - a.y),
         selectionRadiusPx: 0,
       };
+    }
+
+    // A polygon carries its own boundary and its centre is the centroid the
+    // layout resolved, so there is no radius to project.
+    if (selection.type === 'polygon') {
+      const centre = this.target?.center ?? selection.center;
+      const p = centre ? this.map.project(centre) : { x: 0, y: 0 };
+      const rings = normaliseRings(selection).map((ring) =>
+        ring.map((c) => {
+          const q = this.map.project(c);
+          return [q.x, q.y];
+        }));
+      return { cx: p.x, cy: p.y, selectionRings: rings, selectionRadiusPx: 0 };
     }
 
     const p = this.map.project(this.options.center);

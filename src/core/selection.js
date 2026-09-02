@@ -6,8 +6,12 @@
  * lens centre) and `bearing` (degrees, 0 = north). Those annotations are what
  * make the angular and radial binning modes possible at all.
  *
- * Currently implemented: disc, annulus, sector, corridor.
- * Reserved (see docs/design-space.md 3.1): polygon, lasso, isochrone.
+ * Currently implemented: disc, annulus, sector, corridor, polygon.
+ *
+ * `polygon` also covers the `lasso` and `isochrone` cases: all three are "here
+ * is a shape", and they differ only in where the shape came from. Producing an
+ * isochrone is a routing problem and stays the caller's job — this library
+ * renders whatever polygon it is handed.
  *
  * A corridor is the one selection with no centre. Its members are annotated
  * with `chainage` (distance along the path) and `offset` (signed perpendicular
@@ -21,6 +25,9 @@ import {
   bearingDelta,
   projectOntoPath,
   pathLength,
+  pointInPolygon,
+  polygonArea,
+  polygonCentroid,
 } from './geo.js';
 
 const defaultGetPosition = (f) =>
@@ -33,6 +40,7 @@ const defaultGetPosition = (f) =>
  */
 export function select(features, selection, { getPosition = defaultGetPosition } = {}) {
   if (selection.type === 'corridor') return selectCorridor(features, selection, { getPosition });
+  if (selection.type === 'polygon') return selectPolygon(features, selection, { getPosition });
 
   const { center } = selection;
   const items = [];
@@ -86,6 +94,56 @@ export function selectCorridor(features, selection, { getPosition = defaultGetPo
   return { items, area: selectionArea({ ...selection, length }), length };
 }
 
+/**
+ * Members inside an arbitrary polygon — a drawn lasso, an admin unit, an
+ * isochrone.
+ *
+ * A polygon has no natural centre, but every downstream stage needs one to
+ * measure bearing and distance from, so the area-weighted centroid is used
+ * unless the caller supplies `center` explicitly. That choice is visible in the
+ * reading: bearings are relative to it, so a caller with a better anchor — the
+ * point an isochrone was generated from, say — should pass it.
+ */
+export function selectPolygon(features, selection, { getPosition = defaultGetPosition } = {}) {
+  const rings = normaliseRings(selection);
+  if (!rings.length) return { items: [], area: 0 };
+
+  const center = selection.center ?? polygonCentroid(rings);
+  const items = [];
+
+  for (const feature of features) {
+    const pos = getPosition(feature);
+    if (!pos || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) continue;
+    if (!pointInPolygon(pos, rings)) continue;
+    items.push({
+      feature,
+      position: pos,
+      distance: geoDistance(center, pos),
+      bearing: geoBearing(center, pos),
+    });
+  }
+
+  return { items, area: polygonArea(rings), center, rings };
+}
+
+/**
+ * Accept the shapes callers actually have: a bare ring, an array of rings, or
+ * GeoJSON Polygon / MultiPolygon coordinates.
+ */
+export function normaliseRings(selection) {
+  const raw = selection.rings ?? selection.coordinates ?? selection.polygon;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+
+  // A bare ring: [[lng, lat], ...]
+  if (typeof raw[0]?.[0] === 'number') return [raw];
+  // Rings: [[[lng, lat], ...], ...]
+  if (typeof raw[0]?.[0]?.[0] === 'number') return raw;
+  // MultiPolygon: flatten to rings. Holes still work, because the parity test
+  // counts crossings across every ring.
+  if (typeof raw[0]?.[0]?.[0]?.[0] === 'number') return raw.flat();
+  return [];
+}
+
 /** Containment test in the (distance, bearing) frame the selection defines. */
 export function contains(selection, distanceM, bearingDeg) {
   switch (selection.type) {
@@ -94,8 +152,9 @@ export function contains(selection, distanceM, bearingDeg) {
     case 'annulus':
       return distanceM >= (selection.innerRadius ?? 0) && distanceM <= selection.radius;
     case 'corridor':
-      // Containment for a corridor needs the path, so `selectCorridor` handles
-      // it directly rather than going through this distance/bearing test.
+    case 'polygon':
+      // These need the geometry, not a distance and a bearing, so their own
+      // selectors handle containment rather than going through this test.
       return true;
     case 'sector': {
       if (distanceM > selection.radius) return false;
@@ -127,6 +186,8 @@ export function selectionArea(selection) {
       const w = (selection.width ?? 0) / 1000;
       return len * w + Math.PI * (w / 2) ** 2;
     }
+    case 'polygon':
+      return polygonArea(normaliseRings(selection));
     default:
       return selection.areaKm2 ?? Math.PI * r * r;
   }
@@ -143,13 +204,16 @@ export function selectComplement(features, selection, options = {}) {
   const { getPosition = defaultGetPosition, contextRadius = Infinity } = options;
   const { center } = selection;
   const items = [];
+  const rings = selection.type === 'polygon' ? normaliseRings(selection) : null;
+
   for (const feature of features) {
     const pos = getPosition(feature);
     if (!pos) continue;
     const d = geoDistance(center, pos);
     if (d > contextRadius) continue;
     const b = geoBearing(center, pos);
-    if (!contains(selection, d, b)) {
+    const inside = rings ? pointInPolygon(pos, rings) : contains(selection, d, b);
+    if (!inside) {
       items.push({ feature, position: pos, distance: d, bearing: b });
     }
   }

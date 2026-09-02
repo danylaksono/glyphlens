@@ -57,6 +57,11 @@ export function computeLens(config) {
   const sel = select(data, selection, { getPosition });
   const { items } = sel;
   if (sel.length != null) selection.length = sel.length;
+  // A polygon has no centre until its centroid is computed, and everything
+  // downstream measures bearing and distance from one. Adopt what the selector
+  // resolved so the layout, the structure stage and the renderer all agree.
+  const anchor = center ?? sel.center ?? null;
+  if (sel.center && !selection.center) selection.center = sel.center;
   const areaKm2 = selectionArea(selection);
 
   // 2. binning
@@ -70,8 +75,14 @@ export function computeLens(config) {
   // 2b. within-unit structure — the parallel summary of how each bin's members
   // are distributed inside it, rather than only how many there are.
   // docs/design-space.md §4.
+  // A polygon's "radius" for radial statistics is the distance to its furthest
+  // member: the one scale on which "how far out" means anything for a shape
+  // that has no radius of its own.
+  const nominalRadius = selection.radius
+    ?? Math.max(1, ...items.map((i) => i.distance));
+
   bins = describeBins(bins, {
-    radius: selection.radius,
+    radius: nominalRadius,
     value: binSpec.value,
     edgeBand: config.structure?.edgeBand,
     roseBins: config.structure?.roseBins,
@@ -84,9 +95,13 @@ export function computeLens(config) {
   if (!baseline && (normSpec.mode === 'lq' || normSpec.mode === 'delta')) {
     // Default baseline is the exterior: inside-vs-rest, the "exterior effect
     // scope" of the lens design space. See docs/design-space.md 3.7.
-    const outer = selectComplement(data, selection, {
+    // A polygon has no radius to scale a context from, so fall back to a
+    // radius that encloses roughly four times its area.
+    const nominalRadius = selection.radius
+      ?? Math.sqrt((areaKm2 * 1e6) / Math.PI) * 2;
+    const outer = selectComplement(data, { ...selection, center: anchor }, {
       getPosition,
-      contextRadius: normSpec.contextRadius ?? selection.radius * 4,
+      contextRadius: normSpec.contextRadius ?? nominalRadius * 4,
     });
     baseline = profileOf(bin(outer.items, { ...binSpec, radius: selection.radius }));
   }
@@ -114,7 +129,7 @@ export function computeLens(config) {
   const lensStructure = describeBins(
     [{ key: '__lens__', items, raw: total }],
     {
-      radius: selection.radius,
+      radius: nominalRadius,
       value: binSpec.value,
       edgeBand: config.structure?.edgeBand,
       roseBins: config.structure?.roseBins,
@@ -124,7 +139,7 @@ export function computeLens(config) {
   )[0].structure;
 
   return {
-    center,
+    center: anchor,
     selection,
     ring: { radius: ringRadius },
     binning: binSpec,

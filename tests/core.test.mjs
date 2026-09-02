@@ -7,8 +7,9 @@ import { cyclicDelta, wrap01, circleCurve, polylineCurve } from '../src/core/cur
 import {
   distance, bearing, destination, bearingDelta, normaliseBearing,
   projectOntoPath, pathLength,
+  pointInPolygon, polygonArea, polygonCentroid, angularExtent,
 } from '../src/core/geo.js';
-import { select, selectionArea } from '../src/core/selection.js';
+import { select, selectionArea, normaliseRings } from '../src/core/selection.js';
 import {
   binAngular, binCategorical, binChainage, circularMean, compassLabel,
 } from '../src/core/binning.js';
@@ -779,4 +780,114 @@ test('elasticityProfile finds the cliff a cluster creates', () => {
 test('elasticityProfile degrades gracefully on empty input', () => {
   assert.deepEqual(elasticityProfile([], { maxRadius: 1000 }), []);
   assert.deepEqual(elasticityProfile([100], { maxRadius: 0 }), []);
+});
+
+// ------------------------------------------------------ polygon selection
+
+const SQUARE = [[
+  [-0.14, 51.50], [-0.11, 51.50], [-0.11, 51.52], [-0.14, 51.52], [-0.14, 51.50],
+]];
+
+test('pointInPolygon: inside, outside and unclosed rings', () => {
+  assert.equal(pointInPolygon([-0.125, 51.51], SQUARE), true);
+  assert.equal(pointInPolygon([-0.20, 51.51], SQUARE), false);
+  assert.equal(pointInPolygon([-0.125, 51.60], SQUARE), false);
+  // Rings need not repeat the first vertex.
+  const open = [SQUARE[0].slice(0, -1)];
+  assert.equal(pointInPolygon([-0.125, 51.51], open), true);
+});
+
+test('pointInPolygon: a hole is outside', () => {
+  const hole = [[-0.13, 51.505], [-0.12, 51.505], [-0.12, 51.515], [-0.13, 51.515]];
+  const withHole = [SQUARE[0], hole];
+  assert.equal(pointInPolygon([-0.125, 51.510], withHole), false, 'inside the hole');
+  assert.equal(pointInPolygon([-0.115, 51.510], withHole), true, 'outside the hole');
+});
+
+test('pointInPolygon: winding order does not matter', () => {
+  const reversed = [[...SQUARE[0]].reverse()];
+  assert.equal(pointInPolygon([-0.125, 51.51], reversed), true);
+});
+
+test('polygonArea matches the rectangle it describes', () => {
+  // 0.03 deg lng at 51.51 N, by 0.02 deg lat.
+  const km = polygonArea(SQUARE);
+  const expectedX = 0.03 * 111.32 * Math.cos((51.51 * Math.PI) / 180);
+  const expectedY = 0.02 * 111.32;
+  assert.ok(Math.abs(km - expectedX * expectedY) < 0.05, `got ${km}`);
+});
+
+test('polygonArea subtracts holes', () => {
+  const hole = [[-0.13, 51.505], [-0.12, 51.505], [-0.12, 51.515], [-0.13, 51.515]];
+  assert.ok(polygonArea([SQUARE[0], hole]) < polygonArea(SQUARE));
+});
+
+test('polygonCentroid finds the middle of a rectangle', () => {
+  const [lng, lat] = polygonCentroid(SQUARE);
+  assert.ok(Math.abs(lng + 0.125) < 1e-9);
+  assert.ok(Math.abs(lat - 51.51) < 1e-9);
+});
+
+test('polygon selection keeps what is inside and derives a centre', () => {
+  const data = [
+    { lng: -0.125, lat: 51.51, category: 'food' },   // inside
+    { lng: -0.115, lat: 51.505, category: 'shop' },  // inside
+    { lng: -0.30, lat: 51.51, category: 'food' },    // outside
+  ];
+  const { items, center, area } = select(data, { type: 'polygon', rings: SQUARE });
+  assert.equal(items.length, 2);
+  assert.ok(Math.abs(center[0] + 0.125) < 1e-9, 'centroid used as the anchor');
+  assert.ok(area > 0);
+  // Every member still carries the distance and bearing the rest of the
+  // pipeline needs.
+  for (const it of items) {
+    assert.ok(Number.isFinite(it.distance) && Number.isFinite(it.bearing));
+  }
+});
+
+test('polygon selection honours an explicit centre', () => {
+  const data = [{ lng: -0.125, lat: 51.515, category: 'food' }];
+  const { items } = select(data, {
+    type: 'polygon', rings: SQUARE, center: [-0.125, 51.505],
+  });
+  // Due north of the supplied centre, not of the centroid.
+  assert.ok(Math.abs(bearingDelta(0, items[0].bearing)) < 1e-6);
+});
+
+test('normaliseRings accepts a bare ring, rings, and a MultiPolygon', () => {
+  assert.equal(normaliseRings({ rings: SQUARE[0] }).length, 1);
+  assert.equal(normaliseRings({ rings: SQUARE }).length, 1);
+  assert.equal(normaliseRings({ coordinates: [SQUARE, SQUARE] }).length, 2);
+  assert.deepEqual(normaliseRings({ rings: [] }), []);
+});
+
+test('computeLens runs the whole pipeline on a polygon', () => {
+  const data = [
+    { lng: -0.125, lat: 51.515, category: 'food' },
+    { lng: -0.120, lat: 51.505, category: 'shop' },
+    { lng: -0.135, lat: 51.512, category: 'food' },
+    { lng: -0.30, lat: 51.51, category: 'food' },
+  ];
+  const layout = computeLens({
+    selection: { type: 'polygon', rings: SQUARE },
+    data,
+    binning: { mode: 'angular', bins: 8 },
+    placement: { mode: 'necklace' },
+    marks: { type: 'bar' },
+    ring: { radius: 150 },
+  });
+  assert.equal(layout.stats.count, 3);
+  assert.ok(layout.center, 'a centre was resolved');
+  assert.ok(layout.stats.areaKm2 > 0);
+  assert.ok(layout.structure, 'within-unit structure still computed');
+  for (const b of layout.bins) assert.ok(Number.isFinite(b.t));
+});
+
+test('angularExtent gives the arc a polygon occupies, and null from inside', () => {
+  // Viewed from well west of the square, it subtends a modest easterly arc.
+  const from = [-0.40, 51.51];
+  const [lo, hi] = angularExtent(from, SQUARE);
+  assert.ok(lo > 45 && lo < 135, `lo = ${lo}`);
+  assert.ok(hi > 45 && hi < 135, `hi = ${hi}`);
+  assert.equal(angularExtent([-0.125, 51.51], SQUARE), null, 'inside spans everything');
 });

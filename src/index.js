@@ -33,7 +33,15 @@ export { LensOverlay, addLens } from './adapters/maplibre.js';
 
 // Pipeline
 export { computeLens, lerpLayout, lerpCyclic } from './core/layout.js';
-export { select, selectComplement, selectionArea, contains } from './core/selection.js';
+export {
+  select,
+  selectPolygon,
+  selectCorridor,
+  selectComplement,
+  selectionArea,
+  normaliseRings,
+  contains,
+} from './core/selection.js';
 export {
   bin,
   binCategorical,

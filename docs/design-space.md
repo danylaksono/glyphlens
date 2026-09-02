@@ -71,16 +71,24 @@ selection -> binning -> normalisation -> placement -> marks -> association
 | `disc` | Euclidean radius. VisQuill's only shape. |
 | `annulus` | Ring of a distance band; isolates "the 800–1600 m belt". |
 | `sector` | Wedge; directional interrogation. |
-| `polygon` | Snap to an admin unit / LSOA / catchment. |
+| `polygon` | Any ring set: an admin unit, an LSOA, a catchment. |
 | `corridor` | Buffer along a linestring (route, river, coastline). |
-| `lasso` | Freehand. |
-| `isochrone` | **Travel-time walkshed.** |
+| `lasso` | Freehand — a `polygon` the analyst drew. |
+| `isochrone` | **Travel-time walkshed** — a `polygon` a router produced. |
 
 The 2025 *Spatially-Embedded Lens Visualization* design space (45 papers, seven
 dimensions) flags **data-driven dynamic shape** as understudied. For urban data
 that gap is not abstract: an isochrone lens is both more defensible
 cartographically than a Euclidean disc and, as far as we can tell, undone as a
-lens. Reserved as a headline extension.
+lens.
+
+The last three rows are one implementation. They differ only in where the shape
+came from, so the library takes rings and asks no questions; an isochrone is
+lensed like any polygon, while *computing* one stays a routing problem outside
+this library. A polygon has no centre and no radius, so the centroid is resolved
+as the anchor (overridable) and a nominal scale is derived for the stages that
+need one. See
+[F-18](findings.md#f-18-three-reserved-selections-turned-out-to-be-one).
 
 ### 3.2 Binning — how the enclosed set is decomposed
 
@@ -364,7 +372,7 @@ As of v0.1, against the axes above.
 
 | Stage | Implemented | Reserved |
 | --- | --- | --- |
-| Selection | `disc`, `annulus`, `sector`, `corridor`, exterior complement | `polygon`, `lasso`, `isochrone` |
+| Selection | `disc`, `annulus`, `sector`, `corridor`, `polygon` (= lasso = isochrone), exterior complement | — |
 | Binning | `categorical`, `angular`, `radial`, `cross`, `chainage` | — |
 | Normalisation | `count`, `density`, `share`, `lq`, `z`, `delta`, confidence | — |
 | Placement | `necklace`, `block`, `morph`, `stacked`, `strip` (open curves) | — |

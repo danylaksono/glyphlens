@@ -566,6 +566,52 @@ Worth generalising: **plotting a derived statistic across its whole domain is a
 good way to find where it stops being valid.** The scalar had been correct
 everywhere we had looked, which is not the same as correct.
 
+### F-18. Three reserved selections turned out to be one
+
+Recorded 2026-09-02.
+
+`polygon`, `lasso` and `isochrone` were listed as three separate reserved values
+on the selection axis. Building the first closed all three, because they differ
+only in **where the shape came from**, not in what the lens does with it:
+
+- `polygon` — an admin unit, an LSOA, a catchment;
+- `lasso` — a shape the analyst drew;
+- `isochrone` — a shape a router produced.
+
+So the library takes rings and asks no questions. Producing an isochrone is a
+routing problem — the `walk` app in this author's `apps` repo does it with
+Overpass, Dijkstra and a concave hull — and pulling that in would have cost the
+zero-dependency core for no gain in what the lens can express. The design space
+now says isochrone lensing is supported and isochrone *computation* is not.
+
+Two things the implementation forced into the open:
+
+**A polygon has no centre, and everything downstream needs one.** Bearing and
+distance are measured from somewhere, so `selectPolygon` resolves the
+area-weighted centroid unless the caller supplies `center`. That choice is
+visible in the reading rather than neutral — every bearing is relative to it —
+so a caller with a better anchor (the origin an isochrone was generated from,
+say) should pass it, and the API makes that easy. The resolved centre is
+returned and propagated so the layout, the structure stage and the renderer all
+agree on it.
+
+**A polygon has no radius either**, which several stages quietly assumed.
+Radial statistics, the `lq` context radius and the density denominator all
+needed a nominal scale; they now derive one (furthest member, or the radius of a
+circle of equivalent area) rather than reading `selection.radius` and getting
+`undefined`. That is the same class of assumption the corridor exposed in
+[F-14](#f-14-the-curve-abstraction-held-and-a-corridors-anchor-is-geographic):
+each new selection shape finds one more place where the disc was being assumed.
+
+Also built, deliberately ahead of any consumer: `angularExtent(center, rings)`,
+the arc a polygon subtends from a point. Nothing calls it — the point-data
+pipeline gives every member a single bearing — but it is Speckmann & Verbeek's
+feasible interval in its original form, and it is the primitive the area-based
+extension turns on ([F-1](#f-1-the-interval-api-is-load-bearing)). It returns
+`null` when the centre is inside the polygon, since a region enclosing the
+viewer constrains nothing. Building it now, with tests, means the census work
+starts from a tested primitive rather than a claim.
+
 ---
 
 ## Open questions

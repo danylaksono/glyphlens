@@ -48,19 +48,20 @@ export class LensRenderer {
     ctx.save();
 
     if (onCircle) {
-      if (s.dimExterior) this._drawDim(ctx, cx, cy, ring, selectionRadiusPx);
+      // A polygon selection supplies its own boundary; a disc, annulus or
+      // sector is described by its radius.
+      const shape = frame.selectionRings;
+      if (s.dimExterior) this._drawDim(ctx, cx, cy, selectionRadiusPx, shape);
 
-      // Geographic selection boundary — this one scales with the map.
-      if (Number.isFinite(selectionRadiusPx) && selectionRadiusPx > 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, selectionRadiusPx, 0, TAU);
-        ctx.setLineDash(s.boundaryDash);
-        ctx.strokeStyle = s.boundaryStroke;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.beginPath();
+      if (shape?.length) this._traceRings(ctx, shape);
+      else if (selectionRadiusPx > 0) ctx.arc(cx, cy, selectionRadiusPx, 0, TAU);
+      ctx.setLineDash(s.boundaryDash);
+      ctx.strokeStyle = s.boundaryStroke;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
     } else {
       this._drawCorridor(ctx, curve, frame.corridorHalfWidthPx);
     }
@@ -151,17 +152,36 @@ export class LensRenderer {
     ctx.restore();
   }
 
-  _drawDim(ctx, cx, cy, ring, selectionRadiusPx) {
+  /**
+   * Dim everything outside the selection, so the lens reads as an aperture.
+   *
+   * The hole is the selection's own shape — a circle, or the polygon's rings.
+   * `evenodd` handles both, and holes in the polygon come out dimmed, which is
+   * correct: a hole is outside the selection.
+   */
+  _drawDim(ctx, cx, cy, selectionRadiusPx, rings) {
     const s = this.style;
-    const hole = Math.max(selectionRadiusPx || 0, 0);
-    if (hole <= 0) return;
+    const hasShape = rings?.length > 0;
+    if (!hasShape && !(selectionRadiusPx > 0)) return;
+
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.arc(cx, cy, hole, 0, TAU, true); // reverse winding punches the hole
+    if (hasShape) this._traceRings(ctx, rings);
+    else ctx.arc(cx, cy, selectionRadiusPx, 0, TAU, true);
     ctx.fillStyle = s.dimColor;
-    ctx.fill();
+    ctx.fill('evenodd');
     ctx.restore();
+  }
+
+  /** Trace projected polygon rings, each closed. */
+  _traceRings(ctx, rings) {
+    for (const ring of rings) {
+      if (!ring?.length) continue;
+      ctx.moveTo(ring[0][0], ring[0][1]);
+      for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i][0], ring[i][1]);
+      ctx.closePath();
+    }
   }
 
   /** Trace the anchor curve, whatever it is. */
@@ -328,7 +348,8 @@ export class LensRenderer {
   _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx) {
     const s = this.style;
     const onCircle = curve.kind === 'circle';
-    const radius = layout.selection?.radius;
+    const radius = layout.selection?.radius ?? layout.structure?.radial?.max
+      ?? Math.max(1, ...layout.bins.flatMap((b) => (b.items ?? []).map((i) => i.distance)));
     const halfWidth = (layout.selection?.width ?? 0) / 2;
     if (onCircle ? !(selectionRadiusPx > 0 && radius > 0) : !(halfWidthPx > 0 && halfWidth > 0)) {
       return;

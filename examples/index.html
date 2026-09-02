@@ -89,7 +89,18 @@
          trusted.</p>
     </label>
 
-    <label class="field">
+    <div class="field">
+      <span>Shape</span>
+      <div class="shape-row">
+        <button type="button" id="draw">Draw a shape</button>
+        <button type="button" id="reset-shape" class="ghost" hidden>Back to disc</button>
+      </div>
+      <p class="hint" id="draw-hint">Click the map to trace a boundary, then
+         double-click to close it. An admin unit or an isochrone works the same
+         way — the library takes any polygon.</p>
+    </div>
+
+    <label class="field" id="radius-field">
       <span>Radius <output id="radius-out">800</output> m</span>
       <div class="profile">
         <canvas id="radius-profile" height="34" aria-hidden="true"></canvas>

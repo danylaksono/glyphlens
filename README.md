@@ -68,7 +68,7 @@ Drag the lens centre to move it, or its dashed edge to resize.
 
 | Stage | Values | Notes |
 |---|---|---|
-| `selection.type` | `disc` · `annulus` · `sector` · `corridor` | `polygon`, `lasso`, `isochrone` reserved |
+| `selection.type` | `disc` · `annulus` · `sector` · `corridor` · `polygon` | `polygon` also covers lasso and isochrone |
 | `binning.mode` | `categorical` · `angular` · `radial` · `cross` · `chainage` | `angular` = bearing sectors; `chainage` = along a corridor |
 | `normalisation.mode` | `count` · `density` · `share` · `lq` · `z` · `delta` | `lq` baselines against the lens's surroundings by default |
 | `placement.mode` | `necklace` · `block` · `morph` · `stacked` | `morph: 0..1` blends block and necklace; `stacked` gives each variable its own ring |
@@ -76,6 +76,26 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `marks.sizeBy` | `value` · `equal` | which reading owns size; roses default to `equal` |
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
 | `style.preset` | `paper` · `night` · `minimal` · `structure` | |
+
+### Any shape: polygon, lasso, isochrone
+
+These are one selection, because they differ only in where the shape came from:
+
+```js
+lens.update({
+  selection: { type: 'polygon', rings: [[[lng, lat], ...]] },  // or GeoJSON coords
+});
+```
+
+Rings accept a bare ring, an array of rings (first outer, rest holes), or
+GeoJSON `Polygon` / `MultiPolygon` coordinates. A polygon has no centre, so the
+area-weighted centroid is resolved as the anchor every bearing is measured
+from — pass `center` if you have a better one, such as the origin an isochrone
+was generated from.
+
+Producing an isochrone is a routing problem and stays outside this library;
+hand it the resulting polygon and it lenses like any other shape. The ring demo
+has a lasso tool that draws one by hand.
 
 ### Stacked: a necklace per variable
 

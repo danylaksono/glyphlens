@@ -152,3 +152,137 @@ export function pathLength(path) {
   for (let i = 1; i < path.length; i++) total += distance(path[i - 1], path[i]);
   return total;
 }
+
+/**
+ * Point-in-polygon by ray casting, with holes.
+ *
+ * `rings` is an array of linear rings in [lng, lat]: the first is the outer
+ * boundary, any others are holes. Crossings are counted across every ring and
+ * the parity taken at the end, so a point inside a hole correctly falls out.
+ *
+ * Winding order does not matter, and rings need not be explicitly closed.
+ *
+ * Testing in degrees rather than a projected frame is deliberate: it is exact
+ * for the meridian/parallel edges that admin boundaries are full of, and the
+ * error elsewhere is the same great-circle-vs-straight-line difference that the
+ * polygon's own vertices already assume.
+ */
+export function pointInPolygon(point, rings) {
+  const [x, y] = point;
+  let inside = false;
+  for (const ring of rings) {
+    if (!ring || ring.length < 3) continue;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+  }
+  return inside;
+}
+
+/** Local equirectangular scale factors at a latitude: metres per degree. */
+function localScale(lat) {
+  return [
+    (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat)),
+    (Math.PI / 180) * EARTH_RADIUS,
+  ];
+}
+
+/**
+ * Area of a polygon in square kilometres.
+ *
+ * Shoelace in a local equirectangular frame at the outer ring's mean latitude.
+ * Holes subtract. Good to well under a percent at city scale; not intended for
+ * continental polygons.
+ */
+export function polygonArea(rings) {
+  if (!rings?.length) return 0;
+  const outer = rings[0];
+  if (!outer || outer.length < 3) return 0;
+  const lat0 = outer.reduce((s, p) => s + p[1], 0) / outer.length;
+  const [kx, ky] = localScale(lat0);
+
+  const ringArea = (ring) => {
+    let sum = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      sum += (ring[j][0] * kx) * (ring[i][1] * ky) - (ring[i][0] * kx) * (ring[j][1] * ky);
+    }
+    return Math.abs(sum) / 2;
+  };
+
+  let area = ringArea(outer);
+  for (let i = 1; i < rings.length; i++) {
+    if (rings[i]?.length >= 3) area -= ringArea(rings[i]);
+  }
+  return Math.max(0, area) / 1e6;
+}
+
+/**
+ * Area-weighted centroid of a polygon's outer ring, as [lng, lat].
+ *
+ * Used as the lens centre when a polygon selection does not supply one — every
+ * downstream stage needs a point to measure bearing and distance from. Falls
+ * back to the vertex mean for degenerate (zero-area) rings.
+ */
+export function polygonCentroid(rings) {
+  const ring = rings?.[0];
+  if (!ring?.length) return [0, 0];
+  if (ring.length < 3) {
+    return [
+      ring.reduce((s, p) => s + p[0], 0) / ring.length,
+      ring.reduce((s, p) => s + p[1], 0) / ring.length,
+    ];
+  }
+
+  let twiceArea = 0;
+  let x = 0;
+  let y = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    twiceArea += cross;
+    x += (ring[j][0] + ring[i][0]) * cross;
+    y += (ring[j][1] + ring[i][1]) * cross;
+  }
+  if (Math.abs(twiceArea) < 1e-12) {
+    return [
+      ring.reduce((s, p) => s + p[0], 0) / ring.length,
+      ring.reduce((s, p) => s + p[1], 0) / ring.length,
+    ];
+  }
+  return [x / (3 * twiceArea), y / (3 * twiceArea)];
+}
+
+/**
+ * The angular extent of a polygon seen from a point, as [fromBearing, toBearing]
+ * sweeping clockwise.
+ *
+ * This is Speckmann & Verbeek's feasible interval in its original form — the arc
+ * a region may legitimately occupy on the necklace (docs/findings.md F-1). It is
+ * unused by the point-data pipeline, where every member is a single bearing, and
+ * exists because it is the primitive the area-based extension turns on.
+ *
+ * Returns `null` when the centre lies inside the polygon, since then the region
+ * spans every direction and no interval constrains it.
+ */
+export function angularExtent(center, rings) {
+  const ring = rings?.[0];
+  if (!ring?.length) return null;
+  if (pointInPolygon(center, rings)) return null;
+
+  const bearings = ring.map((p) => toRad(bearing(center, p)));
+  // Work relative to the first vertex so the sweep is unwrapped rather than
+  // split at north, then take the extremes.
+  const base = bearings[0];
+  let min = 0;
+  let max = 0;
+  for (const b of bearings) {
+    const d = ((((b - base) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+    if (d < min) min = d;
+    if (d > max) max = d;
+  }
+  return [normaliseBearing(toDeg(base + min)), normaliseBearing(toDeg(base + max))];
+}
+
