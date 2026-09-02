@@ -58,6 +58,11 @@ of D3.
 hand rather than delegated to SVG. Hit-testing is done analytically against the
 layout objects, which the core already produces.
 
+**Standing test, added later:** `examples/gallery.html` runs the whole pipeline
+on bare canvases with no map on the page at all. If the core ever grows a
+dependency on MapLibre, that page stops working — which makes this decision
+enforced rather than merely asserted.
+
 ---
 
 ## Findings

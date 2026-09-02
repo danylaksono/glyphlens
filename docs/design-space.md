@@ -381,6 +381,13 @@ As of v0.1, against the axes above.
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity | — |
 | Curves | circle, polyline (open + closed), marks placed on either | — |
 
+`examples/gallery.html` shows twelve of these combinations side by side on one
+dataset, each captioned with the path it takes through the pipeline. It is the
+most direct evidence for the framework's central claim — that these are one
+object with different arguments rather than a set of separate techniques — and
+it runs with no map on the page, which is a standing test that the core has not
+grown a rendering dependency.
+
 The necklace solver (`src/core/necklace.js`) is complete for the cyclic case
 including feasible intervals, with 30 tests covering non-overlap, stability and
 overflow. Interval handling is by projection and therefore approximate; the
