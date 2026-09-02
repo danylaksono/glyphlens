@@ -40,11 +40,32 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (68 tests, no dependencies)
+npm test        # node --test (89 tests, no runtime dependencies)
+npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
-There is no build step. The examples import `../../src/` directly, which is
-also why they work unchanged on GitHub Pages.
+The library itself needs no build: the `exports` map points bundlers and the
+examples straight at the ESM sources in `src/`, which is why the examples work
+unchanged on GitHub Pages.
+
+### From a CDN
+
+`dist/` is committed, so the bundles are served from the repo and from the live
+site without anything having to run a build:
+
+```html
+<!-- plain script tag: defines window.glyphlens -->
+<script src="https://cdn.jsdelivr.net/gh/danylaksono/glyphlens@main/dist/glyphlens.global.min.js"></script>
+
+<!-- or as a module -->
+<script type="module">
+  import { computeLens } from 'https://danylaksono.is-a.dev/glyphlens/dist/glyphlens.esm.js';
+</script>
+```
+
+Not on npm yet, so the jsDelivr path is the `gh/` one and pins to a branch
+rather than a version — pin a commit SHA instead of `@main` if you need
+stability.
 
 ## Use
 

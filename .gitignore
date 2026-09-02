@@ -1,5 +1,7 @@
 node_modules/
-dist/
+
+# dist/ is committed on purpose: jsDelivr serves it straight from the repo
+# and GitHub Pages serves it from the live domain. Neither runs a build.
 .DS_Store
 *.log
 .playwright-mcp/

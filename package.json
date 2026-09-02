@@ -4,6 +4,8 @@
   "description": "Composable multivariate map lenses for MapLibre, with a JavaScript necklace-map placement engine",
   "type": "module",
   "main": "src/index.js",
+  "unpkg": "./dist/glyphlens.global.min.js",
+  "jsdelivr": "./dist/glyphlens.global.min.js",
   "exports": {
     ".": "./src/index.js",
     "./maplibre": "./src/adapters/maplibre.js",
@@ -12,12 +14,17 @@
   },
   "files": [
     "src",
-    "docs"
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "start": "node scripts/serve.mjs",
-    "test": "node --test"
+    "build": "rollup -c",
+    "test": "node --test",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "maplibre",
@@ -50,5 +57,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "@rollup/plugin-terser": "^1.0.0",
+    "rollup": "^4.63.1"
   }
 }
