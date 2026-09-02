@@ -363,30 +363,45 @@ Related, and cheaper: **lens trail** — sweep a lens along a route and stack ea
 position's glyph into a strip. This derives VisQuill's Rhine/Kungsleden-style
 profiles from the lens rather than treating them as a separate chart type.
 
-## 6. Area-based statistical data (deferred)
+## 6. Area-based statistical data
 
-The current target is point / feature data (OSM, Overture places). The intended
-later extension is **area-based statistics** — LSOA/OA census, IMD, EPC — which
-is the actual subject of the STAR review and would close the loop with Chapter 4.
+Point data (OSM, Overture places) was the starting target. **Area-based
+statistics** — LSOA/OA census, IMD, EPC — is the actual subject of the STAR
+review, and closing that loop is what connects this library back to Chapter 4.
 
-What changes:
+Built. What changed, and what did not:
 
-- **Selection** becomes areal intersection, not point containment. Units are
-  partly inside the lens, so weighting is required (area weight, or
-  population-weighted centroid).
-- **Binning** by bearing uses the unit's population-weighted centroid, and the
-  necklace *feasible interval* becomes the true angular projection of the unit's
-  geometry as seen from the lens centre — which is exactly Speckmann–Verbeek's
-  original formulation. The point case is the degenerate one.
-- **MAUP** stops being a footnote. `lq` against a national or regional baseline
-  becomes the default rather than an option.
-- **Aggregation** (`hSpAggr`) needs a hierarchy: OA → LSOA → MSOA → LAD.
+- **Selection** is areal intersection, not point containment. `arealSelect`
+  offers both standard answers to partial containment: count a unit in full if
+  its centroid is inside, or weight it by the share of its area that is. The
+  second is estimated by deterministic grid sampling rather than clipping —
+  clipping a polygon against a disc exactly is not worth a dependency for a
+  weight that feeds a visual encoding.
+- **The feasible interval is now the unit's real angular extent**, so a symbol
+  may slide along the arc its district occupies but can never leave it. This is
+  Speckmann–Verbeek's original formulation, and it needed no change to the
+  solver — see below.
+- **Binning** gains `unit`: one bin per areal unit, which is the reading census
+  geography actually supports.
+- **Aggregation** distinguishes **extensive** from **intensive** measures, and
+  requires the caller to say which. Counts apportion and sum; rates, shares and
+  medians do neither. Summing a column of percentages is the classic
+  census-visualisation bug and it produces a plausible-looking map that is
+  simply wrong
+  ([F-21](findings.md#f-21-nothing-about-a-number-says-whether-it-can-be-added-up)).
 
-This is why the necklace engine takes *intervals*, not just angles, from day one
-even though the point case only needs a preferred angle — see
-[findings.md](findings.md#f-1-the-interval-api-is-load-bearing). Getting that
-shape right now makes the census extension a data-adapter problem later, rather
-than a rewrite.
+**What did not change is the result worth having.** The solver, the placement
+stage, the normalisation stage and the renderer's mark drawing are untouched.
+[F-1](findings.md#f-1-the-interval-api-is-load-bearing) argued on day one that
+the engine should take intervals rather than angles precisely so that areal
+units would be the general case and points the degenerate one; that call, and
+the decision to build `angularExtent` ahead of any consumer, both paid off
+exactly as predicted
+([F-23](findings.md#f-23-the-interval-api-paid-off-exactly-as-f-1-predicted)).
+
+Still open: **aggregation hierarchies** (`hSpAggr`: OA → LSOA → MSOA → LAD), and
+population-weighted centroids as the anchor, which the demo cannot show because
+its units carry no population.
 
 ## 7. What is built
 
@@ -394,9 +409,9 @@ As of v0.1, against the axes above.
 
 | Stage | Implemented | Reserved |
 | --- | --- | --- |
-| Selection | `disc`, `annulus`, `sector`, `corridor`, `polygon` (= lasso = isochrone), exterior complement | — |
-| Binning | `categorical`, `angular`, `radial`, `cross`, `chainage` | — |
-| Normalisation | `count`, `density`, `share`, `lq`, `z`, `delta`, confidence | — |
+| Selection | `disc`, `annulus`, `sector`, `corridor`, `polygon` (= lasso = isochrone), areal units, exterior complement | — |
+| Binning | `categorical`, `angular`, `radial`, `cross`, `chainage`, `unit` | — |
+| Normalisation | `count`, `density`, `share`, `lq`, `z`, `delta`, confidence; extensive/intensive measures | — |
 | Placement | `necklace`, `block`, `morph`, `stacked`, `strip` (open curves) | — |
 | Marks | `bar`, `disc` | `wedge`, `spark`, `stream` |
 | Association | `adjacency`, brush hooks, displacement indicator | `leader` |

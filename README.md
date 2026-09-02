@@ -10,7 +10,8 @@ the first JavaScript implementation of **necklace-map placement**.
 **Try it:** [gallery](examples/gallery.html) — twelve points in the design space,
 one dataset · [continuum](examples/continuum.html) — one lens to a gridded
 glyphmap on one slider · [ring lens](examples/) ·
-[corridor lens](examples/corridor.html).
+[corridor lens](examples/corridor.html) ·
+[areal lens](examples/areal.html) — census-style geography.
 Live, no build step, and the interactive demos fall back to a bundled OSM
 extract when Overpass is down.
 
@@ -135,6 +136,39 @@ Two things worth knowing. A field derives **one** shared baseline for `lq` and
 the renderer sheds chrome as rings shrink; below about ten pixels the glyph
 stops carrying multivariate information and the field reads as a density
 surface, which is the resolution limit of the technique rather than a bug.
+
+### Areal units: census-style geography
+
+Members can be polygons rather than points. Each unit is placed on the arc it
+actually subtends from the lens centre — Speckmann & Verbeek's necklace map, on
+real geography:
+
+```js
+const lens = addLens(map, {
+  center: [110.3695, -7.7956],
+  selection: { type: 'disc', radius: 2600 },
+  data: districts,                        // [{ name, rings: [[[lng, lat], ...]], pop }]
+
+  areal: { weighting: 'centroid' },       // or 'area' for partial containment
+  binning: {
+    measure: { value: (f) => f.pop, kind: 'extensive' },
+    label: (f) => f.name,
+  },
+});
+```
+
+**`kind` is required, and it matters more than anything else here.** Counts are
+*extensive*: apportionable and summable, so a district half inside contributes
+half its people. Rates, shares and medians are *intensive*: half a district has
+the same unemployment rate, and adding two rates together is meaningless. They
+are averaged, weighted by whatever the rate is a rate of:
+
+```js
+{ value: (f) => f.unemployed / f.workforce, kind: 'intensive', weight: (f) => f.workforce }
+```
+
+Nothing about a number says which kind it is, so the library will not guess —
+guessing wrong gives a confident, plausible, wrong map.
 
 ### Any shape: polygon, lasso, isochrone
 

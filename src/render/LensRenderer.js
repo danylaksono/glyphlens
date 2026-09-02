@@ -484,7 +484,7 @@ export class LensRenderer {
       // diverging normalisation reads directly off the anchor.
       const inward = (bin.signed ?? 1) < 0;
       const extent = inward ? -bin.size : bin.size;
-      const half = Math.max(bin.halfWidthPx, 0.5);
+      const half = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 0.5);
 
       if (onCircle) {
         // Curved edges are worth the special case on a ring: at the widths a
@@ -663,7 +663,7 @@ export class LensRenderer {
         const lo = inward ? base - bin.size : base;
         const hi = inward ? base : base + bin.size;
         if (r < lo || r > hi) continue;
-        const halfAngle = Math.max(bin.halfWidthPx, 3) / base;
+        const halfAngle = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 3) / base;
         if (Math.abs(angleDelta(bin.angle, a)) <= halfAngle) return bin;
       }
     }

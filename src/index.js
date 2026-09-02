@@ -56,10 +56,17 @@ export {
   binAngular,
   binRadial,
   binCross,
+  binUnits,
   circularMean,
   compassLabel,
 } from './core/binning.js';
 export { normalise, profileOf, confidence } from './core/normalise.js';
+export {
+  arealSelect,
+  areaFractionInside,
+  aggregate,
+  UNIT_COUNT,
+} from './core/areal.js';
 export {
   circularStats,
   radialStats,

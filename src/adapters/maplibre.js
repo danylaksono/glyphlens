@@ -146,6 +146,7 @@ export class LensOverlay {
       placement: curveLength ? { ...o.placement, curveLength } : o.placement,
       marks: o.marks,
       structure: o.structure,
+      areal: o.areal,
       ring: { radius: this.renderer.style.ringRadius },
     });
 
@@ -490,6 +491,7 @@ export class FieldOverlay {
       normalisation: o.normalisation,
       placement: o.placement,
       marks: o.marks,
+      areal: o.areal,
       minCount: o.minCount,
       spacing,
       ring: { radius: ringRadius },

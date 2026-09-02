@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>glyphlens — areal lens</title>
+<meta name="description" content="A necklace map of census-style geography: one symbol per district, placed on the arc that district actually occupies." />
+<meta property="og:title" content="glyphlens — areal lens" />
+<meta property="og:description" content="One symbol per district, placed on the arc that district actually occupies — Speckmann & Verbeek's necklace map, on real administrative geography." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://danylaksono.is-a.dev/glyphlens/examples/areal.html" />
+<meta name="twitter:card" content="summary" />
+<link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<link href="css/demo.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside class="panel">
+    <header>
+      <h1><a href="../" class="home">glyphlens</a> · areal lens</h1>
+      <p>Members are <strong>polygons</strong>, not points. Each bar sits on the
+         arc its district actually subtends from the lens centre — which is
+         Speckmann &amp; Verbeek's necklace map, on real geography.</p>
+    </header>
+
+    <label class="field">
+      <span>Measure</span>
+      <select id="measure">
+        <option value="total" selected>Amenities (count)</option>
+        <option value="density">Amenities per km² (rate)</option>
+        <option value="foodShare">Food as a share of amenities (rate)</option>
+      </select>
+      <p class="hint" id="measure-note">Extensive: apportionable and summable. A
+         district half inside contributes half its count.</p>
+    </label>
+
+    <label class="field">
+      <span>Partly-inside districts</span>
+      <select id="weighting">
+        <option value="centroid" selected>Count in full if the centroid is inside</option>
+        <option value="area">Weight by the share of area inside</option>
+      </select>
+      <p class="hint" id="weighting-note">A district counts in full if its
+         centroid is inside, and not at all otherwise.</p>
+    </label>
+
+    <label class="field">
+      <span>Radius <output id="radius-out">2600</output> m</span>
+      <input id="radius" type="range" min="800" max="6000" step="100" value="2600" />
+    </label>
+
+    <div class="readout">
+      <div><strong id="stat-units">0</strong><em>districts</em></div>
+      <div><strong id="stat-area">0</strong><em>km² covered</em></div>
+      <div><strong id="stat-shift">0°</strong><em>max shift</em></div>
+      <div><strong id="stat-value">0</strong><em id="stat-value-label">lens total</em></div>
+    </div>
+
+    <ul id="legend" class="legend"></ul>
+    <p class="status" id="status">Loading…</p>
+    <p class="credit">
+      <a href="gallery.html">Gallery →</a> ·
+      <a href="continuum.html">Continuum →</a> ·
+      <a href="./">Ring lens →</a><br />
+      Boundaries: Indonesian kecamatan, simplified. Attributes derived from
+      OpenStreetMap contributors (ODbL).
+    </p>
+  </aside>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="js/areal.js"></script>
+</body>
+</html>

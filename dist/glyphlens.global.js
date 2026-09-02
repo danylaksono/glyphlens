@@ -525,6 +525,205 @@ var glyphlens = (function (exports) {
   }
 
   /**
+   * Area-based statistical data.
+   *
+   * Everything else in this library treats a member as a point: it has one
+   * position, it is either inside the lens or outside it, and its bearing is a
+   * single number. Census geography breaks all three. An LSOA is a polygon that
+   * can lie partly inside the lens, it subtends an *arc* rather than a direction,
+   * and its attributes cannot all be added up.
+   *
+   * This module supplies what that needs, and nothing more — the binning,
+   * normalisation, placement and rendering stages are unchanged. The reason they
+   * can be is docs/findings.md F-1: the necklace engine has taken a feasible
+   * *interval* rather than a preferred angle since the first commit, precisely so
+   * that areal units would be the general case and points the degenerate one.
+   * `angularExtent` (core/geo.js) was built ahead of any consumer for this.
+   *
+   * Two things here are easy to get wrong and expensive to get wrong quietly:
+   *
+   *   1. **Partial containment.** A unit straddling the lens boundary contributes
+   *      part of itself, not all or nothing — unless you choose otherwise, which
+   *      is a legitimate and common choice, so both are offered explicitly.
+   *   2. **Extensive vs intensive.** Counts can be apportioned and summed; rates,
+   *      medians and densities cannot. Summing a column of percentages is the
+   *      classic census-visualisation bug, and nothing about the number itself
+   *      says which kind it is. See docs/findings.md F-21.
+   */
+
+
+  const defaultGetGeometry = (f) => f.rings ?? f.coordinates ?? f.geometry?.coordinates;
+
+  /**
+   * The share of a polygon that lies inside a selection, in [0, 1].
+   *
+   * Estimated by testing a deterministic grid of sample points over the
+   * polygon's bounding box, rather than by clipping. Clipping a polygon against a
+   * disc exactly means either an analytic circle-polygon intersection or a
+   * general clipper, and neither is worth a dependency or the corner cases for a
+   * weight that feeds a visual encoding.
+   *
+   * Deterministic rather than random so the value does not shimmer between
+   * frames as the lens moves. Accuracy is roughly one part in `samples`, so the
+   * default is honest to a percent or two; raise it if the weight is load-bearing.
+   */
+  function areaFractionInside(rings, selection, { samples = 24 } = {}) {
+    const outer = rings?.[0];
+    if (!outer?.length) return 0;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of outer) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    const centre = selection.center;
+    let inPolygon = 0;
+    let inBoth = 0;
+
+    for (let i = 0; i < samples; i++) {
+      // Cell centres, not edges: sampling the boundary biases thin polygons.
+      const x = minX + ((i + 0.5) / samples) * (maxX - minX);
+      for (let j = 0; j < samples; j++) {
+        const y = minY + ((j + 0.5) / samples) * (maxY - minY);
+        if (!pointInPolygon([x, y], rings)) continue;
+        inPolygon++;
+        const d = distance(centre, [x, y]);
+        const b = bearing(centre, [x, y]);
+        if (contains(selection, d, b)) inBoth++;
+      }
+    }
+
+    // A unit far smaller than the sample spacing can catch no samples at all.
+    // Falling back to its centroid is better than reporting zero for a real unit.
+    if (inPolygon === 0) {
+      const c = polygonCentroid(rings);
+      return contains(selection, distance(centre, c), bearing(centre, c)) ? 1 : 0;
+    }
+    return inBoth / inPolygon;
+  }
+
+  /**
+   * Select areal units against a lens.
+   *
+   * @param {any[]} features
+   * @param {object} selection            must carry `center`
+   * @param {object} [options]
+   * @param {(f:any)=>any} [options.getGeometry]  rings, or GeoJSON coordinates
+   * @param {(f:any)=>[number,number]} [options.getAnchor]
+   *   where the unit "is" for bearing and distance. Defaults to the geometric
+   *   centroid; pass the population-weighted centroid when you have it, because
+   *   for an elongated or concave unit the two disagree and the bearing is the
+   *   reading (docs/findings.md Q-3).
+   * @param {'centroid'|'area'} [options.weighting='centroid']
+   * @param {number} [options.samples=24]  grid resolution for area weighting
+   * @param {number} [options.minWeight=0.001]  drop units barely inside
+   */
+  function arealSelect(features, selection, options = {}) {
+    const {
+      getGeometry = defaultGetGeometry,
+      getAnchor,
+      weighting = 'centroid',
+      samples = 24,
+      minWeight = 0.001,
+    } = options;
+
+    const centre = selection.center;
+    const items = [];
+    let areaKm2 = 0;
+
+    for (const feature of features) {
+      const rings = normaliseRings({ rings: getGeometry(feature) });
+      if (!rings.length) continue;
+
+      const anchor = getAnchor?.(feature) ?? polygonCentroid(rings);
+      const d = distance(centre, anchor);
+      const b = bearing(centre, anchor);
+
+      const weight = weighting === 'area'
+        ? areaFractionInside(rings, selection, { samples })
+        : (contains(selection, d, b) ? 1 : 0);
+      if (weight <= minWeight) continue;
+
+      const unitArea = polygonArea(rings);
+      areaKm2 += unitArea * weight;
+
+      items.push({
+        feature,
+        position: anchor,
+        distance: d,
+        bearing: b,
+        weight,
+        rings,
+        unitAreaKm2: unitArea,
+        // The arc this unit subtends from the lens centre: Speckmann & Verbeek's
+        // feasible interval in its original form. `null` when the centre is
+        // inside the unit, since then it constrains nothing.
+        interval: angularExtent(centre, rings),
+      });
+    }
+
+    return { items, area: areaKm2 };
+  }
+
+  /**
+   * Aggregate a measure over areal units.
+   *
+   * The distinction this exists for:
+   *
+   *   **extensive** — counts, totals, populations. Apportionable: a unit half
+   *   inside the lens contributes half its people. Summed.
+   *
+   *   **intensive** — rates, shares, medians, densities. *Not* apportionable and
+   *   emphatically not summable: half of a unit still has the same unemployment
+   *   rate, and adding two rates together is meaningless. Averaged, weighted by
+   *   whatever the rate is a rate *of* — population, households, area.
+   *
+   * Nothing about a number says which kind it is, so `kind` is required rather
+   * than guessed. Guessing wrong produces a plausible-looking map that is simply
+   * false, which is worse than an error.
+   *
+   * @param {Array} items                 from `arealSelect`
+   * @param {object} measure
+   * @param {(f:any)=>number} measure.value
+   * @param {'extensive'|'intensive'} measure.kind
+   * @param {(f:any)=>number} [measure.weight]  denominator for intensive measures
+   */
+  function aggregate(items, measure) {
+    if (!items.length) return 0;
+    const { value, kind = 'extensive', weight } = measure;
+
+    if (kind === 'intensive') {
+      // Weighted mean. Without a denominator this falls back to weighting by the
+      // share of each unit inside the lens, which is an area-weighted mean —
+      // defensible, but a population-weighted one is usually what is wanted.
+      let num = 0;
+      let den = 0;
+      for (const it of items) {
+        const w = (weight?.(it.feature) ?? 1) * it.weight;
+        num += (value(it.feature) ?? 0) * w;
+        den += w;
+      }
+      return den > 0 ? num / den : 0;
+    }
+
+    let total = 0;
+    for (const it of items) total += (value(it.feature) ?? 0) * it.weight;
+    return total;
+  }
+
+  /**
+   * A measure spec for a plain count of units, which is always extensive.
+   * Useful as a default so `binUnits` has something to aggregate.
+   */
+  const UNIT_COUNT = { value: () => 1, kind: 'extensive' };
+
+  /**
    * Binning — how the enclosed set is decomposed.
    *
    * VisQuill's lens only ever does `categorical`: everything inside the radius
@@ -536,6 +735,7 @@ var glyphlens = (function (exports) {
    *   radial       radius = distance band       distance decay
    *   cross        bearing x category           both
    *   chainage     position = DISTANCE ALONG    what changes along a route
+   *   unit         one bin per areal unit       census geography, as a necklace
    *
    * Every bin carries `bearing` (its preferred angular position, or null when the
    * mode has none) and `interval` (its feasible arc, or null). Those two fields
@@ -545,11 +745,23 @@ var glyphlens = (function (exports) {
 
   const TAU_DEG = 360;
 
-  /** Sum of `value` over items, or a plain count when no accessor is given. */
-  function measure(items, getValue) {
-    if (!getValue) return items.length;
+  /**
+   * Aggregate a group.
+   *
+   * A `measure` spec routes to `aggregate`, which knows the difference between
+   * extensive and intensive quantities. Otherwise this sums `value`, or counts,
+   * weighting by `item.weight` where there is one — which is 1 for every point,
+   * so the point path is unchanged.
+   */
+  function measure(items, getValue, measureSpec) {
+    if (measureSpec) return aggregate(items, measureSpec);
+    if (!getValue) {
+      let n = 0;
+      for (const it of items) n += it.weight ?? 1;
+      return n;
+    }
     let sum = 0;
-    for (const it of items) sum += getValue(it.feature) ?? 0;
+    for (const it of items) sum += (getValue(it.feature) ?? 0) * (it.weight ?? 1);
     return sum;
   }
 
@@ -574,6 +786,8 @@ var glyphlens = (function (exports) {
         return binCross(items, spec);
       case 'chainage':
         return binChainage(items, spec);
+      case 'unit':
+        return binUnits(items, spec);
       case 'categorical':
       default:
         return binCategorical(items, spec);
@@ -597,7 +811,7 @@ var glyphlens = (function (exports) {
         label: key,
         category: key,
         count: group.length,
-        raw: measure(group, spec.value),
+        raw: measure(group, spec.value, spec.measure),
         items: group,
         // Nominal order carries no bearing: placement will lay these out in
         // blocks unless the caller morphs towards `angular`.
@@ -636,7 +850,7 @@ var glyphlens = (function (exports) {
         category: null,
         dominant: getCategory && group.length ? dominantOf(group, getCategory) : null,
         count: group.length,
-        raw: measure(group, spec.value),
+        raw: measure(group, spec.value, spec.measure),
         items: group,
         bearing: centre,
         // A bin owns exactly its wedge — this is a real feasible interval, so
@@ -673,7 +887,7 @@ var glyphlens = (function (exports) {
       category: null,
       dominant: getCategory && group.length ? dominantOf(group, getCategory) : null,
       count: group.length,
-      raw: measure(group, spec.value),
+      raw: measure(group, spec.value, spec.measure),
       items: group,
       chainage: i * step + step / 2,
       // Curve parameter, so placement needs no knowledge of corridors.
@@ -681,6 +895,39 @@ var glyphlens = (function (exports) {
       interval: [i / nBins, (i + 1) / nBins],
       bearing: null,
       areaKm2: spec.width ? (step / 1000) * (spec.width / 1000) : undefined,
+    }));
+  }
+
+  /**
+   * One bin per areal unit — a necklace map of census geography.
+   *
+   * This is the mode the interval API was designed for. Each unit carries the arc
+   * it actually subtends from the lens centre, so placement may slide a symbol
+   * along that arc to avoid its neighbours but can never move it somewhere the
+   * unit is not. Angular bins own a wedge by construction; a unit owns whatever
+   * arc its geometry occupies (docs/findings.md F-1, F-21).
+   */
+  function binUnits(items, spec = {}) {
+    const label = spec.label ?? ((f) => f.name ?? f.code ?? '');
+    const key = spec.key ?? ((f) => f.code ?? f.id ?? f.name);
+    const getCategory = spec.category;
+
+    return items.map((it) => ({
+      key: String(key(it.feature)),
+      label: String(label(it.feature)),
+      category: getCategory ? String(getCategory(it.feature)) : null,
+      count: 1,
+      raw: measure([it], spec.value, spec.measure),
+      items: [it],
+      weight: it.weight,
+      bearing: it.bearing,
+      // The unit's true angular extent, when it has one. A unit containing the
+      // lens centre subtends everything, so it gets no interval and placement is
+      // free to put it anywhere.
+      interval: it.interval ?? null,
+      meanBearing: it.bearing,
+      // Only the part inside the lens counts towards density.
+      areaKm2: (it.unitAreaKm2 ?? 0) * (it.weight ?? 1),
     }));
   }
 
@@ -699,7 +946,7 @@ var glyphlens = (function (exports) {
       key: `r${i}`,
       label: `${Math.round(i * step)}–${Math.round((i + 1) * step)} m`,
       count: group.length,
-      raw: measure(group, spec.value),
+      raw: measure(group, spec.value, spec.measure),
       items: group,
       ring: i,
       // Ring area, so radial bins can be density-normalised honestly: outer
@@ -729,7 +976,7 @@ var glyphlens = (function (exports) {
           label: `${key} ${sector.label}`,
           category: key,
           count: group.length,
-          raw: measure(group, spec.value),
+          raw: measure(group, spec.value, spec.measure),
           items: group,
           bearing: sector.bearing,
           interval: sector.interval,
@@ -1700,7 +1947,13 @@ var glyphlens = (function (exports) {
     const circumference = TAU$1 * ringRadius;
 
     // 1. selection
-    const sel = select(data, selection, { getPosition });
+    //
+    // Areal members need their own selector: they can be partly inside, they
+    // carry a weight, and they subtend an arc rather than a bearing. Everything
+    // downstream sees the same annotated items either way.
+    const sel = config.areal
+      ? arealSelect(data, selection, { ...config.areal, getAnchor: config.areal.getAnchor })
+      : select(data, selection, { getPosition });
     const { items } = sel;
     if (sel.length != null) selection.length = sel.length;
     // A polygon has no centre until its centroid is computed, and everything
@@ -1708,7 +1961,10 @@ var glyphlens = (function (exports) {
     // resolved so the layout, the structure stage and the renderer all agree.
     const anchor = center ?? sel.center ?? null;
     if (sel.center && !selection.center) selection.center = sel.center;
-    const areaKm2 = selectionArea(selection);
+    // For areal data the meaningful denominator is the land actually covered by
+    // the selected units, not the lens disc — much of a disc over a coastline or
+    // a park is not in any unit at all.
+    const areaKm2 = config.areal ? (sel.area ?? 0) : selectionArea(selection);
 
     // 2. binning
     let bins = bin(items, {
@@ -1716,6 +1972,11 @@ var glyphlens = (function (exports) {
       radius: selection.radius,
       length: selection.length ?? sel.length,
       width: selection.width,
+      // After the spread, not before: an absent `binSpec.mode` would otherwise
+      // overwrite this with undefined. An areal lens defaults to one bin per
+      // unit, which is the reading census geography supports and the one the
+      // interval API exists for.
+      mode: config.areal ? (binSpec.mode ?? 'unit') : binSpec.mode,
     });
 
     // 2b. within-unit structure — the parallel summary of how each bin's members
@@ -2007,7 +2268,15 @@ var glyphlens = (function (exports) {
         displacement: (p.displacement ?? 0) * 360, // degrees, for Q-2
         size: sizeOf(b) * scale,
         halfWidth: p.halfWidth,
+        // Two different widths, deliberately. `halfWidthPx` is the footprint
+        // placement reserved, which includes room for a label; `markHalfWidthPx`
+        // is how wide the mark itself should be drawn. Conflating them makes a
+        // bar as wide as its own label, which is very obvious with long names
+        // and easy to miss with short ones (docs/findings.md F-22).
         halfWidthPx: p.halfWidth * circumference,
+        markHalfWidthPx: radialGlyph
+          ? sizeOf(b) * scale
+          : Math.max(barWidth * (marks._scale ?? 1), marks.minWidth ?? 1) / 2,
         signed: (Number.isFinite(b.value) ? b.value : 0) - neutral,
       };
     });
@@ -2957,7 +3226,7 @@ var glyphlens = (function (exports) {
         // diverging normalisation reads directly off the anchor.
         const inward = (bin.signed ?? 1) < 0;
         const extent = inward ? -bin.size : bin.size;
-        const half = Math.max(bin.halfWidthPx, 0.5);
+        const half = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 0.5);
 
         if (onCircle) {
           // Curved edges are worth the special case on a ring: at the widths a
@@ -3136,7 +3405,7 @@ var glyphlens = (function (exports) {
           const lo = inward ? base - bin.size : base;
           const hi = inward ? base : base + bin.size;
           if (r < lo || r > hi) continue;
-          const halfAngle = Math.max(bin.halfWidthPx, 3) / base;
+          const halfAngle = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 3) / base;
           if (Math.abs(angleDelta(bin.angle, a)) <= halfAngle) return bin;
         }
       }
@@ -3334,6 +3603,7 @@ var glyphlens = (function (exports) {
         placement: curveLength ? { ...o.placement, curveLength } : o.placement,
         marks: o.marks,
         structure: o.structure,
+        areal: o.areal,
         ring: { radius: this.renderer.style.ringRadius },
       });
 
@@ -3678,6 +3948,7 @@ var glyphlens = (function (exports) {
         normalisation: o.normalisation,
         placement: o.placement,
         marks: o.marks,
+        areal: o.areal,
         minCount: o.minCount,
         spacing,
         ring: { radius: ringRadius },
@@ -3748,14 +4019,19 @@ var glyphlens = (function (exports) {
   exports.LensRenderer = LensRenderer;
   exports.PRESETS = PRESETS;
   exports.TOUCHING = TOUCHING;
+  exports.UNIT_COUNT = UNIT_COUNT;
   exports.addField = addField;
   exports.addLens = addLens;
+  exports.aggregate = aggregate;
   exports.angularHistogram = angularHistogram;
+  exports.areaFractionInside = areaFractionInside;
+  exports.arealSelect = arealSelect;
   exports.bin = bin;
   exports.binAngular = binAngular;
   exports.binCategorical = binCategorical;
   exports.binCross = binCross;
   exports.binRadial = binRadial;
+  exports.binUnits = binUnits;
   exports.circleCurve = circleCurve;
   exports.circularMean = circularMean;
   exports.circularStats = circularStats;

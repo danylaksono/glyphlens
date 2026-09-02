@@ -10,6 +10,7 @@
  *   radial       radius = distance band       distance decay
  *   cross        bearing x category           both
  *   chainage     position = DISTANCE ALONG    what changes along a route
+ *   unit         one bin per areal unit       census geography, as a necklace
  *
  * Every bin carries `bearing` (its preferred angular position, or null when the
  * mode has none) and `interval` (its feasible arc, or null). Those two fields
@@ -17,14 +18,27 @@
  */
 
 import { normaliseBearing } from './geo.js';
+import { aggregate } from './areal.js';
 
 const TAU_DEG = 360;
 
-/** Sum of `value` over items, or a plain count when no accessor is given. */
-function measure(items, getValue) {
-  if (!getValue) return items.length;
+/**
+ * Aggregate a group.
+ *
+ * A `measure` spec routes to `aggregate`, which knows the difference between
+ * extensive and intensive quantities. Otherwise this sums `value`, or counts,
+ * weighting by `item.weight` where there is one — which is 1 for every point,
+ * so the point path is unchanged.
+ */
+function measure(items, getValue, measureSpec) {
+  if (measureSpec) return aggregate(items, measureSpec);
+  if (!getValue) {
+    let n = 0;
+    for (const it of items) n += it.weight ?? 1;
+    return n;
+  }
   let sum = 0;
-  for (const it of items) sum += getValue(it.feature) ?? 0;
+  for (const it of items) sum += (getValue(it.feature) ?? 0) * (it.weight ?? 1);
   return sum;
 }
 
@@ -49,6 +63,8 @@ export function bin(items, spec) {
       return binCross(items, spec);
     case 'chainage':
       return binChainage(items, spec);
+    case 'unit':
+      return binUnits(items, spec);
     case 'categorical':
     default:
       return binCategorical(items, spec);
@@ -72,7 +88,7 @@ export function binCategorical(items, spec = {}) {
       label: key,
       category: key,
       count: group.length,
-      raw: measure(group, spec.value),
+      raw: measure(group, spec.value, spec.measure),
       items: group,
       // Nominal order carries no bearing: placement will lay these out in
       // blocks unless the caller morphs towards `angular`.
@@ -111,7 +127,7 @@ export function binAngular(items, spec = {}) {
       category: null,
       dominant: getCategory && group.length ? dominantOf(group, getCategory) : null,
       count: group.length,
-      raw: measure(group, spec.value),
+      raw: measure(group, spec.value, spec.measure),
       items: group,
       bearing: centre,
       // A bin owns exactly its wedge — this is a real feasible interval, so
@@ -148,7 +164,7 @@ export function binChainage(items, spec = {}) {
     category: null,
     dominant: getCategory && group.length ? dominantOf(group, getCategory) : null,
     count: group.length,
-    raw: measure(group, spec.value),
+    raw: measure(group, spec.value, spec.measure),
     items: group,
     chainage: i * step + step / 2,
     // Curve parameter, so placement needs no knowledge of corridors.
@@ -156,6 +172,39 @@ export function binChainage(items, spec = {}) {
     interval: [i / nBins, (i + 1) / nBins],
     bearing: null,
     areaKm2: spec.width ? (step / 1000) * (spec.width / 1000) : undefined,
+  }));
+}
+
+/**
+ * One bin per areal unit — a necklace map of census geography.
+ *
+ * This is the mode the interval API was designed for. Each unit carries the arc
+ * it actually subtends from the lens centre, so placement may slide a symbol
+ * along that arc to avoid its neighbours but can never move it somewhere the
+ * unit is not. Angular bins own a wedge by construction; a unit owns whatever
+ * arc its geometry occupies (docs/findings.md F-1, F-21).
+ */
+export function binUnits(items, spec = {}) {
+  const label = spec.label ?? ((f) => f.name ?? f.code ?? '');
+  const key = spec.key ?? ((f) => f.code ?? f.id ?? f.name);
+  const getCategory = spec.category;
+
+  return items.map((it) => ({
+    key: String(key(it.feature)),
+    label: String(label(it.feature)),
+    category: getCategory ? String(getCategory(it.feature)) : null,
+    count: 1,
+    raw: measure([it], spec.value, spec.measure),
+    items: [it],
+    weight: it.weight,
+    bearing: it.bearing,
+    // The unit's true angular extent, when it has one. A unit containing the
+    // lens centre subtends everything, so it gets no interval and placement is
+    // free to put it anywhere.
+    interval: it.interval ?? null,
+    meanBearing: it.bearing,
+    // Only the part inside the lens counts towards density.
+    areaKm2: (it.unitAreaKm2 ?? 0) * (it.weight ?? 1),
   }));
 }
 
@@ -174,7 +223,7 @@ export function binRadial(items, spec = {}) {
     key: `r${i}`,
     label: `${Math.round(i * step)}–${Math.round((i + 1) * step)} m`,
     count: group.length,
-    raw: measure(group, spec.value),
+    raw: measure(group, spec.value, spec.measure),
     items: group,
     ring: i,
     // Ring area, so radial bins can be density-normalised honestly: outer
@@ -204,7 +253,7 @@ export function binCross(items, spec = {}) {
         label: `${key} ${sector.label}`,
         category: key,
         count: group.length,
-        raw: measure(group, spec.value),
+        raw: measure(group, spec.value, spec.measure),
         items: group,
         bearing: sector.bearing,
         interval: sector.interval,

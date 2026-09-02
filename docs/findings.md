@@ -684,6 +684,101 @@ A related effect worth keeping: at high counts most cells fall below `minCount`
 and are not drawn. The field then shows where the data *is* as well as what it
 is like, which is a reading a full tessellation would hide.
 
+### F-21. Nothing about a number says whether it can be added up
+
+Recorded 2026-09-02.
+
+The single most consequential thing in the areal work, and it is not geometric.
+
+Census attributes come in two kinds, and the distinction is invisible in the
+data:
+
+- **Extensive** — counts, totals, population. Apportionable and summable. A
+  district half inside the lens contributes half its people.
+- **Intensive** — rates, shares, medians, densities. Neither apportionable nor
+  summable. Half a district has the *same* unemployment rate, and adding two
+  rates together means nothing at all.
+
+Summing a column of percentages is the classic census-visualisation bug, and it
+produces a map that looks entirely plausible. So `measure.kind` is **required**
+rather than inferred: guessing wrong yields a confident, wrong picture, which is
+worse than an error.
+
+Intensive measures are averaged weighted by whatever the rate is a rate *of* —
+population, households, area. That denominator matters more than it looks. A
+small district at 100% and a large one at 0% averages to 1% population-weighted
+and 50% unweighted; both are arithmetic, only one is the answer. There is a test
+for exactly that pair.
+
+Partial containment composes with this correctly: a unit 10% inside keeps its
+rate and contributes a tenth of the weight, rather than a tenth of the rate.
+
+### F-22. A mark's width is not the room placement reserved for it
+
+Recorded 2026-09-02.
+
+[F-7](#f-7-placement-must-reserve-room-for-labels-not-just-marks) folded label
+width into the half-width handed to the solver, so labelled marks would stop
+colliding. That was right, but the renderer then drew each bar at that same
+half-width — so **a bar came out as wide as its own label**.
+
+With four short category names it looked like a deliberate style. With eleven
+Indonesian district names it was unmistakable: the ring became a solid band.
+
+Two different quantities were sharing one field. The layout now emits both:
+`halfWidthPx`, the footprint placement reserved, and `markHalfWidthPx`, how wide
+the mark should actually be drawn. Hit testing follows the drawn mark, not the
+reservation, so the target matches what is on screen.
+
+The near-miss is the lesson: the bug was present from the moment F-7 landed and
+survived several demos, because the data it was wrong on happened to have short
+labels. Real data with long names exposed it immediately.
+
+### F-23. The interval API paid off exactly as F-1 predicted
+
+Recorded 2026-09-02.
+
+[F-1](#f-1-the-interval-api-is-load-bearing) argued, on the first day, that the
+necklace engine should take a feasible *interval* rather than a preferred angle
+— even though the point-data pipeline only ever needed the angle — because for
+areal units the interval is the real constraint and the point case is the
+degenerate one. `angularExtent` was then built in
+[F-18](#f-18-three-reserved-selections-turned-out-to-be-one) ahead of any
+consumer, which is normally a thing worth avoiding.
+
+Both calls were right. Adding census geography needed **no change to the solver,
+the placement stage, the normalisation stage or the renderer's mark drawing**.
+What it needed was a selector that understands polygons, an aggregation rule
+that understands rates, and one binning mode. A test asserts the property the
+whole design turned on: with three units crowded into one quadrant, placement
+separates their symbols and none of them leaves the arc its own geometry
+occupies.
+
+Worth stating plainly because the reverse is the usual outcome: a general
+mechanism designed before its general case usually turns out to have been
+designed for the wrong generality. This one did not, and the reason is that F-1
+was derived from Speckmann & Verbeek's actual formulation rather than from a
+guess about what might be needed later.
+
+### F-24. Web Mercator is not an area
+
+Recorded 2026-09-02.
+
+Mine, in the data preparation rather than the library. Building the district
+fixture I computed each unit's area in EPSG:3857, and the numbers were 2.6% too
+large — Web Mercator inflates area by `1/cos²(latitude)`, which even at 7.8°
+south is enough to notice.
+
+It surfaced because two figures on the page disagreed: the lens total divided by
+the covered area did not match the area-weighted mean density, and the ratio was
+exactly the inflation factor. Recomputed in UTM zone 49S.
+
+Two things worth keeping from it. Cross-checking one derived figure against
+another computed a different way is a cheap and effective error detector — the
+discrepancy was 2%, small enough to shrug at and large enough to be a real bug.
+And a projection chosen for *display* is almost never the right one for
+*measurement*.
+
 ---
 
 ## Open questions

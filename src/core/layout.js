@@ -16,6 +16,7 @@
  */
 
 import { select, selectComplement, selectionArea } from './selection.js';
+import { arealSelect } from './areal.js';
 import { bin } from './binning.js';
 import { normalise, confidence, profileOf } from './normalise.js';
 import { placeNecklace, fitNecklaceScale } from './necklace.js';
@@ -54,7 +55,13 @@ export function computeLens(config) {
   const circumference = TAU * ringRadius;
 
   // 1. selection
-  const sel = select(data, selection, { getPosition });
+  //
+  // Areal members need their own selector: they can be partly inside, they
+  // carry a weight, and they subtend an arc rather than a bearing. Everything
+  // downstream sees the same annotated items either way.
+  const sel = config.areal
+    ? arealSelect(data, selection, { ...config.areal, getAnchor: config.areal.getAnchor })
+    : select(data, selection, { getPosition });
   const { items } = sel;
   if (sel.length != null) selection.length = sel.length;
   // A polygon has no centre until its centroid is computed, and everything
@@ -62,7 +69,10 @@ export function computeLens(config) {
   // resolved so the layout, the structure stage and the renderer all agree.
   const anchor = center ?? sel.center ?? null;
   if (sel.center && !selection.center) selection.center = sel.center;
-  const areaKm2 = selectionArea(selection);
+  // For areal data the meaningful denominator is the land actually covered by
+  // the selected units, not the lens disc — much of a disc over a coastline or
+  // a park is not in any unit at all.
+  const areaKm2 = config.areal ? (sel.area ?? 0) : selectionArea(selection);
 
   // 2. binning
   let bins = bin(items, {
@@ -70,6 +80,11 @@ export function computeLens(config) {
     radius: selection.radius,
     length: selection.length ?? sel.length,
     width: selection.width,
+    // After the spread, not before: an absent `binSpec.mode` would otherwise
+    // overwrite this with undefined. An areal lens defaults to one bin per
+    // unit, which is the reading census geography supports and the one the
+    // interval API exists for.
+    mode: config.areal ? (binSpec.mode ?? 'unit') : binSpec.mode,
   });
 
   // 2b. within-unit structure — the parallel summary of how each bin's members
@@ -361,7 +376,15 @@ function layoutMarks(bins, { placement, marks, ringRadius, circumference, closed
       displacement: (p.displacement ?? 0) * 360, // degrees, for Q-2
       size: sizeOf(b) * scale,
       halfWidth: p.halfWidth,
+      // Two different widths, deliberately. `halfWidthPx` is the footprint
+      // placement reserved, which includes room for a label; `markHalfWidthPx`
+      // is how wide the mark itself should be drawn. Conflating them makes a
+      // bar as wide as its own label, which is very obvious with long names
+      // and easy to miss with short ones (docs/findings.md F-22).
       halfWidthPx: p.halfWidth * circumference,
+      markHalfWidthPx: radialGlyph
+        ? sizeOf(b) * scale
+        : Math.max(barWidth * (marks._scale ?? 1), marks.minWidth ?? 1) / 2,
       signed: (Number.isFinite(b.value) ? b.value : 0) - neutral,
     };
   });
