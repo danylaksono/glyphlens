@@ -50,14 +50,14 @@ The library itself needs no build: the `exports` map points bundlers and the
 examples straight at the ESM sources in `src/`, which is why the examples work
 unchanged on GitHub Pages.
 
-### From a CDN
+### Loading it in a browser
 
-`dist/` is committed, so the bundles are served from the repo and from the live
-site without anything having to run a build:
+`dist/` is committed, so the bundles are served straight from the live site with
+nothing having to run a build:
 
 ```html
 <!-- plain script tag: defines window.glyphlens -->
-<script src="https://cdn.jsdelivr.net/gh/danylaksono/glyphlens@main/dist/glyphlens.global.min.js"></script>
+<script src="https://danylaksono.is-a.dev/glyphlens/dist/glyphlens.global.min.js"></script>
 
 <!-- or as a module -->
 <script type="module">
@@ -65,9 +65,13 @@ site without anything having to run a build:
 </script>
 ```
 
-Not on npm yet, so the jsDelivr path is the `gh/` one and pins to a branch
-rather than a version — pin a commit SHA instead of `@main` if you need
-stability.
+That URL tracks `main`, so pin a copy if you need stability.
+
+**Not on a CDN yet.** jsDelivr's `gh/` path only serves public repositories and
+this one is private, so `cdn.jsdelivr.net/gh/danylaksono/glyphlens` 404s. Making
+the repo public would enable it immediately (the committed `dist/` is what makes
+that work with no build on their side); publishing to npm would enable the
+shorter `npm/glyphlens` path as well.
 
 ## Use
 
