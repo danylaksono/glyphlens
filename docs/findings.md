@@ -617,6 +617,73 @@ extension turns on ([F-1](#f-1-the-interval-api-is-load-bearing)). It returns
 viewer constrains nothing. Building it now, with tests, means the census work
 starts from a tested primitive rather than a claim.
 
+### F-19. A field needs one baseline, not one per cell
+
+Recorded 2026-09-02.
+
+`computeLens` defaults the `lq` baseline to the lens's own surroundings — the
+"exterior effect scope" of the design space, and the right default for a single
+lens, because the question is "what is unusual *here* relative to nearby".
+
+Applied unchanged to a field, that default is quietly catastrophic. Every cell
+would be compared to its own neighbourhood, so every cell would come out close
+to average by construction, and the map would say nothing at all. The failure is
+worse than a wrong answer because it looks plausible: a smooth field of values
+near 1.
+
+`computeField` therefore derives one baseline from the whole dataset and passes
+it to every lens. It also computes it once rather than per cell, which matters —
+the per-lens default calls `selectComplement` over all data, so a 400-cell field
+would have scanned the dataset 400 times.
+
+The general shape of this: **a default that encodes "relative to context" has to
+be re-examined the moment the same object is tiled**, because tiling changes what
+the context is. Worth checking the other defaults against the field case as they
+accumulate.
+
+### F-20. The continuum holds, and stops being multivariate around ten pixels
+
+Recorded 2026-09-02.
+
+[Design space §5](design-space.md#5-the-continuum-recorded-now-built-later)
+claimed a lens and a gridded glyphmap are the same object at different
+`hSpSubset` settings. Built, and the claim holds: `computeField` calls
+`computeLens` once per lattice centre and changes nothing else. The binning, the
+normalisation, the necklace solver and the renderer are the same code at every
+position on the slider. Only two things had to be added, and neither is a lens
+concept: somewhere to put the centres, and a spatial index so a field of `m`
+lenses over `n` features does not cost O(n·m).
+
+The three preconditions [F-2](#f-2-what-the-continuum-needs-from-the-core)
+recorded all paid off, which is the more useful result — they were written down
+before there was anything to test them against:
+
+1. *A lens is a value, not a singleton.* `computeField` is a loop. Nothing
+   needed changing.
+2. *Layout is separate from rendering.* The field renders by calling `draw` per
+   layout with a different frame.
+3. *Anchor is a curve.* Not exercised here, but the reason a stacked or corridor
+   field would also be free.
+
+**Where it stops working.** The deferred item in F-2 was level of detail, and it
+turned out to be the real constraint. Chrome that reads at 150px — compass,
+labels, values, spread arcs, the centre dot — is a grey smear at 20px, so
+`resolveLod` sheds it in two coarse steps. Interpolating instead produces a band
+of sizes where everything is present and nothing is legible.
+
+But below roughly **ten pixels of ring radius** the glyph stops carrying
+multivariate information at all. The bars are a pixel or two; what remains is
+essentially a density map with texture. That is not a bug to tune away — it is
+the resolution limit of the in-situ mini-chart strategy, and it is exactly the
+trade-off Chapter 4 names between spatial resolution and multivariate
+resolution. The honest framing is that the continuum has a **usable** range
+rather than an infinite one, and the field is most informative in the middle of
+it, around 20–40px, where a cell is still a chart but the eye reads the surface.
+
+A related effect worth keeping: at high counts most cells fall below `minCount`
+and are not drawn. The field then shows where the data *is* as well as what it
+is like, which is a reading a full tessellation would hide.
+
 ---
 
 ## Open questions

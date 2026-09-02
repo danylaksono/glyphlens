@@ -8,7 +8,9 @@ the first JavaScript implementation of **necklace-map placement**.
 > data it summarises lies to the northwest.
 
 **Try it:** [gallery](examples/gallery.html) — twelve points in the design space,
-one dataset · [ring lens](examples/) · [corridor lens](examples/corridor.html).
+one dataset · [continuum](examples/continuum.html) — one lens to a gridded
+glyphmap on one slider · [ring lens](examples/) ·
+[corridor lens](examples/corridor.html).
 Live, no build step, and the interactive demos fall back to a bundled OSM
 extract when Overpass is down.
 
@@ -40,7 +42,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (89 tests, no runtime dependencies)
+npm test        # node --test (101 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -103,6 +105,32 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `marks.sizeBy` | `value` · `equal` | which reading owns size; roses default to `equal` |
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
 | `style.preset` | `paper` · `night` · `minimal` · `structure` | |
+
+### Fields: one lens, or a glyphmap
+
+A lens and a gridded glyphmap are the same object at different settings, so a
+field is a loop over `computeLens` rather than a second implementation:
+
+```js
+import { addField } from 'glyphlens/maplibre';
+
+const field = addField(map, {
+  center: [110.3695, -7.7956],
+  data: places,
+  coverRadius: 4200,
+  count: 60,            // 1 = focus lens; a few = small multiples; many = glyphmap
+  minCount: 3,          // don't draw cells with almost nothing in them
+  binning: { mode: 'angular', bins: 12 },
+});
+
+field.setCount(300);
+```
+
+Two things worth knowing. A field derives **one** shared baseline for `lq` and
+`delta` — per-cell baselines would make every cell average by construction. And
+the renderer sheds chrome as rings shrink; below about ten pixels the glyph
+stops carrying multivariate information and the field reads as a density
+surface, which is the resolution limit of the technique rather than a bug.
 
 ### Any shape: polygon, lasso, isochrone
 
@@ -264,6 +292,7 @@ src/core/      pure pipeline — no DOM, no map, no framework
   necklace.js    placement (Speckmann–Verbeek, via isotonic regression)
   isotonic.js    weighted PAV, exact
   distribution.js  within-unit structure: circular stats, MAUP elasticity
+  field.js       lattices, spatial index — the lens/glyphmap continuum
   layout.js      composes the six stages into a plain geometry object
 src/render/    canvas renderer + style tokens
 src/adapters/  maplibre (deck.gl over MapLibre works today; standalone

@@ -51,6 +51,9 @@ export const DEFAULT_STYLE = {
   valueFloor: 0.35,   // 'auto' threshold, as a fraction of the largest mark
   showLabels: true,
   maxLabels: 12,      // beyond this many marks, drop per-mark labels
+  lod: true,          // shed chrome as the ring shrinks (see resolveLod)
+  lodFull: 60,        // px: full chrome at or above this ring radius
+  lodCompact: 26,     // px: marks + ring only below this
   stripLabelOffset: 12, // label inset on the far side of an open curve, px
 
   // Within-unit structure (docs/design-space.md §4).
@@ -114,6 +117,39 @@ export const PRESETS = {
     boundaryStroke: 'rgba(20,20,25,0.25)',
   },
 };
+
+/**
+ * Level of detail from the size a lens is actually being drawn at.
+ *
+ * docs/findings.md F-2 deferred this as "what the tessellated case will
+ * actually need", and it does: at 400 lenses each ring is a dozen pixels, and
+ * chrome that reads well at 150px — compass, labels, values, spread arcs, the
+ * centre dot — becomes a grey smear that hides the marks it surrounds.
+ *
+ * The thresholds are deliberately coarse. Chrome either fits or it does not,
+ * and interpolating it produces a band of sizes where everything is present and
+ * nothing is legible.
+ */
+export function resolveLod(ringRadius, style) {
+  if (style.lod === false) return null;
+  const r = ringRadius ?? style.ringRadius;
+  if (r >= (style.lodFull ?? 60)) return null;              // full chrome
+  if (r >= (style.lodCompact ?? 26)) {
+    return { showLabels: false, showValues: false, compass: false, centreDot: 1.5 };
+  }
+  // Marks only. At this size the field is read as a surface, not as
+  // individual charts, and everything else is noise.
+  return {
+    showLabels: false,
+    showValues: false,
+    compass: false,
+    structure: 'none',
+    centreDot: 0,
+    ringWidth: 0.6,
+    boundaryStroke: 'transparent',
+    dimExterior: false,
+  };
+}
 
 export function resolveStyle(style = {}) {
   const preset = typeof style.preset === 'string' ? PRESETS[style.preset] ?? {} : {};

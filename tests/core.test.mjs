@@ -16,6 +16,10 @@ import {
 import { normalise, profileOf } from '../src/core/normalise.js';
 import { computeLens } from '../src/core/layout.js';
 import {
+  hexLattice, spatialIndex, computeField, fieldBaseline, spacingForCount,
+} from '../src/core/field.js';
+import { resolveStyle, resolveLod } from '../src/render/style.js';
+import {
   circularStats,
   radialStats,
   lateralStats,
@@ -890,4 +894,181 @@ test('angularExtent gives the arc a polygon occupies, and null from inside', () 
   assert.ok(lo > 45 && lo < 135, `lo = ${lo}`);
   assert.ok(hi > 45 && hi < 135, `hi = ${hi}`);
   assert.equal(angularExtent([-0.125, 51.51], SQUARE), null, 'inside spans everything');
+});
+
+// ------------------------------------------------------------ field / continuum
+
+const FIELD_CENTRE = [110.3695, -7.7956];
+
+/** A ring of places 600 m out, plus a dense knot to the north. */
+function fieldData() {
+  const out = [];
+  for (let b = 0; b < 360; b += 15) {
+    const p = destination(FIELD_CENTRE, b, 600);
+    out.push({ lng: p[0], lat: p[1], category: 'food' });
+  }
+  for (let i = 0; i < 40; i++) {
+    const p = destination(FIELD_CENTRE, 350 + (i % 7), 900 + i);
+    out.push({ lng: p[0], lat: p[1], category: 'retail' });
+  }
+  return out;
+}
+
+test('hexLattice covers the radius and offsets alternate rows', () => {
+  const centres = hexLattice({ center: FIELD_CENTRE, radius: 2000, spacing: 500 });
+  assert.ok(centres.length > 10, `got ${centres.length}`);
+  for (const c of centres) {
+    assert.ok(distance(FIELD_CENTRE, c) <= 2000 + 1, 'inside the covered radius');
+  }
+  // Distinct row offsets are what make it hexagonal rather than square.
+  const xs = new Set(centres.map((c) => c[0].toFixed(6)));
+  assert.ok(xs.size > Math.sqrt(centres.length), 'columns are not all aligned');
+});
+
+test('hexLattice degrades to a single centre without a spacing', () => {
+  assert.deepEqual(hexLattice({ center: FIELD_CENTRE, radius: 2000, spacing: 0 }),
+    [FIELD_CENTRE]);
+});
+
+test('spacingForCount inverts roughly to the count asked for', () => {
+  for (const target of [10, 50, 200]) {
+    const spacing = spacingForCount(target, 3000);
+    const got = hexLattice({ center: FIELD_CENTRE, radius: 3000, spacing }).length;
+    assert.ok(Math.abs(got - target) / target < 0.35,
+      `asked ${target}, laid ${got}`);
+  }
+});
+
+test('spatialIndex never misses a true neighbour', () => {
+  // `near` is a broad phase: it may over-include, but it must never omit
+  // something inside the radius, because `select` only filters what it returns.
+  const data = fieldData();
+  const index = spatialIndex(data, {
+    getPosition: (f) => [f.lng, f.lat],
+    origin: FIELD_CENTRE,
+    cellSize: 500,
+  });
+  const radius = 700;
+  const candidates = new Set(index.near(FIELD_CENTRE, radius));
+  const truth = data.filter((f) => distance(FIELD_CENTRE, [f.lng, f.lat]) <= radius);
+  assert.ok(truth.length > 0, 'the fixture has neighbours to find');
+  for (const f of truth) assert.ok(candidates.has(f), 'no true neighbour is missed');
+});
+
+test('spatialIndex prunes distant cells on spread-out data', () => {
+  // Selectivity only shows up when the data is wider than the query, so this
+  // uses two clusters 20 km apart rather than the tight fixture above.
+  const far = destination(FIELD_CENTRE, 90, 20000);
+  const data = [
+    ...fieldData(),
+    ...Array.from({ length: 200 }, (_, i) => {
+      const p = destination(far, i * 1.8, 300);
+      return { lng: p[0], lat: p[1], category: 'food' };
+    }),
+  ];
+  const index = spatialIndex(data, {
+    getPosition: (f) => [f.lng, f.lat],
+    origin: FIELD_CENTRE,
+    cellSize: 500,
+  });
+  const near = index.near(FIELD_CENTRE, 700);
+  assert.ok(near.length < data.length / 2,
+    `pruned to ${near.length} of ${data.length}`);
+});
+
+test('spatialIndex reaches further when the radius exceeds a cell', () => {
+  const data = fieldData();
+  const index = spatialIndex(data, {
+    getPosition: (f) => [f.lng, f.lat],
+    origin: FIELD_CENTRE,
+    cellSize: 200,   // much smaller than the query radius
+  });
+  // Every member is within 1 km, so a 1.2 km query must reach all of them
+  // despite the small cells — this is the `reach` calculation.
+  assert.equal(index.near(FIELD_CENTRE, 1200).length, data.length);
+});
+
+test('computeField lays a lens per populated centre and skips sparse ones', () => {
+  const data = fieldData();
+  const centres = hexLattice({ center: FIELD_CENTRE, radius: 2000, spacing: 500 });
+  const field = computeField({
+    centres,
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: 250 },
+    binning: { mode: 'angular', bins: 8 },
+    marks: { type: 'bar' },
+    ring: { radius: 20 },
+    minCount: 3,
+  });
+  assert.equal(field.stats.centres, centres.length);
+  assert.ok(field.lenses.length > 0, 'some cells hold data');
+  assert.ok(field.stats.skipped > 0, 'and the empty ones are skipped');
+  assert.equal(field.stats.drawn + field.stats.skipped, centres.length);
+  for (const lens of field.lenses) {
+    assert.ok(lens.stats.count >= 3, 'no lens below minCount survives');
+  }
+});
+
+test('non-overlapping cells never double-count a member', () => {
+  const data = fieldData();
+  const spacing = 500;
+  const centres = hexLattice({ center: FIELD_CENTRE, radius: 2500, spacing });
+  const field = computeField({
+    centres,
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    // Radius at half the spacing: discs touch but do not overlap.
+    selection: { type: 'disc', radius: spacing * 0.5 },
+    binning: { mode: 'angular', bins: 8 },
+    marks: { type: 'bar' },
+    ring: { radius: 20 },
+    minCount: 1,
+  });
+  assert.ok(field.stats.members <= data.length,
+    `${field.stats.members} binned from ${data.length} places`);
+});
+
+test('a field shares one baseline rather than one per cell', () => {
+  const data = fieldData();
+  const centres = hexLattice({ center: FIELD_CENTRE, radius: 1500, spacing: 600 });
+  const config = {
+    centres,
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: 300 },
+    binning: { mode: 'categorical', category: (f) => f.category },
+    normalisation: { mode: 'lq' },
+    marks: { type: 'bar' },
+    ring: { radius: 20 },
+    minCount: 1,
+  };
+  const field = computeField(config);
+  const expected = fieldBaseline(data, config);
+  assert.deepEqual(field.baseline, expected);
+  // The baseline covers every category present anywhere, not just locally.
+  assert.deepEqual(Object.keys(field.baseline).sort(), ['food', 'retail']);
+});
+
+test('computeField degrades gracefully with no centres', () => {
+  const field = computeField({ centres: [], data: fieldData() });
+  assert.deepEqual(field.lenses, []);
+  assert.equal(field.stats.drawn, 0);
+});
+
+test('level of detail sheds chrome as the ring shrinks', () => {
+  const style = resolveStyle({});
+  assert.equal(resolveLod(150, style), null, 'a big lens keeps everything');
+
+  const compact = resolveLod(40, style);
+  assert.equal(compact.showLabels, false);
+  assert.equal(compact.compass, false);
+
+  const minimal = resolveLod(8, style);
+  assert.equal(minimal.structure, 'none', 'within-unit chrome goes too');
+  assert.equal(minimal.centreDot, 0);
+});
+
+test('level of detail can be switched off entirely', () => {
+  assert.equal(resolveLod(8, resolveStyle({ lod: false })), null);
 });

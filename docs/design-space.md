@@ -316,7 +316,7 @@ meaningless at small n, so samples below a member floor are flagged unreliable
 and not drawn. See
 [F-17](findings.md#f-17-the-control-can-be-the-chart-but-the-estimator-needs-a-floor).
 
-## 5. The continuum (recorded now, built later)
+## 5. The continuum
 
 Treat *how many lenses* as a knob rather than a feature:
 
@@ -333,9 +333,31 @@ them.
 
 That is a stronger contribution than any individual lens variant, and it is the
 direct sequel to Chapter 4's argument that the analytical value of the framework
-is *combinability*. It is deferred, not dropped: see
-[findings.md](findings.md#f-2-what-the-continuum-needs-from-the-core) for what
-must stay true in the core for it to be reachable later.
+is *combinability*.
+
+**Built.** `computeField` calls `computeLens` once per lattice centre and
+changes nothing else — the binning, the normalisation, the solver and the
+renderer are the same code at every position on the knob. Only two things had to
+be added, and neither is a lens concept: a hexagonal lattice for the centres,
+and a spatial index so a field of *m* lenses over *n* features does not cost
+O(n·m). The three preconditions recorded in
+[F-2](findings.md#f-2-what-the-continuum-needs-from-the-core) all paid off.
+
+Two things it settled:
+
+- A field must share **one** baseline. `lq` defaults to "relative to the lens's
+  own surroundings", which is right for one lens and catastrophic when tiled —
+  every cell would be average by construction and the map would say nothing
+  ([F-19](findings.md#f-19-a-field-needs-one-baseline-not-one-per-cell)).
+- The continuum has a **usable range**, not an infinite one. Below roughly ten
+  pixels of ring radius the glyph stops carrying multivariate information and
+  the field becomes a density map with texture. That is the spatial-vs-
+  multivariate resolution trade-off Chapter 4 names, met in practice
+  ([F-20](findings.md#f-20-the-continuum-holds-and-stops-being-multivariate-around-ten-pixels)).
+
+Level of detail — deferred in F-2 as "what the tessellated case will actually
+need" — turned out to be the real constraint, and is now a coarse two-step
+shedding of chrome as the ring shrinks.
 
 Related, and cheaper: **lens trail** — sweep a lens along a route and stack each
 position's glyph into a strip. This derives VisQuill's Rhine/Kungsleden-style
@@ -380,6 +402,7 @@ As of v0.1, against the axes above.
 | Association | `adjacency`, brush hooks, displacement indicator | `leader` |
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity | — |
 | Curves | circle, polyline (open + closed), marks placed on either | — |
+| Continuum | hex lattice, spatial index, fields of lenses, level of detail | small-multiples layout (non-geographic) |
 
 `examples/gallery.html` shows twelve of these combinations side by side on one
 dataset, each captioned with the path it takes through the pipeline. It is the

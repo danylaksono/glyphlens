@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>glyphlens — continuum</title>
+<meta name="description" content="One lens, small multiples, or a gridded glyphmap — the same object at different settings. Drag the count and watch a focus lens become a surface." />
+<meta property="og:title" content="glyphlens — continuum" />
+<meta property="og:description" content="One lens, small multiples, or a gridded glyphmap: the same object at different settings." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://danylaksono.is-a.dev/glyphlens/examples/continuum.html" />
+<meta name="twitter:card" content="summary" />
+<link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<link href="css/demo.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside class="panel">
+    <header>
+      <h1><a href="../" class="home">glyphlens</a> · continuum</h1>
+      <p>A lens and a gridded glyphmap are the <strong>same object</strong> at
+         different settings. Only the count changes below — the pipeline, the
+         solver and the renderer are identical throughout.</p>
+    </header>
+
+    <div class="field">
+      <span>How many lenses <output id="count-out">1</output></span>
+      <input id="count" type="range" min="0" max="100" step="1" value="0" />
+      <div class="morph-ends">
+        <em>focus</em><em>small multiples</em><em>glyphmap</em>
+      </div>
+      <p class="hint" id="stage-hint">One lens. Focus and context: everything is
+         read against a single place.</p>
+    </div>
+
+    <label class="field">
+      <span>Decompose by</span>
+      <select id="binning">
+        <option value="angular" selected>Bearing (12 sectors)</option>
+        <option value="categorical">Category</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Normalise</span>
+      <select id="normalisation">
+        <option value="count" selected>Count</option>
+        <option value="share">Share within each lens</option>
+        <option value="lq">Location quotient vs. the whole field</option>
+      </select>
+      <p class="hint">A field shares one baseline. Giving each cell its own
+         would make every cell average by construction.</p>
+    </label>
+
+    <div class="readout">
+      <div><strong id="stat-drawn">0</strong><em>lenses drawn</em></div>
+      <div><strong id="stat-ring">0</strong><em>px ring</em></div>
+      <div><strong id="stat-members">0</strong><em>places binned</em></div>
+    </div>
+
+    <ul id="legend" class="legend"></ul>
+    <p class="status" id="status">Loading…</p>
+    <p class="credit">
+      <a href="gallery.html">Gallery →</a> ·
+      <a href="./">Ring lens →</a> ·
+      <a href="corridor.html">Corridor lens →</a><br />
+      Data © OpenStreetMap contributors.
+    </p>
+  </aside>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="js/continuum.js"></script>
+</body>
+</html>

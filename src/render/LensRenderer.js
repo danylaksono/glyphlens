@@ -11,7 +11,7 @@
  * the small-multiples and tessellated cases will need (F-2, property 1).
  */
 
-import { resolveStyle, colorFor } from './style.js';
+import { resolveStyle, resolveLod, colorFor } from './style.js';
 import { circleCurve } from '../core/curve.js';
 
 const TAU = Math.PI * 2;
@@ -35,9 +35,17 @@ export class LensRenderer {
    * @param {number} [frame.ringRadius]       overrides the layout's ring radius
    */
   draw(ctx, layout, frame) {
-    const s = this.style;
     const { cx, cy, selectionRadiusPx } = frame;
     const ring = frame.ringRadius ?? layout.ring.radius;
+    // A lens drawn at a dozen pixels cannot carry the chrome that reads well at
+    // a hundred and fifty. Applied here rather than by the caller so a field
+    // and a single lens share one rule.
+    const lod = resolveLod(ring, this.style);
+    const s = lod ? { ...this.style, ...lod } : this.style;
+    // Helpers read the effective style for the duration of this paint, the
+    // same way `_valueFloor` is shared. Cleared at the end so the renderer
+    // does not carry one lens's level of detail into the next.
+    this._s = s;
 
     // Marks are placed on a curve, never on "the ring". A disc lens supplies
     // none and gets a circle; a corridor lens supplies its projected path. This
@@ -142,7 +150,7 @@ export class LensRenderer {
       }
     }
 
-    if (onCircle) {
+    if (onCircle && s.centreDot > 0) {
       ctx.beginPath();
       ctx.arc(cx, cy, s.centreDot, 0, TAU);
       ctx.fillStyle = s.ringStroke;
@@ -150,6 +158,8 @@ export class LensRenderer {
     }
 
     ctx.restore();
+    // Cleared so one lens's level of detail cannot leak into the next.
+    this._s = null;
   }
 
   /**
@@ -160,7 +170,7 @@ export class LensRenderer {
    * correct: a hole is outside the selection.
    */
   _drawDim(ctx, cx, cy, selectionRadiusPx, rings) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const hasShape = rings?.length > 0;
     if (!hasShape && !(selectionRadiusPx > 0)) return;
 
@@ -204,7 +214,7 @@ export class LensRenderer {
    * no failure modes at sharp corners.
    */
   _drawCorridor(ctx, curve, halfWidthPx) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     if (!(halfWidthPx > 0)) return;
     ctx.save();
     ctx.beginPath();
@@ -223,7 +233,7 @@ export class LensRenderer {
   }
 
   _drawCompass(ctx, cx, cy, ring) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     ctx.save();
     ctx.strokeStyle = s.compassColor;
     ctx.fillStyle = s.compassColor;
@@ -259,7 +269,7 @@ export class LensRenderer {
    * visible — see docs/findings.md F-10.
    */
   _drawSpread(ctx, bin, layout, cx, cy, ring, track = 0) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const sd = bin.spread;
     if (!Number.isFinite(sd) || !bin.count || sd <= 0) return;
 
@@ -301,7 +311,7 @@ export class LensRenderer {
    * for the within-unit axis, restated for an open curve.
    */
   _drawLateral(ctx, bin, layout, curve, halfWidthPx) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const lat = bin.structure?.lateral;
     if (!lat || !bin.count || !(halfWidthPx > 0)) return;
 
@@ -346,7 +356,7 @@ export class LensRenderer {
    * keeps the renderer free of any map dependency (docs/findings.md F-12).
    */
   _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const onCircle = curve.kind === 'circle';
     const radius = layout.selection?.radius ?? layout.structure?.radial?.max
       ?? Math.max(1, ...layout.bins.flatMap((b) => (b.items ?? []).map((i) => i.distance)));
@@ -406,7 +416,7 @@ export class LensRenderer {
    * the selection because that is the unit it describes.
    */
   _drawGradient(ctx, layout, cx, cy, selectionRadiusPx) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const { bearing, strength } = layout.structure.gradient;
     if (bearing == null || !(strength > 0)) return;
 
@@ -438,7 +448,7 @@ export class LensRenderer {
   }
 
   _drawMark(ctx, bin, layout, curve, cx, cy, ring) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const type = layout.marks?.type ?? 'bar';
     if (!Number.isFinite(bin.size) || bin.size <= 0.1) return;
     const onCircle = curve.kind === 'circle';
@@ -524,7 +534,7 @@ export class LensRenderer {
    * be compared with each other and with the compass.
    */
   _drawRose(ctx, bin, gx, gy, outer) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     const petals = bin.structure?.rose;
     if (!petals || petals.length === 0 || !bin.count) return;
 
@@ -552,7 +562,7 @@ export class LensRenderer {
   }
 
   _drawLabel(ctx, bin, layout, curve, cx, cy, ring, geographic) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     // Per-mark text only pays for itself while there are few enough marks to
     // read. Past that the compass carries the angular reading and the labels
     // would just be a ring of noise.
@@ -601,7 +611,7 @@ export class LensRenderer {
   }
 
   _drawValue(ctx, bin, layout, curve, cx, cy, ring) {
-    const s = this.style;
+    const s = this._s ?? this.style;
     if (Math.abs(bin.size ?? 0) < this._valueFloor) return;
     const extent = this._markExtent(bin, layout);
     const along = (bin.ringOffset ?? 0) + (bin.signed < 0 ? -extent - 9 : extent + 9);
@@ -620,6 +630,10 @@ export class LensRenderer {
   /** Which bin, if any, is under a canvas point. */
   hitTest(layout, frame, px, py) {
     const ring = frame.ringRadius ?? layout.ring.radius;
+    // Match the level of detail the lens was painted at, so hit areas cannot
+    // disagree with what is on screen.
+    const lod = resolveLod(ring, this.style);
+    this._s = lod ? { ...this.style, ...lod } : this.style;
     const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
     const onCircle = curve.kind === 'circle';
     const dx = px - frame.cx;

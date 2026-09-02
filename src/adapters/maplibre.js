@@ -23,6 +23,7 @@
  */
 
 import { computeLens, lerpLayout } from '../core/layout.js';
+import { computeField, hexLattice, spacingForCount, TOUCHING } from '../core/field.js';
 import { LensRenderer } from '../render/LensRenderer.js';
 import { destination, distance, pathLength } from '../core/geo.js';
 import { normaliseRings } from '../core/selection.js';
@@ -379,3 +380,175 @@ export class LensOverlay {
 export function addLens(map, options) {
   return new LensOverlay(map, options);
 }
+
+/**
+ * A field of lenses on a map — the tessellated end of the continuum.
+ *
+ * Deliberately a separate class rather than a mode on `LensOverlay`: a field
+ * has no drag, no hover target and no single centre, so sharing that machinery
+ * would mean guarding half of it. What it *does* share is everything that
+ * matters — the same `computeLens`, the same solver, the same renderer — which
+ * is the whole claim of docs/design-space.md §5.
+ *
+ * The control is `count`. Spacing follows from it, the lens radius follows from
+ * spacing, and the ring shrinks with the radius so the glyphs stay inside their
+ * cells. Turn it down to one and you have a single lens; turn it up and the
+ * same object is a gridded glyphmap.
+ */
+export class FieldOverlay {
+  constructor(map, options = {}) {
+    this.map = map;
+    this.options = {
+      count: 60,
+      coverRadius: 4000,
+      packing: TOUCHING,
+      minCount: 3,
+      binning: { mode: 'angular', bins: 12 },
+      normalisation: { mode: 'count' },
+      placement: { mode: 'necklace' },
+      marks: { type: 'bar', barWidth: 3 },
+      ...options,
+    };
+    this.renderer = new LensRenderer(options.style);
+    this.field = { lenses: [], stats: null };
+
+    this._mount();
+    this._bind();
+    this.recompute();
+  }
+
+  _mount() {
+    const canvas = document.createElement('canvas');
+    Object.assign(canvas.style, {
+      position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '2',
+    });
+    this.map.getContainer().appendChild(canvas);
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this._resize();
+  }
+
+  _resize() {
+    const { clientWidth: w, clientHeight: h } = this.map.getContainer();
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = `${w}px`;
+    this.canvas.style.height = `${h}px`;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._css = { w, h };
+  }
+
+  _bind() {
+    this._onRender = () => this.repaint();
+    this._onResize = () => { this._resize(); this.repaint(); };
+    // Unlike a single lens, a field's ring radius is tied to a geographic
+    // spacing, so its layout genuinely depends on zoom (the same asymmetry as
+    // the corridor, docs/findings.md F-14).
+    this._onZoomEnd = () => this.recompute();
+    this.map.on('render', this._onRender);
+    this.map.on('resize', this._onResize);
+    this.map.on('zoomend', this._onZoomEnd);
+  }
+
+  destroy() {
+    this.map.off('render', this._onRender);
+    this.map.off('resize', this._onResize);
+    this.map.off('zoomend', this._onZoomEnd);
+    this.canvas.remove();
+  }
+
+  /** Metres per screen pixel at the map's current centre and zoom. */
+  _metresPerPixel() {
+    const c = this.map.getCenter().toArray();
+    const a = this.map.project(c);
+    const b = this.map.project(destination(c, 90, 1000));
+    const px = Math.hypot(b.x - a.x, b.y - a.y);
+    return px > 0 ? 1000 / px : 1;
+  }
+
+  recompute() {
+    const o = this.options;
+    const centre = o.center ?? this.map.getCenter().toArray();
+    const spacing = spacingForCount(o.count, o.coverRadius);
+    const radius = spacing * o.packing;
+
+    const centres = hexLattice({ center: centre, radius: o.coverRadius, spacing });
+
+    // The ring is sized so a lens and its marks stay inside the cell it
+    // represents. Without this the glyphs of neighbouring cells overlap and the
+    // field stops reading as a surface.
+    const mpp = this._metresPerPixel();
+    const ringRadius = Math.max(4, (radius / mpp) * (o.ringFraction ?? 0.55));
+
+    this.field = computeField({
+      centres,
+      data: o.data ?? [],
+      getPosition: o.getPosition,
+      selection: { type: 'disc', radius },
+      binning: o.binning,
+      normalisation: o.normalisation,
+      placement: o.placement,
+      marks: o.marks,
+      minCount: o.minCount,
+      spacing,
+      ring: { radius: ringRadius },
+    });
+
+    this._ringRadius = ringRadius;
+    this.options.onChange?.(this.state());
+    this.repaint();
+    return this.field;
+  }
+
+  update(patch = {}) {
+    for (const [k, v] of Object.entries(patch)) {
+      this.options[k] = v && typeof v === 'object' && !Array.isArray(v) && this.options[k]
+        ? { ...this.options[k], ...v }
+        : v;
+    }
+    if (patch.style) this.renderer.setStyle(patch.style);
+    return this.recompute();
+  }
+
+  setCount(count) {
+    return this.update({ count: Math.max(1, Math.round(count)) });
+  }
+
+  state() {
+    return {
+      stats: this.field.stats,
+      ringRadius: this._ringRadius,
+      count: this.options.count,
+    };
+  }
+
+  repaint() {
+    if (!this._css) return;
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this._css.w, this._css.h);
+
+    const ring = this._ringRadius;
+    const pad = ring * 3;
+    for (const layout of this.field.lenses) {
+      const p = this.map.project(layout.center);
+      // Cheap cull: a field can hold thousands of lenses and most of them are
+      // off screen at any moment.
+      if (p.x < -pad || p.y < -pad || p.x > this._css.w + pad || p.y > this._css.h + pad) {
+        continue;
+      }
+      this.renderer.draw(ctx, layout, {
+        cx: p.x,
+        cy: p.y,
+        ringRadius: ring,
+        selectionRadiusPx: 0,
+      });
+    }
+  }
+}
+
+/** Convenience wrapper. */
+export function addField(map, options) {
+  return new FieldOverlay(map, options);
+}
+

@@ -29,10 +29,18 @@
  */
 
 // Adapters
-export { LensOverlay, addLens } from './adapters/maplibre.js';
+export { LensOverlay, addLens, FieldOverlay, addField } from './adapters/maplibre.js';
 
 // Pipeline
 export { computeLens, lerpLayout, lerpCyclic } from './core/layout.js';
+export {
+  computeField,
+  hexLattice,
+  spatialIndex,
+  fieldBaseline,
+  spacingForCount,
+  TOUCHING,
+} from './core/field.js';
 export {
   select,
   selectPolygon,

@@ -2050,6 +2050,223 @@ var glyphlens = (function (exports) {
   }
 
   /**
+   * Fields of lenses — the continuum from focus to glyphmap.
+   *
+   * docs/design-space.md §5 argues that a lens and a gridded glyphmap are the
+   * same object at different `hSpSubset` settings: one lens is focus+context,
+   * a handful are small multiples, and a lattice of them *is* a glyphmap. This
+   * module is that claim made executable. The knob is **spacing** — as it
+   * shrinks, the count rises and each lens shrinks with it, which is a smooth and
+   * meaningful path rather than an animation between unrelated states.
+   *
+   * Nothing here is new machinery. `computeField` calls `computeLens` once per
+   * centre, which is only possible because the core never assumed a single lens
+   * (docs/findings.md F-2, property 1). What this module adds is the two things
+   * a field needs and a single lens does not: somewhere to put the centres, and
+   * a way to avoid rescanning the whole dataset for each one.
+   */
+
+
+  /** Metres per degree of longitude and latitude at a given latitude. */
+  function scaleAt(lat) {
+    return [
+      (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat)),
+      (Math.PI / 180) * EARTH_RADIUS,
+    ];
+  }
+
+  /**
+   * A hexagonal lattice of centres covering a radius around a point.
+   *
+   * Hexagonal rather than square because it is what the gridded-glyphmap work
+   * uses, and because every cell has six equidistant neighbours instead of a mix
+   * of four near and four far — which matters once these are read as a surface.
+   *
+   * @param {object} options
+   * @param {[number, number]} options.center  [lng, lat]
+   * @param {number} options.radius            metres to cover from the centre
+   * @param {number} options.spacing           metres between adjacent centres
+   * @returns {Array<[number, number]>} centres, ordered top-left to bottom-right
+   */
+  function hexLattice({ center, radius, spacing }) {
+    if (!(spacing > 0) || !(radius > 0)) return [center];
+    const [kx, ky] = scaleAt(center[1]);
+    const rowHeight = spacing * (Math.sqrt(3) / 2);
+    const rows = Math.ceil(radius / rowHeight);
+    const cols = Math.ceil(radius / spacing);
+
+    const out = [];
+    for (let r = -rows; r <= rows; r++) {
+      const y = r * rowHeight;
+      // Odd rows shift by half a spacing: that offset is what makes it hexagonal
+      // rather than a rectangular grid with a different aspect ratio.
+      const shift = (r & 1) === 0 ? 0 : spacing / 2;
+      for (let c = -cols; c <= cols; c++) {
+        const x = c * spacing + shift;
+        if (Math.hypot(x, y) > radius) continue;
+        out.push([center[0] + x / kx, center[1] + y / ky]);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * A uniform grid hash over the data, in a local metric frame.
+   *
+   * Without this, a field of `m` lenses over `n` features costs O(n·m) — 400
+   * lenses over 1,449 places is half a million distance tests per frame, and a
+   * real dataset is far worse. Bucketing once and querying a neighbourhood makes
+   * it O(n + m·k) for small k.
+   */
+  function spatialIndex(features, { getPosition, origin, cellSize }) {
+    const [kx, ky] = scaleAt(origin[1]);
+    const cells = new Map();
+    const key = (ix, iy) => `${ix},${iy}`;
+
+    for (const feature of features) {
+      const pos = getPosition(feature);
+      if (!pos || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) continue;
+      const x = (pos[0] - origin[0]) * kx;
+      const y = (pos[1] - origin[1]) * ky;
+      const k = key(Math.floor(x / cellSize), Math.floor(y / cellSize));
+      const bucket = cells.get(k);
+      if (bucket) bucket.push(feature);
+      else cells.set(k, [feature]);
+    }
+
+    return {
+      cellSize,
+      /** Features within `radius` metres of `point`, plus some slop. */
+      near(point, radius) {
+        const x = (point[0] - origin[0]) * kx;
+        const y = (point[1] - origin[1]) * ky;
+        const ix = Math.floor(x / cellSize);
+        const iy = Math.floor(y / cellSize);
+        // Reach as far as the radius demands: one ring of cells is only enough
+        // while the lens is no wider than a cell.
+        const reach = Math.max(1, Math.ceil(radius / cellSize));
+        const out = [];
+        for (let dx = -reach; dx <= reach; dx++) {
+          for (let dy = -reach; dy <= reach; dy++) {
+            const bucket = cells.get(key(ix + dx, iy + dy));
+            if (bucket) out.push(...bucket);
+          }
+        }
+        return out;
+      },
+    };
+  }
+
+  /**
+   * Compute a lens at every centre.
+   *
+   * @param {object} config  everything `computeLens` takes, plus:
+   * @param {Array<[number, number]>} config.centres
+   * @param {number} [config.minCount=1]  skip lenses holding fewer members than this
+   * @returns {{ lenses: object[], stats: object }}
+   */
+  function computeField(config) {
+    const {
+      centres = [],
+      data = [],
+      getPosition = (f) => [f.lng ?? f.lon, f.lat],
+      selection = { type: 'disc', radius: 400 },
+      normalisation = { mode: 'count' },
+      minCount = 1,
+    } = config;
+
+    if (centres.length === 0) return { lenses: [], stats: emptyStats() };
+
+    const radius = selection.radius ?? 400;
+    const index = spatialIndex(data, {
+      getPosition,
+      origin: centres[0],
+      cellSize: Math.max(radius, 1),
+    });
+
+    // A field needs ONE baseline, not one per lens. Letting each lens derive its
+    // own from its own surroundings would make every cell "average" by
+    // construction and the map would say nothing. See docs/findings.md F-19.
+    const spec = { ...normalisation };
+    if ((spec.mode === 'lq' || spec.mode === 'delta') && !spec.baseline) {
+      spec.baseline = fieldBaseline(data, config);
+    }
+
+    const lenses = [];
+    let members = 0;
+    let skipped = 0;
+
+    for (const centre of centres) {
+      const candidates = index.near(centre, radius);
+      if (candidates.length < minCount) {
+        skipped++;
+        continue;
+      }
+      const layout = computeLens({
+        ...config,
+        center: centre,
+        selection: { ...selection, center: centre },
+        data: candidates,
+        normalisation: spec,
+      });
+      if (layout.stats.count < minCount) {
+        skipped++;
+        continue;
+      }
+      members += layout.stats.count;
+      lenses.push(layout);
+    }
+
+    return {
+      lenses,
+      baseline: spec.baseline,
+      stats: {
+        centres: centres.length,
+        drawn: lenses.length,
+        skipped,
+        members,
+        spacing: config.spacing ?? null,
+        radius,
+      },
+    };
+  }
+
+  /**
+   * The shared reference profile for a field: every feature, binned the same way
+   * the lenses are. Computed once.
+   */
+  function fieldBaseline(data, config) {
+    const { getPosition = (f) => [f.lng ?? f.lon, f.lat], binning = {} } = config;
+    const items = data
+      .map((feature) => {
+        const pos = getPosition(feature);
+        return pos ? { feature, position: pos, distance: 0, bearing: 0 } : null;
+      })
+      .filter(Boolean);
+    return profileOf(bin(items, { ...binning, radius: 1 }));
+  }
+
+  function emptyStats() {
+    return { centres: 0, drawn: 0, skipped: 0, members: 0, spacing: null, radius: 0 };
+  }
+
+  /**
+   * Spacing that yields roughly `count` lenses over a circle of `radius`.
+   *
+   * The continuum control is more legible as "how many" than "how far apart", but
+   * spacing is what the lattice actually takes, so this inverts it: a hexagonal
+   * lattice packs about `1.103 · area / spacing²` centres into a given area.
+   */
+  function spacingForCount(count, radius) {
+    if (!(count > 0) || !(radius > 0)) return radius;
+    const area = Math.PI * radius * radius;
+    return Math.sqrt((1.103 * area) / count);
+  }
+
+  /** Ratio of lens radius to lattice spacing at which discs just touch. */
+  const TOUCHING = 0.5;
+
+  /**
    * Style tokens and presets.
    *
    * Defaults encode the things that make a lens read well, recorded in
@@ -2102,6 +2319,9 @@ var glyphlens = (function (exports) {
     valueFloor: 0.35,   // 'auto' threshold, as a fraction of the largest mark
     showLabels: true,
     maxLabels: 12,      // beyond this many marks, drop per-mark labels
+    lod: true,          // shed chrome as the ring shrinks (see resolveLod)
+    lodFull: 60,        // px: full chrome at or above this ring radius
+    lodCompact: 26,     // px: marks + ring only below this
     stripLabelOffset: 12, // label inset on the far side of an open curve, px
 
     // Within-unit structure (docs/design-space.md §4).
@@ -2165,6 +2385,39 @@ var glyphlens = (function (exports) {
       boundaryStroke: 'rgba(20,20,25,0.25)',
     },
   };
+
+  /**
+   * Level of detail from the size a lens is actually being drawn at.
+   *
+   * docs/findings.md F-2 deferred this as "what the tessellated case will
+   * actually need", and it does: at 400 lenses each ring is a dozen pixels, and
+   * chrome that reads well at 150px — compass, labels, values, spread arcs, the
+   * centre dot — becomes a grey smear that hides the marks it surrounds.
+   *
+   * The thresholds are deliberately coarse. Chrome either fits or it does not,
+   * and interpolating it produces a band of sizes where everything is present and
+   * nothing is legible.
+   */
+  function resolveLod(ringRadius, style) {
+    if (style.lod === false) return null;
+    const r = ringRadius ?? style.ringRadius;
+    if (r >= (style.lodFull ?? 60)) return null;              // full chrome
+    if (r >= (style.lodCompact ?? 26)) {
+      return { showLabels: false, showValues: false, compass: false, centreDot: 1.5 };
+    }
+    // Marks only. At this size the field is read as a surface, not as
+    // individual charts, and everything else is noise.
+    return {
+      showLabels: false,
+      showValues: false,
+      compass: false,
+      structure: 'none',
+      centreDot: 0,
+      ringWidth: 0.6,
+      boundaryStroke: 'transparent',
+      dimExterior: false,
+    };
+  }
 
   function resolveStyle(style = {}) {
     const preset = typeof style.preset === 'string' ? PRESETS[style.preset] ?? {} : {};
@@ -2255,9 +2508,17 @@ var glyphlens = (function (exports) {
      * @param {number} [frame.ringRadius]       overrides the layout's ring radius
      */
     draw(ctx, layout, frame) {
-      const s = this.style;
       const { cx, cy, selectionRadiusPx } = frame;
       const ring = frame.ringRadius ?? layout.ring.radius;
+      // A lens drawn at a dozen pixels cannot carry the chrome that reads well at
+      // a hundred and fifty. Applied here rather than by the caller so a field
+      // and a single lens share one rule.
+      const lod = resolveLod(ring, this.style);
+      const s = lod ? { ...this.style, ...lod } : this.style;
+      // Helpers read the effective style for the duration of this paint, the
+      // same way `_valueFloor` is shared. Cleared at the end so the renderer
+      // does not carry one lens's level of detail into the next.
+      this._s = s;
 
       // Marks are placed on a curve, never on "the ring". A disc lens supplies
       // none and gets a circle; a corridor lens supplies its projected path. This
@@ -2362,7 +2623,7 @@ var glyphlens = (function (exports) {
         }
       }
 
-      if (onCircle) {
+      if (onCircle && s.centreDot > 0) {
         ctx.beginPath();
         ctx.arc(cx, cy, s.centreDot, 0, TAU);
         ctx.fillStyle = s.ringStroke;
@@ -2370,6 +2631,8 @@ var glyphlens = (function (exports) {
       }
 
       ctx.restore();
+      // Cleared so one lens's level of detail cannot leak into the next.
+      this._s = null;
     }
 
     /**
@@ -2380,7 +2643,7 @@ var glyphlens = (function (exports) {
      * correct: a hole is outside the selection.
      */
     _drawDim(ctx, cx, cy, selectionRadiusPx, rings) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const hasShape = rings?.length > 0;
       if (!hasShape && !(selectionRadiusPx > 0)) return;
 
@@ -2424,7 +2687,7 @@ var glyphlens = (function (exports) {
      * no failure modes at sharp corners.
      */
     _drawCorridor(ctx, curve, halfWidthPx) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       if (!(halfWidthPx > 0)) return;
       ctx.save();
       ctx.beginPath();
@@ -2443,7 +2706,7 @@ var glyphlens = (function (exports) {
     }
 
     _drawCompass(ctx, cx, cy, ring) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       ctx.save();
       ctx.strokeStyle = s.compassColor;
       ctx.fillStyle = s.compassColor;
@@ -2479,7 +2742,7 @@ var glyphlens = (function (exports) {
      * visible — see docs/findings.md F-10.
      */
     _drawSpread(ctx, bin, layout, cx, cy, ring, track = 0) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const sd = bin.spread;
       if (!Number.isFinite(sd) || !bin.count || sd <= 0) return;
 
@@ -2521,7 +2784,7 @@ var glyphlens = (function (exports) {
      * for the within-unit axis, restated for an open curve.
      */
     _drawLateral(ctx, bin, layout, curve, halfWidthPx) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const lat = bin.structure?.lateral;
       if (!lat || !bin.count || !(halfWidthPx > 0)) return;
 
@@ -2566,7 +2829,7 @@ var glyphlens = (function (exports) {
      * keeps the renderer free of any map dependency (docs/findings.md F-12).
      */
     _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const onCircle = curve.kind === 'circle';
       const radius = layout.selection?.radius ?? layout.structure?.radial?.max
         ?? Math.max(1, ...layout.bins.flatMap((b) => (b.items ?? []).map((i) => i.distance)));
@@ -2626,7 +2889,7 @@ var glyphlens = (function (exports) {
      * the selection because that is the unit it describes.
      */
     _drawGradient(ctx, layout, cx, cy, selectionRadiusPx) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const { bearing, strength } = layout.structure.gradient;
       if (bearing == null || !(strength > 0)) return;
 
@@ -2658,7 +2921,7 @@ var glyphlens = (function (exports) {
     }
 
     _drawMark(ctx, bin, layout, curve, cx, cy, ring) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const type = layout.marks?.type ?? 'bar';
       if (!Number.isFinite(bin.size) || bin.size <= 0.1) return;
       const onCircle = curve.kind === 'circle';
@@ -2744,7 +3007,7 @@ var glyphlens = (function (exports) {
      * be compared with each other and with the compass.
      */
     _drawRose(ctx, bin, gx, gy, outer) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       const petals = bin.structure?.rose;
       if (!petals || petals.length === 0 || !bin.count) return;
 
@@ -2772,7 +3035,7 @@ var glyphlens = (function (exports) {
     }
 
     _drawLabel(ctx, bin, layout, curve, cx, cy, ring, geographic) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       // Per-mark text only pays for itself while there are few enough marks to
       // read. Past that the compass carries the angular reading and the labels
       // would just be a ring of noise.
@@ -2821,7 +3084,7 @@ var glyphlens = (function (exports) {
     }
 
     _drawValue(ctx, bin, layout, curve, cx, cy, ring) {
-      const s = this.style;
+      const s = this._s ?? this.style;
       if (Math.abs(bin.size ?? 0) < this._valueFloor) return;
       const extent = this._markExtent(bin, layout);
       const along = (bin.ringOffset ?? 0) + (bin.signed < 0 ? -extent - 9 : extent + 9);
@@ -2840,6 +3103,10 @@ var glyphlens = (function (exports) {
     /** Which bin, if any, is under a canvas point. */
     hitTest(layout, frame, px, py) {
       const ring = frame.ringRadius ?? layout.ring.radius;
+      // Match the level of detail the lens was painted at, so hit areas cannot
+      // disagree with what is on screen.
+      const lod = resolveLod(ring, this.style);
+      this._s = lod ? { ...this.style, ...lod } : this.style;
       const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
       const onCircle = curve.kind === 'circle';
       const dx = px - frame.cx;
@@ -3302,12 +3569,186 @@ var glyphlens = (function (exports) {
     return new LensOverlay(map, options);
   }
 
+  /**
+   * A field of lenses on a map — the tessellated end of the continuum.
+   *
+   * Deliberately a separate class rather than a mode on `LensOverlay`: a field
+   * has no drag, no hover target and no single centre, so sharing that machinery
+   * would mean guarding half of it. What it *does* share is everything that
+   * matters — the same `computeLens`, the same solver, the same renderer — which
+   * is the whole claim of docs/design-space.md §5.
+   *
+   * The control is `count`. Spacing follows from it, the lens radius follows from
+   * spacing, and the ring shrinks with the radius so the glyphs stay inside their
+   * cells. Turn it down to one and you have a single lens; turn it up and the
+   * same object is a gridded glyphmap.
+   */
+  class FieldOverlay {
+    constructor(map, options = {}) {
+      this.map = map;
+      this.options = {
+        count: 60,
+        coverRadius: 4000,
+        packing: TOUCHING,
+        minCount: 3,
+        binning: { mode: 'angular', bins: 12 },
+        normalisation: { mode: 'count' },
+        placement: { mode: 'necklace' },
+        marks: { type: 'bar', barWidth: 3 },
+        ...options,
+      };
+      this.renderer = new LensRenderer(options.style);
+      this.field = { lenses: [], stats: null };
+
+      this._mount();
+      this._bind();
+      this.recompute();
+    }
+
+    _mount() {
+      const canvas = document.createElement('canvas');
+      Object.assign(canvas.style, {
+        position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '2',
+      });
+      this.map.getContainer().appendChild(canvas);
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this._resize();
+    }
+
+    _resize() {
+      const { clientWidth: w, clientHeight: h } = this.map.getContainer();
+      const dpr = window.devicePixelRatio || 1;
+      this.canvas.width = w * dpr;
+      this.canvas.height = h * dpr;
+      this.canvas.style.width = `${w}px`;
+      this.canvas.style.height = `${h}px`;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this._css = { w, h };
+    }
+
+    _bind() {
+      this._onRender = () => this.repaint();
+      this._onResize = () => { this._resize(); this.repaint(); };
+      // Unlike a single lens, a field's ring radius is tied to a geographic
+      // spacing, so its layout genuinely depends on zoom (the same asymmetry as
+      // the corridor, docs/findings.md F-14).
+      this._onZoomEnd = () => this.recompute();
+      this.map.on('render', this._onRender);
+      this.map.on('resize', this._onResize);
+      this.map.on('zoomend', this._onZoomEnd);
+    }
+
+    destroy() {
+      this.map.off('render', this._onRender);
+      this.map.off('resize', this._onResize);
+      this.map.off('zoomend', this._onZoomEnd);
+      this.canvas.remove();
+    }
+
+    /** Metres per screen pixel at the map's current centre and zoom. */
+    _metresPerPixel() {
+      const c = this.map.getCenter().toArray();
+      const a = this.map.project(c);
+      const b = this.map.project(destination(c, 90, 1000));
+      const px = Math.hypot(b.x - a.x, b.y - a.y);
+      return px > 0 ? 1000 / px : 1;
+    }
+
+    recompute() {
+      const o = this.options;
+      const centre = o.center ?? this.map.getCenter().toArray();
+      const spacing = spacingForCount(o.count, o.coverRadius);
+      const radius = spacing * o.packing;
+
+      const centres = hexLattice({ center: centre, radius: o.coverRadius, spacing });
+
+      // The ring is sized so a lens and its marks stay inside the cell it
+      // represents. Without this the glyphs of neighbouring cells overlap and the
+      // field stops reading as a surface.
+      const mpp = this._metresPerPixel();
+      const ringRadius = Math.max(4, (radius / mpp) * (o.ringFraction ?? 0.55));
+
+      this.field = computeField({
+        centres,
+        data: o.data ?? [],
+        getPosition: o.getPosition,
+        selection: { type: 'disc', radius },
+        binning: o.binning,
+        normalisation: o.normalisation,
+        placement: o.placement,
+        marks: o.marks,
+        minCount: o.minCount,
+        spacing,
+        ring: { radius: ringRadius },
+      });
+
+      this._ringRadius = ringRadius;
+      this.options.onChange?.(this.state());
+      this.repaint();
+      return this.field;
+    }
+
+    update(patch = {}) {
+      for (const [k, v] of Object.entries(patch)) {
+        this.options[k] = v && typeof v === 'object' && !Array.isArray(v) && this.options[k]
+          ? { ...this.options[k], ...v }
+          : v;
+      }
+      if (patch.style) this.renderer.setStyle(patch.style);
+      return this.recompute();
+    }
+
+    setCount(count) {
+      return this.update({ count: Math.max(1, Math.round(count)) });
+    }
+
+    state() {
+      return {
+        stats: this.field.stats,
+        ringRadius: this._ringRadius,
+        count: this.options.count,
+      };
+    }
+
+    repaint() {
+      if (!this._css) return;
+      const ctx = this.ctx;
+      ctx.clearRect(0, 0, this._css.w, this._css.h);
+
+      const ring = this._ringRadius;
+      const pad = ring * 3;
+      for (const layout of this.field.lenses) {
+        const p = this.map.project(layout.center);
+        // Cheap cull: a field can hold thousands of lenses and most of them are
+        // off screen at any moment.
+        if (p.x < -pad || p.y < -pad || p.x > this._css.w + pad || p.y > this._css.h + pad) {
+          continue;
+        }
+        this.renderer.draw(ctx, layout, {
+          cx: p.x,
+          cy: p.y,
+          ringRadius: ring,
+          selectionRadiusPx: 0,
+        });
+      }
+    }
+  }
+
+  /** Convenience wrapper. */
+  function addField(map, options) {
+    return new FieldOverlay(map, options);
+  }
+
   exports.CATEGORICAL = CATEGORICAL;
   exports.DEFAULT_STYLE = DEFAULT_STYLE;
   exports.DIVERGING = DIVERGING;
+  exports.FieldOverlay = FieldOverlay;
   exports.LensOverlay = LensOverlay;
   exports.LensRenderer = LensRenderer;
   exports.PRESETS = PRESETS;
+  exports.TOUCHING = TOUCHING;
+  exports.addField = addField;
   exports.addLens = addLens;
   exports.angularHistogram = angularHistogram;
   exports.bin = bin;
@@ -3320,6 +3761,7 @@ var glyphlens = (function (exports) {
   exports.circularStats = circularStats;
   exports.colorFor = colorFor;
   exports.compassLabel = compassLabel;
+  exports.computeField = computeField;
   exports.computeLens = computeLens;
   exports.confidence = confidence;
   exports.contains = contains;
@@ -3329,8 +3771,10 @@ var glyphlens = (function (exports) {
   exports.drawArcText = drawArcText;
   exports.elasticity = elasticity;
   exports.elasticityProfile = elasticityProfile;
+  exports.fieldBaseline = fieldBaseline;
   exports.fitNecklaceScale = fitNecklaceScale;
   exports.geo = geo;
+  exports.hexLattice = hexLattice;
   exports.isotonic = isotonic;
   exports.isotonicBoundedSpan = isotonicBoundedSpan;
   exports.lateralStats = lateralStats;
@@ -3350,6 +3794,8 @@ var glyphlens = (function (exports) {
   exports.selectCorridor = selectCorridor;
   exports.selectPolygon = selectPolygon;
   exports.selectionArea = selectionArea;
+  exports.spacingForCount = spacingForCount;
+  exports.spatialIndex = spatialIndex;
   exports.wrap01 = wrap01;
 
   return exports;
