@@ -7,7 +7,11 @@ the first JavaScript implementation of **necklace-map placement**.
 > position means *bearing*, not category order. A bar at 11 o'clock means the
 > data it summarises lies to the northwest.
 
-Zero dependencies in the core. Plain ESM — no build step to run the examples.
+**Try it:** [ring lens](examples/) · [corridor lens](examples/corridor.html) —
+live, no build step, and they fall back to a bundled OSM extract when Overpass
+is down.
+
+Zero dependencies in the core. Plain ESM.
 
 **Status:** early prototype (v0.1). The API will move.
 
@@ -38,7 +42,8 @@ npm run dev     # -> http://localhost:5180/examples/
 npm test        # node --test (68 tests, no dependencies)
 ```
 
-There is no build step. The examples import `../../src/` directly.
+There is no build step. The examples import `../../src/` directly, which is
+also why they work unchanged on GitHub Pages.
 
 ## Use
 
