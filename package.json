@@ -1,11 +1,9 @@
 {
   "name": "glyphlens",
   "version": "0.1.0",
-  "description": "Composable multivariate map lenses for MapLibre / deck.gl, with a JavaScript necklace-map placement engine",
+  "description": "Composable multivariate map lenses for MapLibre, with a JavaScript necklace-map placement engine",
   "type": "module",
   "main": "src/index.js",
-  "unpkg": "./dist/glyphlens.global.min.js",
-  "jsdelivr": "./dist/glyphlens.global.min.js",
   "exports": {
     ".": "./src/index.js",
     "./maplibre": "./src/adapters/maplibre.js",
@@ -14,7 +12,6 @@
   },
   "files": [
     "src",
-    "dist",
     "docs"
   ],
   "scripts": {

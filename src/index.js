@@ -1,7 +1,7 @@
 /**
  * glyphlens
  *
- * Composable multivariate map lenses for MapLibre / deck.gl.
+ * Composable multivariate map lenses for MapLibre.
  *
  * The library treats a lens as a path through six stages —
  * selection, binning, normalisation, placement, marks, association — so that
@@ -49,6 +49,7 @@ export {
   radialStats,
   lateralStats,
   elasticity,
+  elasticityProfile,
   angularHistogram,
   radialHistogram,
   describeDistribution,

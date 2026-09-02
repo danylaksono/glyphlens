@@ -101,6 +101,19 @@ button:hover { background: #2b2f38; }
 
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 
+/* The radius control carries its own MAUP profile: the canvas sits directly
+   above the track, so a peak lines up with the radius that causes it. */
+.profile { position: relative; }
+
+.profile canvas {
+  display: block;
+  width: 100%;
+  height: 34px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile input[type="range"] { margin-top: 2px; }
+
 .morph-ends {
   display: flex;
   justify-content: space-between;

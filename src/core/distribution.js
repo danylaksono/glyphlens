@@ -145,6 +145,68 @@ export function elasticity(distances, radius, edgeBand = 0.1) {
 }
 
 /**
+ * Elasticity sampled across a range of radii.
+ *
+ * The point of this is that it does not depend on the radius currently set: it
+ * describes the whole distance distribution around a centre, so it can be
+ * computed once per centre and drawn *on the radius control itself*. The
+ * analyst then sees where the cliffs are before moving the slider, rather than
+ * discovering them by moving it. See docs/findings.md F-17.
+ *
+ * Distances are sorted once and swept by binary search, so this costs
+ * O(n log n + samples log n) rather than O(n x samples).
+ *
+ * Samples below `minCount` members are flagged `reliable: false`. The estimator
+ * is a ratio of counts and is meaningless at small n — see F-17.
+ *
+ * @returns {Array<{ r, count, share, elasticity }>} ascending by radius
+ */
+export function elasticityProfile(distances, options = {}) {
+  const {
+    maxRadius, minRadius = 0, samples = 96, edgeBand = 0.1, minCount = 30,
+  } = options;
+  const sorted = [...distances].sort((a, b) => a - b);
+  const total = sorted.length;
+  const top = maxRadius ?? sorted[total - 1] ?? 0;
+  // No data means no profile, rather than a flat line of zeroes a caller might
+  // draw as if it said something.
+  if (total === 0 || !(top > minRadius) || samples < 2) return [];
+
+  /** Members within radius r. */
+  const countWithin = (r) => {
+    let lo = 0;
+    let hi = total;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] <= r) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+
+  const out = [];
+  for (let i = 0; i < samples; i++) {
+    const r = minRadius + ((top - minRadius) * i) / (samples - 1);
+    const count = countWithin(r);
+    const inner = countWithin(r * (1 - edgeBand));
+    out.push({
+      r,
+      count,
+      share: total > 0 ? count / total : 0,
+      // The same estimator as `elasticity`, so a point on this curve agrees
+      // with the live readout at that radius.
+      elasticity: count > 0 ? (count - inner) / (edgeBand * count) : 0,
+      // The estimator is a ratio of counts, so it is wild when counts are
+      // small: a single member inside the edge band of a lens holding one
+      // member reports E = 10 regardless of the geography. Callers should not
+      // draw or read unreliable samples as cliffs. See docs/findings.md F-17.
+      reliable: count >= minCount,
+    });
+  }
+  return out;
+}
+
+/**
  * Angular histogram of a set of bearings, normalised to a peak of 1.
  *
  * Bearings are binned in **absolute** terms, so petal 0 is always due north.

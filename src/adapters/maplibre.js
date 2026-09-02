@@ -12,8 +12,14 @@
  * changes size. That is both smoother than recomputing and the honest reading
  * of `glyphScale: 'screen'` (docs/design-space.md 3.5).
  *
- * deck.gl users: nothing here is MapLibre-specific except `project` and the
- * event names. See adapters/deckgl.js.
+ * **Using this with deck.gl.** The common setup — deck.gl rendering data over a
+ * MapLibre map, via MapboxOverlay — already works: pass the same MapLibre map
+ * here and the lens draws on its own canvas above deck's. What is *not*
+ * implemented is a standalone Deck (no MapLibre underneath); that needs a
+ * second adapter supplying `project`/`unproject` from a Deck viewport plus
+ * `onViewStateChange` in place of the map events. Nothing in the core or the
+ * renderer would change — they take a curve and screen coordinates and know
+ * nothing about maps.
  */
 
 import { computeLens, lerpLayout } from '../core/layout.js';

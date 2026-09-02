@@ -1,7 +1,7 @@
 # glyphlens
 
-Composable multivariate map lenses for MapLibre / deck.gl — with, as far as we
-can find, the first JavaScript implementation of **necklace-map placement**.
+Composable multivariate map lenses for MapLibre — with, as far as we can find,
+the first JavaScript implementation of **necklace-map placement**.
 
 > In VisQuill the ring is a legend. Here the ring is a **necklace**: angular
 > position means *bearing*, not category order. A bar at 11 o'clock means the
@@ -172,7 +172,22 @@ circle the selection asserts.
 **Elasticity** falls out of the same geometry: `E = (dV/V)/(dr/r)` says how much
 the reading depends on the radius the analyst happened to pick. `E ≈ 2` is
 uniform density; `E ≫ 2` means a cluster sits just outside the rim and the
-number is about to jump. See
+number is about to jump.
+
+Because that curve does not depend on the radius currently set, it can be drawn
+**on the radius control itself** — so the cliffs are visible before you drag
+onto one:
+
+```js
+import { elasticityProfile } from 'glyphlens';
+
+const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 120 });
+// [{ r, count, share, elasticity, reliable }, ...]
+```
+
+`reliable` matters: the estimator is a ratio of counts and is meaningless at
+small n, so don't plot or read samples below the floor as cliffs. The ring demo
+draws only the reliable span and shades the rest. See
 [docs/design-space.md §4](docs/design-space.md#4-within-unit-structure--the-maup-channel).
 
 ### Using the placement engine on its own
@@ -204,7 +219,8 @@ src/core/      pure pipeline — no DOM, no map, no framework
   distribution.js  within-unit structure: circular stats, MAUP elasticity
   layout.js      composes the six stages into a plain geometry object
 src/render/    canvas renderer + style tokens
-src/adapters/  maplibre
+src/adapters/  maplibre (deck.gl over MapLibre works today; standalone
+               Deck would need a second adapter — see adapters/maplibre.js)
 examples/      ring lens + corridor lens demos (with a bundled extract,
                so they work when Overpass is down)
 docs/          design space, findings, references

@@ -297,8 +297,16 @@ widening the lens adds nothing) or `E ≫ 2` (a cluster sitting just outside the
 current edge). Reporting it says how much the reading depends on a choice the
 analyst made arbitrarily.
 
-Proposed, not yet settled — see
-[Q-6](findings.md#q-6-is-elasticity-a-reading-or-a-diagnostic).
+Built, and it lives **on the radius control** rather than on the marks. The
+curve is independent of the radius currently set — it describes the distance
+distribution around the centre — so it is computed once per centre and merely
+re-marked as the slider moves. The analyst sees the cliffs before choosing a
+radius instead of discovering them by dragging onto one.
+
+One caveat, found by plotting it: the estimator is a ratio of counts and is
+meaningless at small n, so samples below a member floor are flagged unreliable
+and not drawn. See
+[F-17](findings.md#f-17-the-control-can-be-the-chart-but-the-estimator-needs-a-floor).
 
 ## 5. The continuum (recorded now, built later)
 

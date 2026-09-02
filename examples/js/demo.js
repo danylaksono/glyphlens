@@ -10,6 +10,8 @@
 
 import { addLens } from '../../src/adapters/maplibre.js';
 import { CATEGORICAL } from '../../src/render/style.js';
+import { select } from '../../src/core/selection.js';
+import { elasticityProfile } from '../../src/core/distribution.js';
 
 const $ = (id) => document.getElementById(id);
 const status = $('status');
@@ -212,7 +214,10 @@ function bindControls() {
     const r = Number(e.target.value);
     $('radius-out').value = r;
     lens.update({ selection: { radius: r }, animate: false });
+    drawProfile(); // only the marker moves; the curve is radius-independent
   });
+
+  window.addEventListener('resize', () => drawProfile());
 }
 
 /**
@@ -246,10 +251,113 @@ function applyPlacement(animate = true) {
   });
 }
 
+// ------------------------------------------------------- MAUP profile
+
+// The elasticity curve depends only on the distance distribution around the
+// centre, not on the radius currently set — so it is recomputed when the lens
+// moves or the data changes, and merely re-marked when the slider moves.
+let profile = [];
+let profileKey = '';
+
+function refreshProfile() {
+  // `onChange` fires once from inside `addLens`, before `lens` is assigned.
+  if (!lens) return;
+  const slider = $('radius');
+  const maxRadius = Number(slider.max);
+  const centre = lens.options.center;
+  const key = `${centre[0].toFixed(5)},${centre[1].toFixed(5)},${lens.options.data.length}`;
+  if (key === profileKey) return;
+  profileKey = key;
+
+  const { items } = select(lens.options.data, {
+    type: 'disc', center: centre, radius: maxRadius,
+  }, { getPosition: (f) => [f.lng, f.lat] });
+
+  profile = elasticityProfile(items.map((i) => i.distance), {
+    minRadius: Number(slider.min),
+    maxRadius,
+    samples: 120,
+  });
+  drawProfile();
+}
+
+function drawProfile() {
+  const canvas = $('radius-profile');
+  const slider = $('radius');
+  const w = canvas.clientWidth;
+  const h = 34;
+  if (!w) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  if (profile.length === 0) return;
+
+  const lo = Number(slider.min);
+  const hi = Number(slider.max);
+  const x = (r) => ((r - lo) / (hi - lo)) * w;
+
+  // Only the reliable part of the curve is drawn. At small radii the estimator
+  // is a ratio of tiny counts and spikes for arithmetic reasons rather than
+  // geographic ones; plotting that would invent cliffs (F-17).
+  const usable = profile.filter((p) => p.reliable);
+  if (usable.length < 2) return;
+
+  // Scale to the reliable data, not to the whole curve.
+  const cap = Math.max(4, ...usable.map((p) => p.elasticity)) * 0.9;
+  const y = (e) => h - Math.min(1, e / cap) * (h - 3) - 1;
+
+  ctx.beginPath();
+  ctx.moveTo(x(usable[0].r), h);
+  for (const p of usable) ctx.lineTo(x(p.r), y(p.elasticity));
+  ctx.lineTo(x(usable[usable.length - 1].r), h);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,114,178,0.16)';
+  ctx.fill();
+
+  ctx.beginPath();
+  usable.forEach((p, i) => (i ? ctx.lineTo(x(p.r), y(p.elasticity)) : ctx.moveTo(x(p.r), y(p.elasticity))));
+  ctx.strokeStyle = 'rgba(0,114,178,0.75)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Say where the curve stops being trustworthy rather than silently starting
+  // it partway across.
+  if (usable[0].r > lo) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,24,29,0.05)';
+    ctx.fillRect(0, 0, x(usable[0].r), h);
+    ctx.restore();
+  }
+
+  // E = 2 is uniform density: below it the count is barely moving, above it
+  // the radius is doing more work than the geography.
+  ctx.save();
+  ctx.setLineDash([2, 3]);
+  ctx.strokeStyle = 'rgba(20,24,29,0.28)';
+  ctx.beginPath();
+  ctx.moveTo(0, y(2));
+  ctx.lineTo(w, y(2));
+  ctx.stroke();
+  ctx.restore();
+
+  const here = x(Number(slider.value));
+  ctx.beginPath();
+  ctx.moveTo(here, 0);
+  ctx.lineTo(here, h);
+  ctx.strokeStyle = 'rgba(20,24,29,0.65)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 // ---------------------------------------------------------------- readout
 
 function updateReadout(state) {
   if (!state?.stats) return;
+  refreshProfile();
   $('stat-count').textContent = state.stats.count.toLocaleString();
   $('stat-fill').textContent = `${Math.round(state.stats.fill * 100)}%`;
   $('stat-disp').textContent = `${Math.round(state.stats.maxDisplacement)}°`;

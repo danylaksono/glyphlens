@@ -19,6 +19,7 @@ import {
   radialStats,
   lateralStats,
   elasticity,
+  elasticityProfile,
   angularHistogram,
   radialHistogram,
   describeDistribution,
@@ -715,4 +716,67 @@ test('placement modes agree on bin count and stay in range', () => {
       assert.ok(Number.isFinite(b.ringOffset), `${mode}: ringOffset missing`);
     }
   }
+});
+
+// ------------------------------------------------- elasticity profile
+
+test('elasticityProfile is ascending in radius and monotone in count', () => {
+  const radius = 2000;
+  const distances = Array.from({ length: 4000 }, (_, i) =>
+    radius * Math.sqrt((i + 0.5) / 4000));
+  const prof = elasticityProfile(distances, { maxRadius: radius, samples: 40 });
+  assert.equal(prof.length, 40);
+  for (let i = 1; i < prof.length; i++) {
+    assert.ok(prof[i].r > prof[i - 1].r, 'radius ascends');
+    assert.ok(prof[i].count >= prof[i - 1].count, 'count never falls');
+  }
+  assert.equal(prof[prof.length - 1].count, 4000);
+});
+
+test('elasticityProfile agrees with the scalar estimator', () => {
+  const radius = 2000;
+  const distances = Array.from({ length: 4000 }, (_, i) =>
+    radius * Math.sqrt((i + 0.5) / 4000));
+  const prof = elasticityProfile(distances, { maxRadius: radius, samples: 60 });
+  const last = prof[prof.length - 1];
+  assert.ok(Math.abs(last.elasticity - elasticity(distances, radius, 0.1)) < 0.05);
+});
+
+test('elasticityProfile reports uniform density as E near 2', () => {
+  const radius = 2000;
+  const distances = Array.from({ length: 8000 }, (_, i) =>
+    radius * Math.sqrt((i + 0.5) / 8000));
+  const prof = elasticityProfile(distances, { maxRadius: radius, samples: 40 })
+    .filter((p) => p.reliable);
+  for (const p of prof) {
+    assert.ok(Math.abs(p.elasticity - 1.9) < 0.35, `E = ${p.elasticity} at r = ${p.r}`);
+  }
+});
+
+test('elasticityProfile flags small-count samples as unreliable', () => {
+  // Nothing inside 900 m, then a cluster: the low-radius samples have counts of
+  // 0-2 and their elasticity is arithmetic noise, not geography.
+  const distances = [...Array(200).fill(950), ...Array(2).fill(100)];
+  const prof = elasticityProfile(distances, { maxRadius: 2000, samples: 40, minCount: 30 });
+  const early = prof.filter((p) => p.r < 900);
+  assert.ok(early.length > 0);
+  assert.ok(early.every((p) => !p.reliable), 'sparse radii are flagged');
+  assert.ok(prof.some((p) => p.reliable), 'and the dense ones are not');
+});
+
+test('elasticityProfile finds the cliff a cluster creates', () => {
+  // A ring of 300 places at 1500 m: crossing it should be the sharpest change.
+  const distances = [
+    ...Array.from({ length: 200 }, (_, i) => 100 + (i / 200) * 600),
+    ...Array(300).fill(1500),
+  ];
+  const prof = elasticityProfile(distances, { maxRadius: 2500, samples: 200, minCount: 30 })
+    .filter((p) => p.reliable);
+  const peak = prof.reduce((a, b) => (b.elasticity > a.elasticity ? b : a));
+  assert.ok(Math.abs(peak.r - 1500) < 200, `peak at ${peak.r}, expected ~1500`);
+});
+
+test('elasticityProfile degrades gracefully on empty input', () => {
+  assert.deepEqual(elasticityProfile([], { maxRadius: 1000 }), []);
+  assert.deepEqual(elasticityProfile([100], { maxRadius: 0 }), []);
 });

@@ -527,6 +527,45 @@ unacceptable for the task, stack instead of tuning the solver. It costs radius
 and makes cross-track comparison harder, and the design space should say so
 rather than presenting stacking as strictly better.
 
+### F-17. The control can be the chart, but the estimator needs a floor
+
+Recorded 2026-09-02. Resolves [Q-6](#q-6-is-elasticity-a-reading-or-a-diagnostic).
+
+Q-6 asked whether elasticity belongs on the mark, in a readout, or on the radius
+slider itself. The third option turned out to be both the most useful and the
+easiest, because of a property that was not obvious until it was written down:
+
+**The elasticity curve does not depend on the radius currently set.** It
+describes the whole distance distribution around a centre, so it is computed
+once per centre and merely *re-marked* when the slider moves. Drawing it on the
+control costs nothing per interaction, and it inverts the workflow: instead of
+discovering a cliff by dragging onto it, the analyst sees where the cliffs are
+before choosing. `elasticityProfile` sorts once and sweeps by binary search, so
+it is O(n log n + samples log n).
+
+Plotting it across all radii immediately exposed a flaw the scalar version had
+been hiding. **The estimator is a ratio of counts, so it is meaningless at small
+n.** At the low end of the slider the lens holds one or two members, and
+`(count - inner) / (edgeBand * count)` reports E = 10 for arithmetic reasons
+rather than geographic ones. The first render was dominated by a spike that
+meant nothing at all.
+
+That is a real limitation of the MAUP-elasticity idea in
+[F-11](#f-11-a-lens-makes-maup-directly-measurable), not just of its plot, and
+it would have been easy to ship without noticing — the live readout is usually
+computed at a radius holding hundreds of members, where the estimator is fine.
+
+Response: every sample carries `reliable` (default floor 30 members), the demo
+draws only the reliable span and shades the rest, and an empty input returns an
+empty profile rather than a flat line of zeroes a caller might draw as if it
+said something. The floor is a rough one — the edge band holds roughly 19% of a
+uniform disc's members, so 30 total is only ~6 in the band — and a caller
+wanting a tighter guarantee should raise `minCount`.
+
+Worth generalising: **plotting a derived statistic across its whole domain is a
+good way to find where it stops being valid.** The scalar had been correct
+everywhere we had looked, which is not the same as correct.
+
 ---
 
 ## Open questions
@@ -567,7 +606,10 @@ Package is currently `glyphlens`, after the `original_glylens.html` sketch.
 Alternatives considered: `lenskit` (too generic), `necklace` (understates the
 lens), `carto-lens`. Not settled; renaming is cheap until publication.
 
-### Q-6. Is elasticity a reading or a diagnostic?
+### Q-6. Is elasticity a reading or a diagnostic? — answered
+
+Answered by [F-17](#f-17-the-control-can-be-the-chart-but-the-estimator-needs-a-floor):
+on the control. Kept here for the reasoning.
 
 [F-11](#f-11-a-lens-makes-maup-directly-measurable) shows the elasticity of the
 aggregate with respect to the lens radius is cheap to compute exactly. Unclear
@@ -585,6 +627,10 @@ A third option worth testing: make the radius slider itself show the elasticity
 profile, so the analyst can see where the cliffs are before moving it — the
 control becomes the chart. That is the most interesting version and the least
 proven.
+
+It was the right one, and cheaper than expected: the curve is independent of the
+current radius, so it is computed once per centre. It also broke the estimator
+in a way the scalar had hidden — see F-17.
 
 ### Q-7. Does `spread` compete with value for attention?
 
