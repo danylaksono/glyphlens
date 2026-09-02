@@ -7,9 +7,10 @@ the first JavaScript implementation of **necklace-map placement**.
 > position means *bearing*, not category order. A bar at 11 o'clock means the
 > data it summarises lies to the northwest.
 
-**Try it:** [ring lens](examples/) · [corridor lens](examples/corridor.html) —
-live, no build step, and they fall back to a bundled OSM extract when Overpass
-is down.
+**Try it:** [gallery](examples/gallery.html) — twelve points in the design space,
+one dataset · [ring lens](examples/) · [corridor lens](examples/corridor.html).
+Live, no build step, and the interactive demos fall back to a bundled OSM
+extract when Overpass is down.
 
 Zero dependencies in the core. Plain ESM.
 
@@ -246,8 +247,8 @@ src/core/      pure pipeline — no DOM, no map, no framework
 src/render/    canvas renderer + style tokens
 src/adapters/  maplibre (deck.gl over MapLibre works today; standalone
                Deck would need a second adapter — see adapters/maplibre.js)
-examples/      ring lens + corridor lens demos (with a bundled extract,
-               so they work when Overpass is down)
+examples/      gallery (no map at all) + ring and corridor demos, with a
+               bundled extract so they work when Overpass is down
 docs/          design space, findings, references
 sketches/      the pre-library prototypes this grew out of
 ```

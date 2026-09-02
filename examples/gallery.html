@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>glyphlens — gallery</title>
+<meta name="description" content="One dataset, twelve points in the multivariate cartography design space. Every tile is the same pipeline with different arguments, drawn on a bare canvas with no map." />
+<meta property="og:title" content="glyphlens — gallery" />
+<meta property="og:description" content="One dataset, twelve points in the multivariate cartography design space — the same pipeline with different arguments." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://danylaksono.is-a.dev/glyphlens/examples/gallery.html" />
+<meta name="twitter:card" content="summary" />
+<link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+<link href="css/gallery.css" rel="stylesheet" />
+</head>
+<body>
+  <header class="masthead">
+    <h1><a href="../" class="home">glyphlens</a> · gallery</h1>
+    <p class="lede">
+      One dataset, twelve points in the design space. Every tile below is the
+      <em>same</em> pipeline with different arguments — not twelve different
+      visualisations.
+    </p>
+    <p class="lede">
+      There is no map on this page. The core returns plain geometry and the
+      renderer paints it onto any 2D canvas, so these are drawn with no MapLibre
+      at all. For the interactive versions, see the
+      <a href="./">ring lens</a> and the <a href="corridor.html">corridor lens</a>.
+    </p>
+    <p class="source" id="source">Loading…</p>
+  </header>
+
+  <main id="grid" class="grid"></main>
+
+  <footer class="colophon">
+    <p>
+      The reasoning behind each stage is in
+      <a href="../docs/design-space.md">the design space document</a>;
+      the record of what building it changed is in
+      <a href="../docs/findings.md">the findings log</a>.
+    </p>
+  </footer>
+
+  <script type="module" src="js/gallery.js"></script>
+</body>
+</html>

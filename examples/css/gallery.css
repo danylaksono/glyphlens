@@ -1,0 +1,119 @@
+:root {
+  --ink: #16181d;
+  --muted: #6b7280;
+  --faint: #9aa0aa;
+  --line: #e4e1da;
+  --paper: #faf9f6;
+  --accent: #0072b2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 24px 64px;
+  font: 400 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+a { color: var(--accent); }
+
+.masthead {
+  max-width: 660px;
+  margin: 0 auto;
+  padding: 56px 0 32px;
+}
+
+.masthead h1 {
+  margin: 0 0 14px;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.masthead h1 a.home {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.masthead h1 a.home:hover { border-bottom-color: var(--ink); }
+
+.lede {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #3d4350;
+}
+
+.source {
+  margin: 20px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 34px 28px;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+.tile {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tile canvas {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.tile h2 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.tile .note {
+  margin: 0 0 8px;
+  max-width: 40ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.tile .path {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.colophon {
+  max-width: 660px;
+  margin: 56px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.colophon p { margin: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile canvas { transition: border-color 120ms ease; }
+  .tile:hover canvas { border-color: #cfcabf; }
+}
