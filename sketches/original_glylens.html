@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Spatial Glyph Visualization</title>
+    
+    <!-- CSS and Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f9fafb;
+        }
+
+        textarea::-webkit-scrollbar { width: 8px; }
+        textarea::-webkit-scrollbar-track { background: #f1f1f1; }
+        textarea::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        textarea::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Ensure MapLibre doesn't hide the overlay */
+        .maplibregl-canvas-container { z-index: 1; }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shrink-0 z-20 shadow-sm relative">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800">Spatial Glyph Visualizer</h1>
+            <p class="text-sm text-gray-500">Drag the lens across the map to explore multivariate data</p>
+        </div>
+        <div class="flex space-x-3">
+            <button id="exportSvgBtn" class="flex items-center px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition font-medium text-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Export Glyph SVG
+            </button>
+            <button id="exportPngBtn" class="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium text-sm shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Export Glyph PNG
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+
+        <!-- Sidebar / Controls -->
+        <aside class="w-96 bg-white border-r border-gray-200 flex flex-col shrink-0 z-20 shadow-[2px_0_10px_rgba(0,0,0,0.05)]">
+            <div class="p-6 flex-1 flex flex-col">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Input Data (CSV)</h2>
+
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-xs text-gray-500">item, group, value[, error]</label>
+                    <label class="cursor-pointer text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                        Load CSV File
+                        <input type="file" id="fileInput" accept=".csv" class="hidden">
+                    </label>
+                </div>
+
+                <textarea id="csvInput" class="flex-1 w-full border border-gray-300 rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none mb-4" placeholder="item,group,value[,error]..."></textarea>
+
+                <div class="mb-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="showErrorBars" class="mr-2 w-4 h-4 text-indigo-600 rounded border-gray-300">
+                        <span class="text-sm text-gray-700">Show Error Bars</span>
+                    </label>
+                </div>
+
+                <button id="updateBtn" class="w-full py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition font-medium shadow-sm">
+                    Update Visualization
+                </button>
+                <div id="errorMsg" class="mt-3 text-sm text-red-600 hidden font-medium"></div>
+            </div>
+        </aside>
+
+        <!-- Map & Visualization Area -->
+        <section class="flex-1 relative bg-gray-50">
+            <!-- MapLibre Container -->
+            <div id="map" class="w-full h-full"></div>
+            
+            <!-- D3 Overlay Container (pointer-events-none lets map interaction pass through) -->
+            <svg id="d3-overlay" class="absolute top-0 left-0 w-full h-full pointer-events-none z-10 drop-shadow-xl"></svg>
+            
+            <!-- Instructional Card -->
+            <div class="absolute bottom-6 right-6 bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-100 z-20 pointer-events-auto max-w-sm">
+                <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                    Interactive Lens
+                </h3>
+                <p class="text-sm text-gray-600 mt-2 leading-relaxed">
+                    Grab and drag the central circle of the glyph over the map points. Drag the small handles on the <b>inner and outer rings</b> to resize the aggregation areas. The chart automatically filters and animates to visualize properties of the enclosed items.
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- Dummy Data Setup ---
+        const defaultCsvData = `item,group,value
+item 1,A,35\nitem 2,A,90\nitem 3,A,65\nitem 4,A,55\nitem 5,A,95\nitem 6,A,40\nitem 7,A,30\nitem 8,A,35\nitem 9,A,40\nitem 10,A,35
+item 11,B,20\nitem 12,B,85\nitem 13,B,25\nitem 14,B,70\nitem 15,B,65\nitem 16,B,50\nitem 17,B,80\nitem 18,B,75\nitem 19,B,95\nitem 20,B,100
+item 21,B,40\nitem 22,B,85\nitem 23,B,55\nitem 24,B,50\nitem 25,B,65\nitem 26,B,95\nitem 27,B,85\nitem 28,B,50\nitem 29,B,75\nitem 30,B,80
+item 31,C,25\nitem 32,C,55\nitem 33,C,50\nitem 34,C,75\nitem 35,C,80\nitem 36,C,60\nitem 37,C,95\nitem 38,C,95\nitem 39,C,65\nitem 40,C,80
+item 41,C,100\nitem 42,C,65\nitem 43,D,35\nitem 44,D,40\nitem 45,D,55\nitem 46,D,65\nitem 47,D,40\nitem 48,D,95\nitem 49,D,85\nitem 50,D,40`;
+
+        const csvInput = document.getElementById('csvInput');
+        const updateBtn = document.getElementById('updateBtn');
+        const fileInput = document.getElementById('fileInput');
+        const errorMsg = document.getElementById('errorMsg');
+        const showErrorBars = document.getElementById('showErrorBars');
+        csvInput.value = defaultCsvData;
+
+        // --- Config & State ---
+        const colorPalette = { "A": "#1f77b4", "B": "#ff7f0e", "C": "#2ca02c", "D": "#d62728" };
+        
+        let innerRadius = 45; 
+        let outerRadius = 150; 
+        const resizeAngle = Math.PI / 4; // 45 degrees bottom-right for outer handle
+        const innerResizeAngle = Math.PI * 3 / 4; // 135 degrees bottom-left for inner handle
+        
+        let lensLngLat = [-0.1276, 51.5072]; // Center of London
+        let parsedData = [];
+        let paddedData = [];
+        let x, y, maxValue;
+        let isMapReady = false;
+
+        // Stable Random Function (ensures dummy coords don't jump on CSV edit)
+        function getStableRandom(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = Math.imul(31, hash) + str.charCodeAt(i) | 0;
+            return (Math.abs(hash) % 10000) / 10000;
+        }
+
+        // --- Map Initialization ---
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '&copy; OpenStreetMap Contributors'
+                    }
+                },
+                layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+            },
+            center: lensLngLat,
+            zoom: 12,
+            pitchWithRotate: false,
+            dragRotate: false
+        });
+
+        map.on('load', () => {
+            isMapReady = true;
+            buildChart(csvInput.value);
+            
+            // Adjust bounds to fit data
+            const bounds = new maplibregl.LngLatBounds();
+            parsedData.forEach(d => bounds.extend([d.lng, d.lat]));
+            map.fitBounds(bounds, { padding: 80, duration: 1000 });
+        });
+
+        // Sync visual lens to map movements
+        map.on('move', () => updateLens());
+        map.on('zoom', () => updateLens());
+        window.addEventListener('resize', () => { map.resize(); updateLens(); });
+
+        // --- D3 Chart & Glyphs ---
+        const svg = d3.select("#d3-overlay");
+        const lensGroup = svg.append("g").attr("id", "lens-group");
+
+        function buildChart(csvString) {
+            try {
+                errorMsg.classList.add('hidden');
+                
+                // Parse Data
+                let rawData = d3.csvParse(csvString, d => ({
+                    item: d.item.trim(),
+                    group: d.group.trim(),
+                    value: +d.value,
+                    error: d.error ? +d.error : null
+                }));
+
+                if (rawData.length === 0) throw new Error("No valid data found.");
+
+                // Map stable dummy coordinates and errors
+                parsedData = rawData.map(d => {
+                    return {
+                        ...d,
+                        error: d.error != null ? d.error : (Math.floor(getStableRandom(d.item + "err") * 10) + 1),
+                        lng: -0.1276 + (getStableRandom(d.item + "lng") - 0.5) * 0.20, // Spread ~10km around London
+                        lat: 51.5072 + (getStableRandom(d.item + "lat") - 0.5) * 0.15
+                    };
+                });
+
+                // Prepare Padded Data for grouping visualization
+                paddedData = [];
+                let currentGroup = null;
+                parsedData.forEach((d, i) => {
+                    if (currentGroup !== null && d.group !== currentGroup) {
+                        paddedData.push({ item: `gap_${i}`, group: 'gap', value: 0 });
+                    }
+                    paddedData.push(d);
+                    currentGroup = d.group;
+                });
+                paddedData.push({ item: `gap_end`, group: 'gap', value: 0 });
+
+                maxValue = d3.max(parsedData, d => d.value + (d.error || 0));
+
+                // Set D3 Scales
+                x = d3.scaleBand().range([0, 2 * Math.PI]).align(0).domain(paddedData.map(d => d.item));
+                y = d3.scaleRadial().range([innerRadius, outerRadius]).domain([0, maxValue]);
+                const color = d3.scaleOrdinal().domain(Array.from(new Set(parsedData.map(d => d.group)))).range(Object.values(colorPalette));
+
+                lensGroup.selectAll("*").remove();
+
+                // 1. Draw Lens Boundary (Shows map capture area)
+                lensGroup.append("circle")
+                    .attr("class", "lens-boundary")
+                    .attr("r", outerRadius)
+                    .attr("fill", "rgba(255, 255, 255, 0.15)")
+                    .attr("stroke", "#6366f1") // Indigo
+                    .attr("stroke-width", 2)
+                    .attr("stroke-dasharray", "6 4");
+
+                // 2. Faint Background Framework
+                lensGroup.append("g").attr("class", "bg-bars").selectAll("path")
+                    .data(paddedData.filter(d => d.group !== 'gap'))
+                    .join("path")
+                    .attr("fill", "#e5e7eb")
+                    .attr("opacity", 0.6)
+                    .attr("d", d3.arc()
+                        .innerRadius(innerRadius)
+                        .outerRadius(outerRadius)
+                        .startAngle(d => x(d.item))
+                        .endAngle(d => x(d.item) + x.bandwidth())
+                        .padAngle(0.01)
+                        .padRadius(innerRadius)
+                    );
+
+                // 3. Dynamic Main Bars
+                lensGroup.append("g").attr("class", "main-bars").selectAll("path")
+                    .data(paddedData.filter(d => d.group !== 'gap'))
+                    .join("path")
+                    .attr("fill", d => colorPalette[d.group] || color(d.group))
+                    .attr("opacity", 0) // Hidden until enclosed
+                    .attr("d", d3.arc()
+                        .innerRadius(innerRadius)
+                        .outerRadius(innerRadius) // Start at zero height
+                        .startAngle(d => x(d.item))
+                        .endAngle(d => x(d.item) + x.bandwidth())
+                        .padAngle(0.01)
+                        .padRadius(innerRadius)
+                    );
+
+                // 4. Dynamic Error Bars
+                lensGroup.append("g").attr("class", "error-bars").selectAll("path")
+                    .data(paddedData.filter(d => d.group !== 'gap'))
+                    .join("path")
+                    .attr("fill", "none")
+                    .attr("stroke", "#1f2937")
+                    .attr("stroke-width", 1.5)
+                    .attr("stroke-linecap", "round")
+                    .attr("opacity", 0)
+                    .attr("d", "");
+
+                // 5. Labels
+                lensGroup.append("g").attr("class", "labels").selectAll("g")
+                    .data(paddedData.filter(d => d.group !== 'gap'))
+                    .join("g")
+                    .attr("text-anchor", d => (x(d.item) + x.bandwidth()/2 + Math.PI) % (2*Math.PI) < Math.PI ? "end" : "start")
+                    .attr("transform", d => `rotate(${(x(d.item) + x.bandwidth()/2) * 180/Math.PI - 90}) translate(${outerRadius + 8}, 0)`)
+                    .append("text")
+                    .text(d => d.item)
+                    .attr("transform", d => (x(d.item) + x.bandwidth()/2 + Math.PI) % (2*Math.PI) < Math.PI ? "rotate(180)" : "rotate(0)")
+                    .style("font-size", "9px")
+                    .style("fill", "#9ca3af")
+                    .style("transition", "fill 0.2s, font-weight 0.2s")
+                    .style("text-shadow", "0px 0px 2px rgba(255,255,255,0.8)")
+                    .attr("alignment-baseline", "middle");
+
+                // 6. Group Indicator Arcs
+                const groupArcs = lensGroup.append("g").attr("class", "group-arcs");
+                const groupsMap = d3.group(paddedData, d => d.group);
+                groupsMap.delete("gap");
+
+                const groupDataList = Array.from(groupsMap, ([key, values]) => ({
+                    key,
+                    startAngle: x(values[0].item),
+                    endAngle: x(values[values.length - 1].item) + x.bandwidth()
+                }));
+
+                groupArcs.selectAll("path")
+                    .data(groupDataList)
+                    .join("path")
+                    .attr("d", d => d3.arc()
+                        .innerRadius(innerRadius - 12)
+                        .outerRadius(innerRadius - 12)
+                        .startAngle(d.startAngle)
+                        .endAngle(d.endAngle)()
+                    )
+                    .attr("fill", "none")
+                    .attr("stroke", d => colorPalette[d.key] || color(d.key))
+                    .attr("stroke-width", 2.5);
+
+                groupArcs.selectAll("text")
+                    .data(groupDataList)
+                    .join("text")
+                    .attr("x", d => Math.cos((d.startAngle + d.endAngle) / 2 - Math.PI / 2) * (innerRadius - 28))
+                    .attr("y", d => Math.sin((d.startAngle + d.endAngle) / 2 - Math.PI / 2) * (innerRadius - 28))
+                    .text(d => d.key)
+                    .attr("text-anchor", "middle")
+                    .attr("alignment-baseline", "middle")
+                    .style("font-size", "14px")
+                    .style("font-weight", "bold")
+                    .style("fill", d => colorPalette[d.key] || color(d.key));
+
+                // 7. Interactive Drag Handle (Eye of the lens) - Now mostly transparent
+                lensGroup.append("circle")
+                    .attr("class", "drag-handle")
+                    .attr("r", innerRadius)
+                    .attr("fill", "rgba(255, 255, 255, 0.15)") // Highly transparent to see points beneath
+                    .attr("stroke", "#4b5563")
+                    .attr("stroke-width", 1.5)
+                    .attr("stroke-dasharray", "4 2")
+                    .style("pointer-events", "all") 
+                    .style("cursor", "move");
+
+                // Drag Icon
+                lensGroup.append("g")
+                    .style("pointer-events", "none")
+                    .attr("transform", "translate(-12, -12)")
+                    .html(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="19 9 22 12 19 15"></polyline><polyline points="9 19 12 22 15 19"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>`);
+
+                // Center handle drag behavior
+                const drag = d3.drag()
+                    .container(svg.node())
+                    .subject(() => ({ x: map.project(lensLngLat).x, y: map.project(lensLngLat).y }))
+                    .on("drag", (event) => {
+                        lensLngLat = map.unproject([event.x, event.y]).toArray();
+                        updateLens();
+                    });
+                lensGroup.select(".drag-handle").call(drag);
+
+                // 8. Interactive Resize Handle (Outer Edge)
+                lensGroup.append("circle")
+                    .attr("class", "resize-handle")
+                    .attr("cx", Math.cos(resizeAngle) * outerRadius)
+                    .attr("cy", Math.sin(resizeAngle) * outerRadius)
+                    .attr("r", 7)
+                    .attr("fill", "#ffffff")
+                    .attr("stroke", "#6366f1") // Indigo
+                    .attr("stroke-width", 2.5)
+                    .style("pointer-events", "all")
+                    .style("cursor", "nwse-resize");
+
+                const resizeDrag = d3.drag()
+                    .on("drag", (event) => {
+                        outerRadius = Math.max(innerRadius + 30, Math.min(350, Math.hypot(event.x, event.y)));
+                        updateChartGeometry();
+                        updateLens(0);
+                    })
+                    .on("end", () => updateLens(250));
+                lensGroup.select(".resize-handle").call(resizeDrag);
+
+                // 9. Interactive Resize Handle (Inner Edge)
+                lensGroup.append("circle")
+                    .attr("class", "inner-resize-handle")
+                    .attr("cx", Math.cos(innerResizeAngle) * innerRadius)
+                    .attr("cy", Math.sin(innerResizeAngle) * innerRadius)
+                    .attr("r", 6)
+                    .attr("fill", "#ffffff")
+                    .attr("stroke", "#10b981") // Emerald to distinguish
+                    .attr("stroke-width", 2.5)
+                    .style("pointer-events", "all")
+                    .style("cursor", "nesw-resize");
+
+                const innerResizeDrag = d3.drag()
+                    .on("drag", (event) => {
+                        innerRadius = Math.max(20, Math.min(outerRadius - 30, Math.hypot(event.x, event.y)));
+                        updateChartGeometry();
+                        updateLens(0);
+                    })
+                    .on("end", () => updateLens(250));
+                lensGroup.select(".inner-resize-handle").call(innerResizeDrag);
+
+                updateMapPoints();
+                updateLens();
+
+            } catch (err) {
+                console.error(err);
+                errorMsg.textContent = err.message;
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        // --- Shared Geometry Update Helper ---
+        // Keeps backgrounds, handlers, and scales synced when resizing
+        function updateChartGeometry() {
+            y.range([innerRadius, outerRadius]);
+            
+            lensGroup.select(".lens-boundary").attr("r", outerRadius);
+            lensGroup.select(".drag-handle").attr("r", innerRadius);
+            
+            lensGroup.select(".resize-handle")
+                .attr("cx", Math.cos(resizeAngle) * outerRadius)
+                .attr("cy", Math.sin(resizeAngle) * outerRadius);
+                
+            lensGroup.select(".inner-resize-handle")
+                .attr("cx", Math.cos(innerResizeAngle) * innerRadius)
+                .attr("cy", Math.sin(innerResizeAngle) * innerRadius);
+
+            lensGroup.select(".bg-bars").selectAll("path")
+                .attr("d", d3.arc()
+                    .innerRadius(innerRadius)
+                    .outerRadius(outerRadius)
+                    .startAngle(d => x(d.item))
+                    .endAngle(d => x(d.item) + x.bandwidth())
+                    .padAngle(0.01)
+                    .padRadius(innerRadius)
+                );
+
+            lensGroup.select(".labels").selectAll("g")
+                .attr("transform", d => `rotate(${(x(d.item) + x.bandwidth()/2) * 180/Math.PI - 90}) translate(${outerRadius + 8}, 0)`);
+                
+            lensGroup.select(".group-arcs").selectAll("path")
+                .attr("d", d => d3.arc()
+                    .innerRadius(innerRadius - 12)
+                    .outerRadius(innerRadius - 12)
+                    .startAngle(d.startAngle)
+                    .endAngle(d.endAngle)()
+                );
+                
+            lensGroup.select(".group-arcs").selectAll("text")
+                .attr("x", d => Math.cos((d.startAngle + d.endAngle) / 2 - Math.PI / 2) * (innerRadius - 28))
+                .attr("y", d => Math.sin((d.startAngle + d.endAngle) / 2 - Math.PI / 2) * (innerRadius - 28));
+        }
+
+        // --- Data Intersection Logic ---
+        function updateLens(duration = 250) {
+            if (!isMapReady || parsedData.length === 0) return;
+
+            // 1. Move SVG Lens
+            const px = map.project(lensLngLat);
+            lensGroup.attr("transform", `translate(${px.x}, ${px.y})`);
+
+            // 2. Compute Spatially Enclosed Points
+            const enclosedItems = new Set();
+            parsedData.forEach(d => {
+                const pPx = map.project([d.lng, d.lat]);
+                const dist = Math.hypot(pPx.x - px.x, pPx.y - px.y);
+                if (dist <= outerRadius) enclosedItems.add(d.item);
+            });
+
+            // 3. Update MapLibre GeoJSON Highlights
+            if (map.getSource('points')) {
+                map.getSource('points').setData({
+                    type: 'FeatureCollection',
+                    features: parsedData.map(d => ({
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
+                        properties: { ...d, isEnclosed: enclosedItems.has(d.item) }
+                    }))
+                });
+            }
+
+            // 4. Update the Glyph Shape
+            updateChartState(enclosedItems, duration);
+        }
+
+        // Generate complex path for error bars easily mathematically
+        function getErrorBarPath(d, displayValue, displayError) {
+            if (displayValue <= 0 || !displayError) return "";
+            const angle = x(d.item) + x.bandwidth() / 2 - Math.PI / 2;
+            const yMin = Math.max(innerRadius, y(Math.max(0, displayValue - displayError)));
+            const yMax = Math.min(outerRadius, y(displayValue + displayError));
+
+            const cos = Math.cos(angle), sin = Math.sin(angle);
+            const x1 = cos * yMin, y1 = sin * yMin;
+            const x2 = cos * yMax, y2 = sin * yMax;
+
+            const cap = 2.5;
+            const dx = -sin * cap, dy = cos * cap;
+
+            return `M ${x1} ${y1} L ${x2} ${y2} M ${x1-dx} ${y1-dy} L ${x1+dx} ${y1+dy} M ${x2-dx} ${y2-dy} L ${x2+dx} ${y2+dy}`;
+        }
+
+        function updateChartState(enclosedSet, duration = 250) {
+            // Apply physics-like fluid transition for the pop-up bars (Duration 0 makes resize instant)
+            const t = d3.transition().duration(duration).ease(d3.easeBackOut.overshoot(0.7));
+            const isErrorVisible = showErrorBars.checked;
+
+            // Update main bars
+            lensGroup.select(".main-bars").selectAll("path")
+                .attr("opacity", d => enclosedSet.has(d.item) ? 0.95 : 0)
+                .transition(t)
+                .attr("d", d => d3.arc()
+                    .innerRadius(innerRadius)
+                    .outerRadius(y(enclosedSet.has(d.item) ? d.value : 0))
+                    .startAngle(x(d.item))
+                    .endAngle(x(d.item) + x.bandwidth())
+                    .padAngle(0.01)
+                    .padRadius(innerRadius)(d)
+                );
+
+            // Update error bars
+            lensGroup.select(".error-bars").selectAll("path")
+                .transition(t)
+                .attr("opacity", d => (enclosedSet.has(d.item) && isErrorVisible) ? 1 : 0)
+                .attr("d", d => getErrorBarPath(d, enclosedSet.has(d.item) ? d.value : 0, d.error));
+
+            // Highlight text labels of enclosed items
+            lensGroup.select(".labels").selectAll("text")
+                .style("fill", d => enclosedSet.has(d.item) ? "#111827" : "#9ca3af")
+                .style("font-weight", d => enclosedSet.has(d.item) ? "bold" : "normal");
+        }
+
+        function updateMapPoints() {
+            if (!isMapReady) return;
+            const geoData = {
+                type: 'FeatureCollection',
+                features: parsedData.map(d => ({
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
+                    properties: { ...d, isEnclosed: false }
+                }))
+            };
+
+            if (!map.getSource('points')) {
+                map.addSource('points', { type: 'geojson', data: geoData });
+                
+                // Highlight ring (Halo) for enclosed items
+                map.addLayer({
+                    id: 'points-halo',
+                    type: 'circle',
+                    source: 'points',
+                    paint: {
+                        'circle-radius': 14,
+                        'circle-color': ['match', ['get', 'group'], 'A', '#1f77b4', 'B', '#ff7f0e', 'C', '#2ca02c', 'D', '#d62728', '#888888'],
+                        'circle-opacity': ['case', ['boolean', ['get', 'isEnclosed'], false], 0.35, 0]
+                    }
+                });
+
+                // Point dots
+                map.addLayer({
+                    id: 'points-layer',
+                    type: 'circle',
+                    source: 'points',
+                    paint: {
+                        'circle-radius': 5,
+                        'circle-color': ['match', ['get', 'group'], 'A', '#1f77b4', 'B', '#ff7f0e', 'C', '#2ca02c', 'D', '#d62728', '#888888'],
+                        'circle-stroke-width': 1.5,
+                        'circle-stroke-color': '#ffffff'
+                    }
+                });
+            } else {
+                map.getSource('points').setData(geoData);
+            }
+        }
+
+        // --- Event Listeners ---
+        updateBtn.addEventListener('click', () => buildChart(csvInput.value));
+        showErrorBars.addEventListener('change', () => updateLens());
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                csvInput.value = e.target.result;
+                buildChart(e.target.result);
+            };
+            reader.readAsText(file);
+        });
+
+        // --- Export Functions ---
+        // Exports only the glyph itself since capturing MapLibre webgl context simultaneously is highly complex
+        function getLensSvgString() {
+            // Create temporary SVG sized precisely around the glyph
+            const tempSvg = d3.select("body").append("svg")
+                .attr("width", outerRadius * 2 + 100)
+                .attr("height", outerRadius * 2 + 100)
+                .attr("xmlns", "http://www.w3.org/2000/svg")
+                .style("font-family", "sans-serif");
+                
+            const clone = document.getElementById("lens-group").cloneNode(true);
+            clone.setAttribute("transform", `translate(${outerRadius + 50}, ${outerRadius + 50})`);
+            tempSvg.node().appendChild(clone);
+            
+            const serializer = new XMLSerializer();
+            let svgString = serializer.serializeToString(tempSvg.node());
+            tempSvg.remove();
+            return svgString;
+        }
+
+        exportSvgBtn.addEventListener('click', () => {
+            const blob = new Blob([getLensSvgString()], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url; link.download = "spatial_glyph.svg";
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+
+        exportPngBtn.addEventListener('click', () => {
+            const svgString = getLensSvgString();
+            const canvas = document.createElement("canvas");
+            canvas.width = outerRadius * 2 + 100; canvas.height = outerRadius * 2 + 100;
+            const ctx = canvas.getContext("2d");
+
+            ctx.fillStyle = "white"; // Add white background so it's not transparent
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const img = new Image();
+            const svg64 = btoa(unescape(encodeURIComponent(svgString)));
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0);
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = "spatial_glyph.png";
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            };
+            img.src = 'data:image/svg+xml;base64,' + svg64;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Urban Scanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <link href="styles.css" rel="stylesheet" />
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <div class="overlay top-3 px-3">
+    <div class="card compact mx-auto max-w-3xl rounded-[22px] p-3">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Urban Scanner</p>
+          <h1 class="mt-1 text-base font-semibold text-white">Amenities in center lens</h1>
+        </div>
+        <div id="statusBadge" class="status-chip bg-sky-500/12 text-sky-200">Locating…</div>
+      </div>
+      <p id="statusText" class="mt-2 text-sm leading-5 text-slate-300">Move the map. The center lens updates instantly.
+      </p>
+    </div>
+  </div>
+
+  <div class="overlay top-[86px] px-3">
+    <div class="card compact mx-auto max-w-3xl rounded-[22px] p-3 grid gap-3 sm:grid-cols-2">
+      <div class="rounded-3xl bg-slate-900/90 p-3">
+        <p class="text-[11px] uppercase tracking-[0.35em] text-slate-500">Radius</p>
+        <div class="mt-1 text-xl font-semibold text-white"><span id="radiusLabel">800</span> m</div>
+      </div>
+      <div class="rounded-3xl bg-slate-900/90 p-3">
+        <p class="text-[11px] uppercase tracking-[0.35em] text-slate-500">Amenities inside</p>
+        <div class="mt-1 text-xl font-semibold text-white" id="totalCount">0</div>
+      </div>
+      <div class="sm:col-span-2">
+        <input id="radiusInput" type="range" min="250" max="2000" step="50" value="800" class="w-full accent-sky-400" />
+      </div>
+    </div>
+  </div>
+
+  <div id="chartCard" class="overlay bottom-3 px-3">
+    <div class="card compact mx-auto max-w-3xl rounded-[22px] p-3 grid gap-2 sm:grid-cols-4">
+      <div class="rounded-3xl bg-slate-900/90 p-3">
+        <p class="text-[11px] uppercase tracking-[0.35em] text-slate-500">Health</p>
+        <div class="mt-1 text-base font-semibold text-emerald-300" id="countHealth">0</div>
+      </div>
+      <div class="rounded-3xl bg-slate-900/90 p-3">
+        <p class="text-[11px] uppercase tracking-[0.35em] text-slate-500">Education</p>
+        <div class="mt-1 text-base font-semibold text-sky-300" id="countEducation">0</div>
+      </div>
+      <div class="rounded-3xl bg-slate-900/90 p-3">
+        <p class="text-[11px] uppercase tracking-[0.35em] text-slate-500">Markets</p>
+        <div class="mt-1 text-base font-semibold text-amber-300" id="countMarketplace">0</div>
+      </div>
+      <div class="rounded-3xl bg-slate-900/90 p-3">
+        <p class="text-[11px] uppercase tracking-[0.35em] text-slate-500">Work</p>
+        <div class="mt-1 text-base font-semibold text-violet-300" id="countWorkplace">0</div>
+      </div>
+    </div>
+  </div>
+
+  <svg id="chart-overlay"></svg>
+  <script src="app.js"></script>
+</body>
+
+</html>

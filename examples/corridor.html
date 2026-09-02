@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>glyphlens — corridor lens</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<link href="css/demo.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside class="panel">
+    <header>
+      <h1>Corridor lens</h1>
+      <p>The same pipeline on an <strong>open curve</strong>. Position along the
+         strip means distance travelled, so the profile is the lens.</p>
+    </header>
+
+    <p class="hint">
+      Drag either endpoint to re-aim the transect. Everything else — binning,
+      normalisation, necklace placement, marks — is unchanged from the
+      <a href="./">ring lens</a>.
+    </p>
+
+    <label class="field">
+      <span>Corridor width <output id="width-out">600</output> m</span>
+      <input id="width" type="range" min="100" max="2000" step="50" value="600" />
+    </label>
+
+    <label class="field">
+      <span>Bins along the route</span>
+      <input id="bins" type="range" min="6" max="40" step="1" value="18" />
+    </label>
+
+    <label class="field">
+      <span>Normalise</span>
+      <select id="normalisation">
+        <option value="count" selected>Count</option>
+        <option value="density">Density (per km²)</option>
+        <option value="share">Share of corridor</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Within-unit structure</span>
+      <select id="structure">
+        <option value="none" selected>None</option>
+        <option value="spread">Lateral spread</option>
+        <option value="inclusions">Show the members</option>
+        <option value="both">Both</option>
+      </select>
+      <p class="hint">Where across the corridor each stretch's places sit. A short
+         line pushed to one side means one-sided provision — something a count
+         cannot show.</p>
+    </label>
+
+    <label class="field">
+      <span>Mark</span>
+      <select id="mark">
+        <option value="bar" selected>Bar</option>
+        <option value="disc">Disc</option>
+        <option value="rose">Mini rose</option>
+      </select>
+    </label>
+
+    <div class="readout">
+      <div><strong id="stat-count">0</strong><em>in corridor</em></div>
+      <div><strong id="stat-length">0</strong><em>km long</em></div>
+      <div><strong id="stat-fill">0%</strong><em>strip used</em></div>
+      <div><strong id="stat-sided">–</strong><em>one-sidedness</em></div>
+      <div><strong id="stat-bias">–</strong><em>lateral bias</em></div>
+    </div>
+
+    <ul id="legend" class="legend"></ul>
+    <p class="status" id="status">Loading…</p>
+    <p class="credit">Data © OpenStreetMap contributors.</p>
+  </aside>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="js/corridor.js"></script>
+</body>
+</html>

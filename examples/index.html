@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>glyphlens — necklace lens</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<link href="css/demo.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside class="panel">
+    <header>
+      <h1>glyphlens</h1>
+      <p>Multivariate map lens. The ring is a <strong>necklace</strong>, not a legend:
+         angle means bearing.</p>
+    </header>
+
+    <label class="field">
+      <span>Place</span>
+      <form id="search-form">
+        <input id="search" type="text" value="Yogyakarta, Indonesia" autocomplete="off" />
+        <button type="submit">Go</button>
+      </form>
+    </label>
+
+    <div class="field">
+      <span>Angular axis</span>
+      <div class="morph">
+        <input id="morph" type="range" min="0" max="1" step="0.01" value="1" />
+        <div class="morph-ends"><em>category</em><em>bearing</em></div>
+      </div>
+      <p class="hint" id="morph-hint">Drag to move each bar from its slot in a sorted
+         legend to the direction that category actually lies in.</p>
+    </div>
+
+    <label class="field">
+      <span>Decompose by</span>
+      <select id="binning">
+        <option value="categorical" selected>Category</option>
+        <option value="cross">Bearing × category</option>
+        <option value="angular">Bearing (24 sectors)</option>
+        <option value="radial">Distance band</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Normalise</span>
+      <select id="normalisation">
+        <option value="count" selected>Count</option>
+        <option value="share">Share of lens</option>
+        <option value="density">Density (per km²)</option>
+        <option value="lq">Location quotient vs. surroundings</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Placement</span>
+      <select id="placement">
+        <option value="auto" selected>Necklace (one ring)</option>
+        <option value="stacked">Stacked (a ring per category)</option>
+        <option value="block">Block (VisQuill-style slots)</option>
+      </select>
+      <p class="hint" id="placement-hint">Stacked gives each category its own
+         concentric necklace, so categories no longer compete for angular room.</p>
+    </label>
+
+    <label class="field">
+      <span>Mark</span>
+      <select id="mark">
+        <option value="bar" selected>Radial bar</option>
+        <option value="disc">Disc (classic necklace)</option>
+        <option value="rose">Mini rose (directional profile)</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Within-unit structure</span>
+      <select id="structure">
+        <option value="none" selected>None</option>
+        <option value="spread">Angular spread</option>
+        <option value="gradient">Density gradient</option>
+        <option value="inclusions">Show the members</option>
+        <option value="both">All three</option>
+      </select>
+      <p class="hint">How the members are distributed <em>inside</em> the lens —
+         the diamond-cut reading. A wide arc means the direction is not to be
+         trusted.</p>
+    </label>
+
+    <label class="field">
+      <span>Radius <output id="radius-out">800</output> m</span>
+      <input id="radius" type="range" min="200" max="3000" step="50" value="800" />
+    </label>
+
+    <div class="readout">
+      <div><strong id="stat-count">0</strong><em>in lens</em></div>
+      <div><strong id="stat-fill">0%</strong><em>ring used</em></div>
+      <div><strong id="stat-disp">0°</strong><em>max shift</em></div>
+      <div><strong id="stat-elast">–</strong><em>elasticity</em></div>
+      <div><strong id="stat-conc">–</strong><em>concentration</em></div>
+    </div>
+
+    <ul id="legend" class="legend"></ul>
+
+    <p class="status" id="status">Loading…</p>
+    <p class="credit"><a href="corridor.html">Corridor lens →</a> the same pipeline
+       on an open curve.<br />
+       Drag the lens centre to move it, or its dashed edge to resize.
+       Data © OpenStreetMap contributors via Overpass.</p>
+  </aside>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="js/demo.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "name": "glyphlens",
+  "version": "0.1.0",
+  "description": "Composable multivariate map lenses for MapLibre / deck.gl, with a JavaScript necklace-map placement engine",
+  "type": "module",
+  "main": "src/index.js",
+  "unpkg": "./dist/glyphlens.global.min.js",
+  "jsdelivr": "./dist/glyphlens.global.min.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./maplibre": "./src/adapters/maplibre.js",
+    "./necklace": "./src/core/necklace.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist",
+    "docs"
+  ],
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test"
+  },
+  "keywords": [
+    "maplibre",
+    "deck.gl",
+    "cartography",
+    "multivariate",
+    "necklace-map",
+    "glyph",
+    "lens",
+    "geovisualisation",
+    "focus-context"
+  ],
+  "author": "Dany Laksono",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danylaksono/glyphlens.git"
+  },
+  "homepage": "https://github.com/danylaksono/glyphlens#readme",
+  "bugs": {
+    "url": "https://github.com/danylaksono/glyphlens/issues"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "maplibre-gl": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "maplibre-gl": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
