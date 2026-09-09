@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 
 import { isotonic, isotonicBoundedSpan } from '../src/core/isotonic.js';
 import { placeNecklace, fitNecklaceScale } from '../src/core/necklace.js';
-import { cyclicDelta, wrap01, circleCurve, polylineCurve } from '../src/core/curve.js';
+import {
+  cyclicDelta, wrap01, circleCurve, polylineCurve, arcCurve, straightenPath,
+} from '../src/core/curve.js';
+import {
+  pathFromGeoJSON, simplifyPath, fitNodeBudget, insertNode, removeNode,
+} from '../src/core/route.js';
+import { markAxes, arcBasis } from '../src/render/LensRenderer.js';
 import {
   distance, bearing, destination, bearingDelta, normaliseBearing,
   projectOntoPath, pathLength,
@@ -1071,4 +1077,237 @@ test('level of detail sheds chrome as the ring shrinks', () => {
 
 test('level of detail can be switched off entirely', () => {
   assert.equal(resolveLod(8, resolveStyle({ lod: false })), null);
+});
+
+// ------------------------------------------------------------ anchor curves
+
+test('arcCurve at unroll 0 is exactly the ring', () => {
+  const circle = circleCurve(100, 100, 50);
+  const arc = arcCurve(100, 100, 50, { unroll: 0 });
+  for (const t of [0, 0.1, 0.25, 0.5, 0.75, 0.9]) {
+    assert.deepEqual(arc.pointAt(t), circle.pointAt(t));
+    assert.deepEqual(arc.normalAt(t), circle.normalAt(t));
+  }
+});
+
+test('arcCurve approaches the ring continuously as unroll goes to zero', () => {
+  const circle = circleCurve(100, 100, 50);
+  const arc = arcCurve(100, 100, 50, { unroll: 1e-9 });
+  for (const t of [0.05, 0.3, 0.6, 0.95]) {
+    const [x, y] = arc.pointAt(t);
+    const [cx, cy] = circle.pointAt(t);
+    assert.ok(Math.hypot(x - cx, y - cy) < 1e-4, `t=${t}`);
+  }
+});
+
+test('arcCurve keeps its arc length at every curvature', () => {
+  // Placement reserves half-widths as a fraction of the curve, so a curve that
+  // changed length mid-unroll would invalidate the solved layout.
+  for (const unroll of [0, 0.25, 0.5, 0.75, 1]) {
+    const curve = arcCurve(0, 0, 50, { unroll });
+    // Walked in the anchor's own frame, from just inside one side of the seam
+    // to the other. An open curve has a real discontinuity in `t` at the seam,
+    // so walking 0 -> 1 would step across the gap and count it as length.
+    let walked = 0;
+    const n = 4000;
+    const step = 1 / n;
+    const first = wrap01(-0.5 + step);
+    let last = first;
+    for (let i = 2; i < n; i++) {
+      const t = wrap01(-0.5 + i * step);
+      const a = curve.pointAt(last);
+      const b = curve.pointAt(t);
+      walked += Math.hypot(b[0] - a[0], b[1] - a[1]);
+      last = t;
+    }
+    const expected = curve.length * (cyclicDelta(0, last) - cyclicDelta(0, first));
+    assert.ok(Math.abs(walked - expected) < 0.01, `unroll ${unroll}: ${walked} vs ${expected}`);
+    assert.ok(Math.abs(curve.length - 2 * Math.PI * 50) < 1e-9);
+  }
+});
+
+test('arcCurve holds the anchor point fixed and unrolls about it', () => {
+  const at = 0;
+  const anchor = circleCurve(100, 100, 50).pointAt(at);
+  for (const unroll of [0, 0.3, 0.7, 1]) {
+    const p = arcCurve(100, 100, 50, { unroll, at }).pointAt(at);
+    assert.ok(Math.hypot(p[0] - anchor[0], p[1] - anchor[1]) < 1e-9);
+  }
+});
+
+test('a fully unrolled ring is a horizontal baseline with marks growing up', () => {
+  const flat = arcCurve(100, 100, 50, { unroll: 1, at: 0 });
+  const ys = [0, 0.2, 0.5, 0.8].map((t) => flat.pointAt(t)[1]);
+  for (const y of ys) assert.ok(Math.abs(y - 50) < 1e-9);
+  // East of north lands to the right, west to the left: the axis reads
+  // west - north - east, and the outward normal is screen-up.
+  assert.ok(flat.pointAt(0.25)[0] > flat.pointAt(0)[0]);
+  assert.ok(flat.pointAt(0.75)[0] < flat.pointAt(0)[0]);
+  const [nx, ny] = flat.normalAt(0.4);
+  assert.ok(Math.abs(nx) < 1e-9 && Math.abs(ny + 1) < 1e-9);
+});
+
+test('the seam falls opposite the anchor, so `at` chooses where the ring opens', () => {
+  const flat = arcCurve(0, 0, 50, { unroll: 1, at: 0.25 });
+  const ends = [flat.pointAt(0.7500001), flat.pointAt(0.7499999)];
+  // The two sides of the seam are a full curve length apart once opened.
+  assert.ok(Math.abs(Math.abs(ends[0][0] - ends[1][0]) - flat.length) < 0.01);
+});
+
+test('an unrolled ring lands horizontal whichever parameter is anchored', () => {
+  // Otherwise the baseline would tip over as the seam moved, and `at: auto`
+  // would be unusable.
+  for (const at of [0, 0.25, 0.5, 0.7]) {
+    const flat = arcCurve(100, 100, 50, { unroll: 1, at });
+    const ys = [0.05, 0.3, 0.6, 0.9].map((t) => flat.pointAt(t)[1]);
+    for (const y of ys) assert.ok(Math.abs(y - ys[0]) < 1e-9, `at ${at}`);
+    const [nx, ny] = flat.normalAt(at);
+    assert.ok(Math.abs(nx) < 1e-9 && Math.abs(ny + 1) < 1e-9, `at ${at} normal`);
+  }
+});
+
+test('straightenPath lays a route out on its own chainage', () => {
+  const path = [[0, 0], [30, 40], [60, 0]];
+  const flat = straightenPath(path, 1);
+  assert.ok(flat.every(([, y]) => Math.abs(y - flat[0][1]) < 1e-9));
+  const spans = [Math.hypot(...sub(flat[1], flat[0])), Math.hypot(...sub(flat[2], flat[1]))];
+  assert.ok(Math.abs(spans[0] - 50) < 1e-9);
+  assert.ok(Math.abs(spans[1] - 50) < 1e-9);
+});
+
+test('straightenPath at 0 leaves the route alone, and holds its midpoint fixed', () => {
+  const path = [[0, 0], [30, 40], [60, 0]];
+  assert.deepEqual(straightenPath(path, 0), path);
+  // The midpoint of the route by arc length is its middle vertex here, and it
+  // is the point the route opens about.
+  for (const u of [0.3, 0.6, 1]) {
+    assert.deepEqual(straightenPath(path, u)[1], [30, 40]);
+  }
+});
+
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+
+test('markAxes: normal follows the curve, up is always screen vertical', () => {
+  const circle = circleCurve(0, 0, 50);
+  const [nx, ny] = markAxes(circle, 0.25, 'normal');
+  assert.ok(Math.abs(nx - 1) < 1e-9 && Math.abs(ny) < 1e-9);   // east: outward is +x
+  for (const t of [0, 0.25, 0.5, 0.75]) {
+    assert.deepEqual(markAxes(circle, t, 'up').slice(0, 2).map(Math.round), [0, -1]);
+  }
+});
+
+test('markAxes: upright never grows back into the lens', () => {
+  const circle = circleCurve(0, 0, 50);
+  // North of the ring the outward normal points up, south of it, down.
+  assert.equal(markAxes(circle, 0, 'upright')[1], -1);
+  assert.equal(markAxes(circle, 0.5, 'upright')[1], 1);
+});
+
+test('markAxes: the width axis is always square to the growth axis', () => {
+  const circle = circleCurve(0, 0, 50);
+  for (const orient of ['normal', 'up', 'upright']) {
+    for (const t of [0, 0.2, 0.45, 0.8]) {
+      const [ux, uy, wx, wy] = markAxes(circle, t, orient);
+      assert.ok(Math.abs(ux * wx + uy * wy) < 1e-12);
+      assert.ok(Math.abs(Math.hypot(wx, wy) - 1) < 1e-12);
+    }
+  }
+});
+
+test('arcBasis gives up on curved edges once the radius stops mattering', () => {
+  assert.equal(arcBasis(circleCurve(0, 0, 150)).radius, 150);
+  assert.ok(arcBasis(arcCurve(0, 0, 150, { unroll: 0.5 })).radius > 150);
+  assert.equal(arcBasis(arcCurve(0, 0, 150, { unroll: 1 })), null);
+  assert.equal(arcBasis(polylineCurve([[0, 0], [10, 0]])), null);
+});
+
+// ------------------------------------------------------------------- routes
+
+test('simplifyPath keeps the ends and drops what sits on the line', () => {
+  const path = [[0, 0], [0.001, 0], [0.002, 0], [0.003, 0]];
+  const out = simplifyPath(path, 5);
+  assert.deepEqual(out, [[0, 0], [0.003, 0]]);
+});
+
+test('simplifyPath keeps a vertex that is genuinely off the line', () => {
+  const path = [[0, 0], [0.001, 0.001], [0.002, 0]];
+  assert.equal(simplifyPath(path, 5).length, 3);
+  assert.equal(simplifyPath(path, 500).length, 2);
+});
+
+test('fitNodeBudget simplifies until the path fits the budget', () => {
+  const path = Array.from({ length: 500 }, (_, i) => [i * 1e-4, Math.sin(i / 3) * 1e-4]);
+  const out = fitNodeBudget(path, 50);
+  assert.ok(out.length <= 50, `${out.length}`);
+  assert.deepEqual(out[0], path[0]);
+  assert.deepEqual(out[out.length - 1], path[path.length - 1]);
+});
+
+test('pathFromGeoJSON reads a Feature, a bare geometry and a collection', () => {
+  const line = { type: 'LineString', coordinates: [[0, 0], [1, 1]] };
+  for (const doc of [
+    line,
+    { type: 'Feature', geometry: line, properties: {} },
+    { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: line }] },
+    JSON.stringify(line),
+  ]) {
+    assert.deepEqual(pathFromGeoJSON(doc).path, [[0, 0], [1, 1]]);
+  }
+});
+
+test('pathFromGeoJSON takes the longest part rather than joining them', () => {
+  const doc = {
+    type: 'MultiLineString',
+    coordinates: [[[0, 0], [0.1, 0]], [[5, 5], [9, 5]]],
+  };
+  const out = pathFromGeoJSON(doc);
+  assert.deepEqual(out.path, [[5, 5], [9, 5]]);
+  assert.equal(out.parts, 2);
+  assert.equal(out.dropped, 1);
+});
+
+test('pathFromGeoJSON accepts a polygon ring as a route', () => {
+  const doc = {
+    type: 'Polygon',
+    coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+  };
+  assert.equal(pathFromGeoJSON(doc).path.length, 4);
+});
+
+test('pathFromGeoJSON refuses a document with no line in it', () => {
+  assert.throws(
+    () => pathFromGeoJSON({ type: 'Point', coordinates: [0, 0] }),
+    /No LineString/,
+  );
+});
+
+test('pathFromGeoJSON simplifies to the node budget on import', () => {
+  const coordinates = Array.from({ length: 4000 }, (_, i) => [i * 1e-4, Math.sin(i / 40) * 1e-3]);
+  const out = pathFromGeoJSON({ type: 'LineString', coordinates }, { maxNodes: 200 });
+  assert.ok(out.nodes <= 200, `${out.nodes}`);
+  assert.equal(out.sourceNodes, 4000);
+});
+
+test('insertNode and removeNode keep a path usable', () => {
+  const path = [[0, 0], [1, 1]];
+  const three = insertNode(path, 1, [0.5, 0.5]);
+  assert.deepEqual(three, [[0, 0], [0.5, 0.5], [1, 1]]);
+  assert.deepEqual(removeNode(three, 1), path);
+  // A corridor needs two points to be a corridor at all.
+  assert.deepEqual(removeNode(path, 0), path);
+});
+
+test('a corridor lens is unchanged by how its anchor is later drawn', () => {
+  // The unroll is a rendering decision, so the same layout has to serve every
+  // curvature — that is what makes it free (docs/findings.md F-27).
+  const data = Array.from({ length: 40 }, (_, i) => ({ lng: 110.36 + i * 0.0004, lat: -7.78 }));
+  const layout = computeLens({
+    selection: { type: 'corridor', path: [[110.36, -7.78], [110.38, -7.78]], width: 600 },
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    binning: { mode: 'chainage', bins: 6 },
+    ring: { radius: 150 },
+  });
+  assert.ok(layout.bins.length > 0);
+  assert.ok(layout.bins.every((b) => b.t >= 0 && b.t <= 1));
 });

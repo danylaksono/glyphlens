@@ -109,6 +109,28 @@ button:hover { background: #2b2f38; }
 
 .shape-row { display: flex; gap: 6px; }
 
+/* A file input, dressed as one of the panel's own controls. */
+.file {
+  display: block;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.file span {
+  display: block;
+  padding: 7px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.file:hover span,
+.file input:focus-visible + span { border-color: var(--ink); color: var(--ink); }
+
 button.ghost {
   background: transparent;
   color: var(--ink);

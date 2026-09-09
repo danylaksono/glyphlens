@@ -28,9 +28,14 @@ const TOGGLES = [
  * @param {number|false} [options.ring]  initial ring radius, or false to omit
  *   the control — a field derives its ring size from the lattice, so the
  *   slider would be inert there.
+ * @param {false|{label?, hint?}} [options.anchor]  show the anchor controls —
+ *   how far the curve is unrolled, and which way marks grow. Off by default:
+ *   they only mean something for a lens with a single anchor to open.
  */
 export function mountDisplay(mount, options) {
-  const { map, lens, restore, marks = [], extras = [], ring = 150 } = options;
+  const {
+    map, lens, restore, marks = [], extras = [], ring = 150, anchor = false,
+  } = options;
   const showRing = ring !== false;
 
   const markRow = marks.length
@@ -40,6 +45,21 @@ export function mountDisplay(mount, options) {
     }</select></label>`
     : '';
 
+  // The anchor is a drawing decision — the placement is already solved and
+  // does not move — so it belongs here rather than with the analytical
+  // controls, however dramatic it looks.
+  const anchorRows = anchor ? `
+    <label class="sub">
+      <span>${anchor.label ?? 'Unroll'} <output data-role="unroll-out">0</output>%</span>
+      <input data-role="unroll" type="range" min="0" max="100" step="1" value="0" />
+    </label>
+    <label class="sub"><span>Marks grow</span><select data-role="orient">
+      <option value="normal" selected>Outward (radial)</option>
+      <option value="up">Up (one baseline)</option>
+      <option value="upright">Up, away from the lens</option>
+    </select></label>
+    ${anchor.hint ? `<p class="hint">${anchor.hint}</p>` : ''}` : '';
+
   mount.innerHTML = `
     <summary>Display</summary>
     <label class="sub"><span>Basemap</span><select data-role="basemap"></select></label>
@@ -48,6 +68,7 @@ export function mountDisplay(mount, options) {
       <span>Ring size <output data-role="ring-out">${ring}</output> px</span>
       <input data-role="ring" type="range" min="90" max="230" step="5" value="${ring}" />
     </label>` : ''}
+    ${anchorRows}
     <div class="toggles">
       ${TOGGLES.map(([id, label]) =>
     `<label><input type="checkbox" data-toggle="${id}" checked /> ${label}</label>`).join('')}
@@ -78,6 +99,19 @@ export function mountDisplay(mount, options) {
       const r = Number(e.target.value);
       q('[data-role="ring-out"]').value = r;
       lens.update({ style: { ringRadius: r } });
+    });
+  }
+
+  if (anchor) {
+    q('[data-role="unroll"]').addEventListener('input', (e) => {
+      const u = Number(e.target.value);
+      q('[data-role="unroll-out"]').value = u;
+      // `setUnroll` repaints without re-running the pipeline: the curve keeps
+      // its length, so the solved placement is still valid.
+      lens.setUnroll(u / 100);
+    });
+    q('[data-role="orient"]').addEventListener('change', (e) => {
+      lens.update({ marks: { orient: e.target.value }, animate: false });
     });
   }
 

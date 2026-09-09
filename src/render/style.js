@@ -25,6 +25,11 @@ export const DEFAULT_STYLE = {
   boundaryDash: [3, 4],
   corridorFill: 'rgba(20,20,25,0.07)',
   centreDot: 3,
+  // The route as it really runs, drawn behind a straightened one, and the
+  // handles that shape it.
+  ghostOpacity: 0.5,
+  nodeRadius: 4,
+  nodeFill: 'rgba(255,255,255,0.9)',
 
   // Exterior
   dimExterior: true,
@@ -35,12 +40,20 @@ export const DEFAULT_STYLE = {
   barRadius: 2,
   markOpacity: 0.92,
   strokeMarks: false,
+  // Which way a mark grows: 'normal' (the curve's outward normal), 'up'
+  // (screen vertical, one shared baseline direction) or 'upright' (vertical,
+  // but never growing back into the lens). See docs/design-space.md §3.5.
+  orient: 'normal',
 
   // Compass — only drawn when the angular axis is geographic, because that is
   // the only time it is telling the truth.
   compass: true,
   compassColor: 'rgba(20,20,25,0.35)',
   tickLength: 5,
+  // Shortest anchor that still gets a bearing axis when the ring is unrolled.
+  // The rose is dropped by level of detail long before this, because it needs
+  // interior room and the axis needs only length.
+  axisFloor: 180,
 
   // Type
   font: '500 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif',
@@ -92,6 +105,7 @@ export const PRESETS = {
   /** For dark basemaps. */
   night: {
     ringStroke: 'rgba(240,240,245,0.8)',
+    nodeFill: 'rgba(20,22,28,0.9)',
     boundaryStroke: 'rgba(240,240,245,0.4)',
     dimColor: 'rgba(12,14,20,0.6)',
     labelColor: 'rgba(240,240,245,0.75)',
