@@ -84,11 +84,31 @@ export { placeNecklace, placeByBearing, fitNecklaceScale } from './core/necklace
 export { isotonic, isotonicBoundedSpan } from './core/isotonic.js';
 
 // Geometry
-export { circleCurve, polylineCurve, wrap01, cyclicDelta } from './core/curve.js';
+export {
+  circleCurve,
+  polylineCurve,
+  arcCurve,
+  straightenPath,
+  wrap01,
+  cyclicDelta,
+} from './core/curve.js';
+export {
+  pathFromGeoJSON,
+  simplifyPath,
+  fitNodeBudget,
+  insertNode,
+  removeNode,
+} from './core/route.js';
 export * as geo from './core/geo.js';
 
 // Rendering
-export { LensRenderer, drawArcText } from './render/LensRenderer.js';
+export {
+  LensRenderer,
+  drawArcText,
+  markAxes,
+  arcBasis,
+  sampleCurve,
+} from './render/LensRenderer.js';
 export {
   DEFAULT_STYLE,
   PRESETS,

@@ -13,7 +13,7 @@
 
 import { computeLens } from '../../src/core/layout.js';
 import { LensRenderer } from '../../src/render/LensRenderer.js';
-import { polylineCurve } from '../../src/core/curve.js';
+import { arcCurve, polylineCurve, straightenPath } from '../../src/core/curve.js';
 import { destination, distance as geoDistance, bearing as geoBearing } from '../../src/core/geo.js';
 
 const CATEGORY_ORDER = ['food', 'retail', 'civic', 'health'];
@@ -155,6 +155,66 @@ const TILES = [
     style: { showLabels: false },
   },
   {
+    title: 'Leaders, where adjacency ran out',
+    note: 'Block placement throws the geography away, so every mark is displaced by construction. A leader puts it back: each bar is tied to the mean position of what it counts. The same lines fade in as the anchor unrolls.',
+    path: 'categorical · count · block · bar + leader',
+    config: {
+      binning: { mode: 'categorical' },
+      placement: { mode: 'block' },
+      marks: { type: 'bar', barWidth: 22, reserveLabels: true },
+      association: { mode: 'leader' },
+    },
+  },
+  {
+    title: 'The ring, unrolled',
+    note: 'The same necklace on a straight anchor of the same length. Nothing is re-solved — every mark keeps the position it was given — but bearing is now a horizontal axis and the bars share one baseline.',
+    path: 'angular(16) · count · necklace · bar · unroll 1',
+    config: {
+      binning: { mode: 'angular', bins: 16 },
+      marks: { type: 'bar', barWidth: 10, maxLength: 62 },
+    },
+    ring: 40,
+    anchor: { unroll: 1 },
+    // The disc is unchanged and still where it was; at 300px the two together
+    // are a muddle, and the point of the tile is the anchor.
+    frame: { selectionRadiusPx: 0 },
+    style: { showLabels: false },
+  },
+  {
+    title: 'Marks that share a direction',
+    note: 'Bars stood upright on a closed ring: length is easy to compare because every mark grows the same way, and the price is that they no longer point at what they summarise.',
+    path: 'angular(16) · count · necklace · bar · orient upright',
+    config: {
+      binning: { mode: 'angular', bins: 16 },
+      marks: { type: 'bar', barWidth: 10, orient: 'upright' },
+    },
+  },
+  {
+    title: 'A route, laid flat',
+    note: 'The corridor straightened onto its own chainage. Distance along and offset across survive exactly; position does not — this is a linear cartogram, so the true path stays behind it.',
+    path: 'corridor · count · necklace · bar · unroll 1',
+    config: {
+      selection: { type: 'corridor', path: TRANSECT, width: 900 },
+      binning: { mode: 'chainage', bins: 12 },
+      marks: { type: 'bar', barWidth: 8, maxLength: 46 },
+    },
+    anchor: { unroll: 1 },
+    style: { showLabels: false },
+  },
+  {
+    title: 'The line back to the geography',
+    note: 'The unrolled ring with its association restored. Each leader runs from a mark to the mean position of the members it counts, in the lens’s own frame — so the strip can be read as a chart without forgetting it is a map.',
+    path: 'angular(12) · count · necklace · bar · unroll 1 + leader',
+    config: {
+      binning: { mode: 'angular', bins: 12 },
+      marks: { type: 'bar', barWidth: 10, maxLength: 40 },
+      association: { mode: 'leader' },
+    },
+    ring: 46,
+    anchor: { unroll: 1 },
+    style: { showLabels: false },
+  },
+  {
     title: 'The members themselves',
     note: 'Inclusions draw each place back through the aggregate, fainter where the bin is dense — so sparse structure survives binning.',
     path: 'angular(24) · count · necklace · bar + inclusions',
@@ -218,6 +278,8 @@ function renderTile(tile, data) {
 
   const cx = TILE / 2;
   const cy = TILE / 2;
+  const ring = tile.ring ?? RING;
+  const unroll = tile.anchor?.unroll ?? 0;
 
   const selection = tile.config.selection ?? { type: 'disc', radius: RADIUS };
   const layout = computeLens({
@@ -229,22 +291,41 @@ function renderTile(tile, data) {
     normalisation: tile.config.normalisation ?? { mode: 'count' },
     placement: tile.config.placement ?? { mode: 'necklace' },
     marks: tile.config.marks,
-    ring: { radius: RING },
+    association: tile.config.association ?? { mode: 'adjacency' },
+    ring: { radius: ring },
   });
 
   const metresPerPx = RADIUS / SELECTION_PX;
   const project = projector(layout.center ?? CENTRE, metresPerPx, cx, cy);
 
-  const frame = { cx, cy, selectionRadiusPx: SELECTION_PX };
+  const frame = {
+    cx,
+    cy,
+    ringRadius: ring,
+    selectionRadiusPx: SELECTION_PX,
+    // Pixels per metre in the tile's own frame — what a leader needs to put
+    // its target at a real distance.
+    scalePx: 1 / metresPerPx,
+    unroll,
+  };
   if (selection.type === 'polygon') {
     frame.selectionRings = (selection.rings ?? []).map((r) => r.map(project));
   } else if (selection.type === 'corridor') {
-    frame.curve = polylineCurve(selection.path.map(project), { closed: false });
+    // Straightening a route and unrolling a ring are the same move on the two
+    // kinds of anchor, so the tile asks for it the same way.
+    const projected = selection.path.map(project);
+    frame.curve = polylineCurve(straightenPath(projected, unroll), { closed: false });
+    frame.ghost = unroll > 0 ? projected : null;
     frame.corridorHalfWidthPx = (selection.width / 2) / metresPerPx;
     frame.selectionRadiusPx = 0;
+  } else if (unroll > 0) {
+    frame.curve = arcCurve(cx, cy, ring, tile.anchor);
   }
+  Object.assign(frame, tile.frame ?? {});
 
-  const renderer = new LensRenderer({ ...BASE_STYLE, ...(tile.style ?? {}) });
+  const renderer = new LensRenderer({
+    ...BASE_STYLE, ringRadius: ring, ...(tile.style ?? {}),
+  });
   renderer.draw(ctx, layout, frame);
 
   const caption = document.createElement('figcaption');

@@ -7,10 +7,11 @@ the first JavaScript implementation of **necklace-map placement**.
 > position means *bearing*, not category order. A bar at 11 o'clock means the
 > data it summarises lies to the northwest.
 
-**Try it:** [gallery](examples/gallery.html) — twelve points in the design space,
+**Try it:** [gallery](examples/gallery.html) — seventeen points in the design space,
 one dataset · [continuum](examples/continuum.html) — one lens to a gridded
 glyphmap on one slider · [ring lens](examples/) ·
-[corridor lens](examples/corridor.html) ·
+[corridor lens](examples/corridor.html) — shape a route or drop in a GeoJSON
+line ·
 [areal lens](examples/areal.html) — census-style geography.
 Live, no build step, and the interactive demos fall back to a bundled OSM
 extract when Overpass is down.
@@ -43,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (101 tests, no runtime dependencies)
+npm test        # node --test (167 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -106,11 +107,73 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `binning.mode` | `categorical` · `angular` · `radial` · `cross` · `chainage` | `angular` = bearing sectors; `chainage` = along a corridor |
 | `normalisation.mode` | `count` · `density` · `share` · `lq` · `z` · `delta` | `lq` baselines against the lens's surroundings by default |
 | `placement.mode` | `necklace` · `block` · `morph` · `stacked` | `morph: 0..1` blends block and necklace; `stacked` gives each variable its own ring |
+| `anchor.unroll` | `0..1` | `0` is the closed ring, `1` a straight baseline of the same length |
+| `anchor.at` | parameter · `'auto'` | the point held fixed as the curve opens; `'auto'` seams at the widest gap |
 | `marks.type` | `bar` · `disc` · `rose` | `disc` sizes by area (classic necklace); `rose` is a directional profile |
+| `marks.orient` | `normal` · `up` · `upright` | which way a mark grows: outward, screen-up, or vertical but never inward |
 | `marks.sizeBy` | `value` · `equal` | which reading owns size; roses default to `equal` |
+| `association.mode` | `auto` · `leader` · `hover` · `adjacency` | leader lines back to what a mark summarises; `auto` draws them where adjacency has gone |
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
 | `style.preset` | `paper` · `night` · `minimal` · `structure` · `forensic` | switchable at runtime |
 | `style` toggles | `showLabels` · `showValues` · `compass` · `dimExterior` · `ringRadius` · `labelGap` · `valueGap` | all live-updatable via `lens.update({ style })` |
+
+### Unrolling: the same lens on a straight axis
+
+A ring spends angle on bearing, and pays for it — every bar grows from a
+different baseline in a different direction, so lengths are hard to compare.
+Opening the ring into a straight axis of the same length fixes that without
+changing anything else:
+
+```js
+lens.setUnroll(1);          // 0 = closed ring, 1 = straight baseline
+lens.setUnroll(0.5, 'auto');  // half open, seamed at the widest gap
+```
+
+**Nothing is recomputed.** Placement solves in a curve's parameter space and
+reserves each mark's room as a fraction of the curve, so any curve of the same
+length accepts the same solution: `setUnroll` repaints, and a closed ring paints
+identically with or without the new anchor. The unroll therefore composes with
+everything above it — areal units, stacked rings, `lq`, roses — for free.
+
+What you trade is association. On a ring a mark points at the part of the map it
+summarises; on an axis it does not, which is what makes leader lines a
+requirement rather than a nicety
+([F-28](docs/findings.md#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so)).
+The compass follows the marks across: at high curvature it becomes an axis of
+the same ticks and cardinals strung along the curve.
+
+Independently, `marks.orient` says which way a mark grows — `normal` (outward,
+the default), `up` (screen vertical, one shared baseline) or `upright`
+(vertical, but never growing back across the lens). `up` is what a bar chart
+does, and belongs with an open or unrolled anchor.
+
+### Leaders: putting the association back
+
+Adjacency is not really an encoding — it is luck. A mark on a ring around its
+own selection points at what it summarises for free, and two things spend that:
+placement sliding a mark off its bearing, and the anchor unrolling away from
+the map. A leader answers both.
+
+```js
+lens.update({ association: { mode: 'auto' } });   // the default
+```
+
+`auto` draws a leader wherever adjacency has gone — a displaced mark, or an
+opened anchor — and fades them in with `unroll`. `leader` always, `hover` only
+under the pointer, `adjacency` never.
+
+The line runs from the mark to **the position placement tried to honour, at its
+members' own mean distance from the anchor**, so its length is exactly the
+association that was given away. It is drawn in the lens's own azimuthal frame,
+so no projection is involved, and it declines to draw rather than guess: a
+distance-band or nominal-slot bin has no direction to point in, and a lens with
+no pixels-per-metre scale has no distance to point at.
+
+The trigger is the gap between where a mark is and where its data is — not the
+solver's reported displacement, which is zero under `block` placement even
+though every mark is as far from its bearing as it can be. So dragging the
+morph slider from bearing back to category order fades the leaders in as the
+bars leave their bearings.
 
 ### Fields: one lens, or a glyphmap
 
@@ -224,7 +287,32 @@ const lens = addLens(map, {
 
 Members are annotated with `chainage` (distance along) and a signed `offset`
 (perpendicular distance, positive to the left of travel) instead of distance and
-bearing. Endpoints are draggable. See [examples/corridor.html](examples/corridor.html).
+bearing. See [examples/corridor.html](examples/corridor.html).
+
+**The route is the interesting part, so it is editable.** Every vertex is a drag
+handle, clicking the line inserts one, and alt-clicking removes one. The linear
+features worth lensing already exist as GeoJSON, so hand one over:
+
+```js
+import { pathFromGeoJSON } from 'glyphlens';
+
+const { path, nodes, sourceNodes } = pathFromGeoJSON(doc, { maxNodes: 200 });
+lens.setPath(path);
+// or, in one step:
+lens.setPathFromGeoJSON(doc);
+```
+
+`LineString`, `MultiLineString` and polygon rings all work; multi-part
+geometries are **not** joined, because that invents segments the data does not
+have, so the longest part is taken and the rest reported. Simplification is not
+cosmetic: chainage costs O(features x vertices), so a four-thousand-vertex river
+makes the lens unusable long before it makes it wrong. The import says what it
+did.
+
+A corridor unrolls too, and it is the same control: `setUnroll(1)` lays the
+route out flat on its own chainage — the route profile, with the true path kept
+behind it as a ghost. That is a **linear cartogram** rather than a map, so node
+editing switches off while it is straightened.
 
 A corridor has an axis a disc does not: **which side**. `structure: 'spread'` on
 an open curve draws the lateral distribution rather than the angular one, and
@@ -330,6 +418,8 @@ bearing — an open question, not a solved one
 src/core/      pure pipeline — no DOM, no map, no framework
   necklace.js    placement (Speckmann–Verbeek, via isotonic regression)
   isotonic.js    weighted PAV, exact
+  curve.js       the anchors: ring, arc, polyline — and the unroll between them
+  route.js       GeoJSON lines in, simplified corridor paths out
   distribution.js  within-unit structure: circular stats, MAUP elasticity
   field.js       lattices, spatial index — the lens/glyphmap continuum
   layout.js      composes the six stages into a plain geometry object

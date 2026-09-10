@@ -61,8 +61,11 @@ Every configuration in this library is a path through six stages. This is the AP
 shape and the design-space axis list at the same time.
 
 ```
-selection -> binning -> normalisation -> placement -> marks -> association
+selection -> binning -> normalisation -> placement -> anchor -> marks -> association
 ```
+
+The anchor sits between placement and marks because placement solves in a
+curve's parameter space and the anchor decides what curve that is — see §3.4b.
 
 ### 3.1 Selection — what the lens encloses (`hSpSubset`)
 
@@ -89,6 +92,17 @@ this library. A polygon has no centre and no radius, so the centroid is resolved
 as the anchor (overridable) and a nominal scale is derived for the stages that
 need one. See
 [F-18](findings.md#f-18-three-reserved-selections-turned-out-to-be-one).
+
+The same argument applies to corridors, and is the reason a route is editable
+rather than configured. The linear features worth lensing — a river, a railway,
+a bus route, a coastline, a boundary — are shapes that already exist, so the
+library takes a GeoJSON `LineString`, `MultiLineString` or polygon ring, and
+lets every vertex of the resulting path be dragged, inserted or removed. What
+it will not do is join multi-part geometries: a river split at every confluence
+would gain segments that are not in the data. The one real constraint is
+computational rather than cartographic — chainage is O(features x vertices), so
+an imported route is simplified to a node budget and told the analyst about it
+([F-29](findings.md#f-29-an-imported-route-has-to-be-simplified-for-complexity-not-for-looks)).
 
 ### 3.2 Binning — how the enclosed set is decomposed
 
@@ -157,6 +171,57 @@ only with its own variable — and pays in radial space and in cross-variable
 comparability. See
 [F-16](findings.md#f-16-stacking-trades-radius-for-angular-fidelity).
 
+### 3.4b The anchor — what the placement is drawn on
+
+Placement solves in the cyclic parameter of a curve and reserves each mark's
+room as a *fraction of that curve*. Nothing in it assumes a circle. So the curve
+itself is a free axis, and the interesting thing to vary is its **curvature**.
+
+| `anchor.unroll` | Curve | Reading |
+|---|---|---|
+| `0` | closed ring | bearing as angle; marks point at what they summarise |
+| `0..1` | arc of the same length | the transition, which is the argument |
+| `1` | straight baseline | bearing as position; marks share one baseline |
+
+Holding *length* constant rather than radius is what makes this free: the
+solved placement stays valid at every curvature, so unrolling never re-runs the
+pipeline and never interpolates two layouts. It is a change of anchor, not a
+re-solve
+([F-27](findings.md#f-27-unrolling-the-ring-is-a-change-of-anchor-not-a-re-solve)).
+
+The trade is exact and worth stating, because it is the one the ring has been
+making silently all along:
+
+- a **ring** keeps adjacency — the strongest form of `hAssoc`, and the reason
+  §2 works at all — and pays for it in comparability, because every bar grows
+  from a different baseline in a different direction;
+- a **straight axis** makes lengths directly comparable, gives labels somewhere
+  to go, and puts bearings in a scannable left-to-right order — and pays in
+  adjacency, which is what makes leader lines go from a nicety to a
+  requirement.
+
+`anchor.at` is the parameter held fixed as the curve opens; the seam falls
+opposite it. The default holds north at the top, so an unrolled lens reads
+west - north - east across the page with marks growing up. `at: 'auto'` puts
+the seam in the widest gap between marks, so opening the ring never cuts one in
+half.
+
+**The open curve gets the same axis.** A corridor is straightened onto its own
+chainage by the same control, which is the route profile that VisQuill's linear
+gallery items draw by hand. It is also a *linear cartogram* — chainage and
+offset survive, position does not — so the true path stays behind it and vertex
+editing switches off while it is straightened
+([F-28](findings.md#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so)).
+
+Two smaller consequences fall out of the same idea. The compass becomes an
+**axis** at high curvature — the same ticks and cardinals, strung along the
+curve rather than around a centre — which says the angular channel has changed
+anchor rather than disappeared
+([F-30](findings.md#f-30-the-compass-and-the-axis-are-one-legend-at-two-curvatures)).
+And an unrolled lens is a strip, which means several of them stack: the natural
+next step is *n* lenses sharing one baseline, which is the small-multiples cell
+of §5 with a common scale rather than a common shape.
+
 ### 3.5 Marks
 
 `bar` (radial bar, length ∝ value) · `disc` (area ∝ value — the classic necklace
@@ -175,10 +240,55 @@ Two orthogonal scaling regimes, both legitimate, so both exposed:
 - `glyphScale: 'screen'` — constant pixel size, geographic anchor (comparable across zoom)
 - `glyphScale: 'geographic'` — scales with the map (preserves spatial extent)
 
+And, independently of the anchor, **which way a mark grows** — a second and
+weaker way to buy the same comparability the unroll buys:
+
+| `marks.orient` | Growth direction | Trade |
+|---|---|---|
+| `normal` | the curve's outward normal | maximal association; every mark on its own baseline |
+| `up` | screen vertical, always | one shared baseline; on a closed ring the lower marks grow back across the lens |
+| `upright` | vertical, signed by the normal | a shared *axis* with two baselines, and nothing growing into the interior |
+
+`up` belongs with an open or unrolled anchor, where it is simply what a bar
+chart does. `upright` is the compromise that keeps a closed ring usable: the
+marks share a direction, so lengths compare by eye, and none of them crosses
+the selection they are describing.
+
 ### 3.6 Association — `hAssoc`
 
-`adjacency` (default, and strengthened by necklace placement) · `leader` lines ·
+`adjacency` (free, and strengthened by necklace placement) · `leader` lines ·
 `colour` · `brush` (lens as a brush driving linked views).
+
+Adjacency is not an encoding so much as a piece of luck: a mark sitting on a
+ring around its own selection points at what it summarises without anything
+being drawn. Two things spend that luck, and they are the same thing by
+degrees — **placement**, which slides a mark off its bearing to avoid an
+overlap, and **the anchor** (§3.4b), which under `unroll` detaches the whole
+chart from the geography. So one encoding answers both.
+
+| `association.mode` | Draws a leader |
+|---|---|
+| `auto` (default) | where adjacency has gone: a displaced mark, or an opened anchor — fading in with `unroll` |
+| `leader` | always |
+| `hover` | only for the mark under the pointer |
+| `adjacency` | never; the displacement tick stands in |
+
+A leader runs from the mark to **the position placement tried to honour, at its
+members' own mean distance from the anchor**, in the lens's azimuthal frame —
+so its length *is* the association that was given away, and no map projection
+is involved. It refuses to draw where it would have to guess: a bin with no
+bearing (a distance band, a nominal slot) has no direction to point in, and a
+lens with no pixels-per-metre scale has no distance to point at.
+
+The trigger is the gap between where a mark is and where its data is, which is
+**not** the solver's reported displacement: `block` placement asks for a
+nominal slot, so the solver reports no displacement at all while every mark is
+as far from its bearing as it can be
+([F-31](findings.md#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency)).
+Measured properly, the morph of §3.2 gains a second reading: drag the angular
+axis from bearing back to category order and the leaders fade in as the bars
+leave their bearings, so what is being given up and what is compensating for it
+are visible in one gesture.
 
 ### 3.7 Effect scope
 
@@ -363,6 +473,13 @@ Related, and cheaper: **lens trail** — sweep a lens along a route and stack ea
 position's glyph into a strip. This derives VisQuill's Rhine/Kungsleden-style
 profiles from the lens rather than treating them as a separate chart type.
 
+The anchor axis (§3.4b) is what makes the middle of the continuum work.
+Small multiples of rings are hard to compare — each one is a circle with its
+own baselines — but small multiples of *unrolled* rings are a stack of profiles
+sharing an x-axis of bearing, which is a chart people already know how to read.
+That is the remaining unbuilt cell in the table below, and it is now a layout
+problem rather than a design one.
+
 ## 6. Area-based statistical data
 
 Point data (OSM, Overture places) was the starting target. **Area-based
@@ -413,13 +530,15 @@ As of v0.1, against the axes above.
 | Binning | `categorical`, `angular`, `radial`, `cross`, `chainage`, `unit` | — |
 | Normalisation | `count`, `density`, `share`, `lq`, `z`, `delta`, confidence; extensive/intensive measures | — |
 | Placement | `necklace`, `block`, `morph`, `stacked`, `strip` (open curves) | — |
-| Marks | `bar`, `disc` | `wedge`, `spark`, `stream` |
-| Association | `adjacency`, brush hooks, displacement indicator | `leader` |
+| Anchor | ring, arc, straight axis (`unroll`), straightened corridor, `at: 'auto'` seam | — |
+| Marks | `bar`, `disc`, `rose`; `orient: normal / up / upright` | `wedge`, `spark`, `stream` |
+| Association | `adjacency`, `leader` (`auto` / always / hover), brush hooks, displacement indicator | `colour` ramps |
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity | — |
-| Curves | circle, polyline (open + closed), marks placed on either | — |
+| Curves | circle, arc, polyline (open + closed), marks placed on any | — |
+| Routes | GeoJSON import, node editing, simplification to a budget | — |
 | Continuum | hex lattice, spatial index, fields of lenses, level of detail | small-multiples layout (non-geographic) |
 
-`examples/gallery.html` shows twelve of these combinations side by side on one
+`examples/gallery.html` shows seventeen of these combinations side by side on one
 dataset, each captioned with the path it takes through the pipeline. It is the
 most direct evidence for the framework's central claim — that these are one
 object with different arguments rather than a set of separate techniques — and

@@ -831,6 +831,217 @@ order, the unresolved inputs are what has to be kept.
 
 ---
 
+### F-27. Unrolling the ring is a change of anchor, not a re-solve
+
+Recorded 2026-09-09.
+
+The ring spends angular position on bearing, which is the library's whole
+argument, but it pays for it: bar lengths on a circle are compared across a
+gap, each one from a different baseline pointing a different way. The obvious
+fix — lay the marks out along a straight axis — sounds like a second layout
+engine.
+
+It is not. Placement never sees a circle; it sees a `Curve` and solves in the
+cyclic parameter `t`, reserving half-widths as a *fraction of the curve*
+(F-2, property 3). So any curve of the same length accepts the same solution
+unchanged. `arcCurve` is that family: a circular arc of fixed arc length whose
+curvature runs from a closed ring to a straight line, with `unroll = 0`
+returning `circleCurve` itself.
+
+The consequences are larger than the change:
+
+- **The unroll never runs the pipeline.** `setUnroll` repaints. There is no
+  animation to interpolate between two layouts, because there is only one
+  layout; a renderer test asserts that a closed ring paints an identical call
+  sequence with and without the new curve.
+- **It composes with everything.** Every stage above the renderer is untouched,
+  so unrolling works on an areal necklace, a stacked lens, an `lq`
+  normalisation and a rose the same way, for free.
+- **It is the honest form of a comparison the ring was making badly.** The
+  same marks, the same positions, on an axis where length is legible.
+
+Two things had to be got right. The arc is computed from its anchor by chord
+and turn rather than from its own centre, because that centre runs off to
+infinity as the curve straightens and is not a finite point at `unroll = 1`.
+And the arc **rotates about its anchor as it opens**, by exactly enough to
+land horizontal: without that, the baseline's direction would be whatever the
+ring's tangent happened to be at the anchor — vertical for an anchor due east —
+and moving the seam would tip the chart over.
+
+Opening a closed curve creates a seam, which is a real discontinuity in `t`
+and lands opposite the anchor. `at: 'auto'` puts it in the widest gap between
+marks so that opening the ring never cuts one in half. That in turn depended on
+a detail the docstring had backwards: `cyclicDelta` returns `[-0.5, 0.5)`, not
+`(-0.5, 0.5]`, so a point exactly half a turn from the anchor belongs to the
+curve's start rather than its end. Corrected.
+
+What it costs is stated in [F-28](#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so).
+
+### F-28. A straightened anchor is a cartogram, and should say so
+
+Recorded 2026-09-09.
+
+The corridor's counterpart of unrolling a ring is straightening a route:
+`straightenPath` interpolates each projected vertex towards its own chainage on
+a horizontal line of the same length. It is the reading that route profiles
+have always wanted — what changes along this river, without the river's bends
+squeezing and stretching the axis.
+
+But it is not a map any more. Distance along and offset across survive exactly;
+**position does not**. That is the defining move of a linear cartogram, and it
+has two consequences the implementation has to take seriously:
+
+- The true path is drawn behind the straightened one as a ghost. A cartogram
+  with nothing to read it against is just a chart.
+- **Node editing switches off once the route is straightened.** A vertex on a
+  straightened corridor is at a cartogram position, so dragging it would be a
+  gesture with no defensible meaning. The adapter stops emitting handles above
+  a threshold of 2% unroll and refuses the drag.
+
+The same argument applies more weakly to an unrolled ring — the selection stays
+exactly where it was on the map, so only the chart has moved — which is why
+the disc boundary, the centre dot, the gradient arrow and the inclusions are
+all still drawn in place. That asymmetry is worth noticing: **unrolling a ring
+detaches the chart from the geography; straightening a corridor moves the
+geography itself.**
+
+This is also the first thing in the library that makes `association: 'leader'`
+more than a reserved word. Adjacency was doing all the work of `hAssoc` while
+the marks sat on a ring around their own selection; once the anchor is opened,
+adjacency degrades with `unroll` and something has to replace it. Leader lines
+from each mark back to its true bearing — the displacement indicator
+generalised — are the obvious candidate, and the renderer already draws that
+tick on the curve rather than at an angle so it survives the unroll.
+
+### F-29. An imported route has to be simplified for complexity, not for looks
+
+Recorded 2026-09-09.
+
+A two-point transect is the least interesting corridor there is; the linear
+features worth lensing — rivers, railways, bus routes, boundaries — are shapes
+somebody already has as GeoJSON. Accepting them turned out to be mostly
+housekeeping (`pathFromGeoJSON` takes a FeatureCollection, a Feature, a bare
+geometry, a MultiLineString or a polygon ring), with one real constraint
+underneath.
+
+Selection projects every member onto every segment of the path to get its
+chainage and offset, so it is O(features x vertices). A 4,000-vertex river
+against 5,000 places is twenty million projections *per drag frame*. The lens
+stops being interactive long before it stops being correct, and the failure
+looks like a slow map rather than like a data problem.
+
+So imported routes are simplified to a node budget (Douglas-Peucker, tolerance
+doubled until the budget is met, 200 nodes by default). At corridor widths of
+hundreds of metres a tolerance of tens of metres is invisible — but it is still
+a change to the analyst's data, so the import reports what it did: how many
+parts were found, how many nodes survived, how many there were.
+
+Multi-part geometries are **not** joined. A river split at every confluence or
+a bus route with one feature per direction would gain segments that are not in
+the data, and a corridor is a claim about a continuous path. The longest part
+is taken and the rest reported.
+
+The same reasoning makes every vertex a drag handle rather than only the two
+endpoints. A route that can be re-aimed but not shaped cannot follow anything,
+which defeats the purpose of importing one.
+
+### F-30. The compass and the axis are one legend at two curvatures
+
+Recorded 2026-09-09.
+
+A compass rose is drawn inside the ring, and an unrolled ring has no inside.
+The reflex was to hide it — but the angular channel has not gone anywhere, it
+has become a position along a baseline, so the compass becomes an *axis*: the
+same sixteen ticks and four cardinal labels, placed at the same parameters,
+strung along the curve instead of around a centre. They cross-fade with
+`unroll`, which is what makes the transition read as a change of anchor rather
+than a change of encoding.
+
+Building it exposed a real limit in the level-of-detail rule, and the first fix
+for that was wrong in an instructive way.
+
+Chrome is shed by ring radius (F-20). A lens at 40px radius unrolls into a
+250px strip that reads perfectly well and was having its axis suppressed for
+being small, so the axis got its own floor, on the curve's length. That worked,
+and the stated moral was that different chrome needs different room.
+
+Then leader lines ([F-31](#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency))
+hit exactly the same wall, and a second special case would have been a pattern
+rather than a coincidence. The real error was in the measure, not in the rule:
+**level of detail is about how far the drawing reaches, and unrolling makes a
+lens bigger without changing its radius.** A closed ring wraps its whole length
+into a footprint of `2r`; the same length laid flat spans `2*pi*r`. So the
+radius is scaled towards its own half-length as the anchor opens —
+
+```
+effective = r * (1 + unroll * (pi - 1))
+```
+
+— an identity for every closed ring, so fields and default lenses are
+untouched, and the length floor and its token are gone. One measure, one rule,
+and the chrome that a strip has room for comes back on its own.
+
+### F-31. The leader is the residual of both things that break adjacency
+
+Recorded 2026-09-10.
+
+Association (`hAssoc`) had been free up to now, and that was luck rather than
+design: a mark sitting on a ring around its own selection points at what it
+summarises without anything being drawn. Two things spend that, and they turn
+out to be the same thing by degrees —
+
+- **placement**, which slides a mark off its true bearing to avoid an overlap;
+- **the anchor**, which under `unroll` detaches the whole chart from the
+  geography ([F-28](#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so)).
+
+So one encoding answers both, and the `auto` mode fades leaders in exactly as
+adjacency fades out: a mark that is still on its own bearing, on a closed ring,
+gets no line, and every mark gets one by the time the ring is a straight axis.
+
+**Where the leader points is the whole design.** Not at the rim, not at the
+mark's own position, but at *the position placement tried to honour, at the
+members' own mean distance from the anchor* — so the line is precisely the
+association that was given away, and its length is how much. It is drawn in the
+lens's azimuthal frame, so like inclusions it needs no map projection
+([F-12](#f-12-inclusions-are-drawn-in-the-lenss-own-frame-not-the-maps)).
+
+Two things it refuses to do, both for the same reason — a leader is a claim
+about where something is, and a guessed claim is worse than none:
+
+- **No bearing, no leader.** A distance-band or nominal-slot bin has no
+  direction. Its members *do* have a circular mean, and using that as a
+  fallback was the first implementation — but a distance band's members run all
+  the way round, so their mean direction is exactly the arbitrary number
+  [F-6](#f-6-a-categorys-mean-bearing-is-often-not-a-direction) warns about.
+  A confident line to a meaningless bearing is the worst thing on this list.
+- **No scale, no leader.** Without pixels per metre there is no honest distance
+  to place the target at, so a lens that cannot supply one — a field cell —
+  simply gets none.
+
+The find that made it work was that `bin.displacement` is the wrong measure to
+trigger on. That is the *solver's* residual: how far it had to move a mark from
+the position it was asked for. Under `block` placement it is asked for a
+nominal slot, so it reports zero displacement while every mark sits as far from
+its data as it can — 120 degrees away, in the demo — which is the layout where
+association is most missing. The leader therefore measures the gap itself,
+between where a mark is and where its data is, and the two agree exactly
+wherever the solver was the one doing the moving.
+
+That has a pleasing consequence for the morph
+([§3.2](design-space.md#32-binning--how-the-enclosed-set-is-decomposed)): drag
+the angular axis from bearing back to nominal order and the leaders **fade in
+as the bars leave their bearings**, so the encoding being given up and the
+encoding compensating for it are visible in the same gesture.
+
+It also answers [Q-2](#q-2-how-much-angular-displacement-is-acceptable) in
+part. Of the three options recorded there — cap it, encode it, indicate it —
+the answer is encode it, and the displacement tick that stood in for this is
+now drawn only where no leader replaced it. What stays open is the *policy*
+question: at what displacement a symbol should be dropped or merged rather than
+drawn with a longer line.
+
+---
+
 ## Open questions
 
 ### Q-1. Does geographic angle actually help anyone?
@@ -842,13 +1053,22 @@ geographic-angle rings, on tasks of the form "which direction should I walk for
 X" and "is provision here isotropic". Until then the claim stays framed as a
 design conjecture.
 
-### Q-2. How much angular displacement is acceptable?
+### Q-2. How much angular displacement is acceptable? — encoding answered
 
 Necklace placement moves a symbol off its true bearing to avoid overlap. There
 must be a point at which the position is misleading. Options: cap displacement
 and drop/merge symbols beyond it; encode displacement (e.g. a leader tick back
-to the true bearing); or show a residual indicator. **Currently unresolved** —
-the engine reports per-item displacement so a policy can be chosen later.
+to the true bearing); or show a residual indicator.
+
+The **encoding** half is answered by
+[F-31](#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency):
+a leader back to the position the mark was placed for, drawn wherever the gap
+exceeds a threshold, and generalised so it also covers the association lost by
+unrolling the anchor. The engine still reports per-item displacement.
+
+The **policy** half is still open: a leader makes a badly displaced symbol
+honest, not correct. At some gap the right answer is to merge two symbols or
+drop one, and nothing here says where that is.
 
 ### Q-3. Bearing from what?
 
@@ -920,3 +1140,35 @@ of a river, say — is a real finding that the count alone erases.
 
 That guess held. Built as `lateralStats`, with `bias` and `sidedness` kept
 separate because they disagree in the case that matters.
+
+### Q-9. Which reading is the unroll actually better for?
+
+The ring and the straight axis carry the same numbers, and each is better at
+something the other is bad at. The ring keeps adjacency — a mark points at the
+part of the map it summarises — and reads as one object against its own
+selection. The axis makes lengths comparable, gives labels somewhere to go, and
+puts the bearings in a fixed left-to-right order that can be scanned.
+
+The guess is that the split follows the task: "which way should I walk for X"
+wants the ring, "rank these directions" or "is there a run of similar
+directions" wants the axis, and the transition itself teaches that they are the
+same data. That is a testable claim and belongs in the same study as
+[Q-1](#q-1-does-geographic-angle-actually-help-anyone), which it complicates:
+the comparison is no longer categorical-angle against geographic-angle, but a
+2x2 with the anchor.
+
+Unresolved, and deliberately so — the library ships the axis as a knob rather
+than picking a default beyond `unroll: 0`.
+
+### Q-10. What is the right default for a wiggly route?
+
+A corridor's straightened form is unambiguously easier to read, and
+unambiguously not a map ([F-28](#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so)).
+For a route with a lot of bends, the on-map form is arguably the misleading
+one: chainage is compressed where the route doubles back, so equal stretches of
+route occupy unequal stretches of screen and the eye reads the wrong profile.
+
+That suggests the default might depend on the route's sinuosity — straight
+enough, draw it in place; convoluted enough, straighten it and keep the ghost.
+Making a default depend on the data is the sort of thing that is helpful once
+and baffling thereafter, so it stays manual until there is evidence.

@@ -27,13 +27,18 @@ import { computeField, hexLattice, spacingForCount, TOUCHING } from '../core/fie
 import { LensRenderer } from '../render/LensRenderer.js';
 import { destination, distance, pathLength } from '../core/geo.js';
 import { normaliseRings } from '../core/selection.js';
-import { polylineCurve } from '../core/curve.js';
+import { arcCurve, polylineCurve, straightenPath, wrap01 } from '../core/curve.js';
+import { insertNode, removeNode, pathFromGeoJSON } from '../core/route.js';
 
 export class LensOverlay {
   /**
    * @param {import('maplibre-gl').Map} map
    * @param {object} options  everything `computeLens` takes, plus:
    * @param {object} [options.style]      renderer style / preset
+   * @param {object} [options.anchor]     `{ unroll: 0..1, at }` — the curve the
+   *   marks are drawn on. `unroll` opens the ring into a straight baseline of
+   *   the same length, and straightens a corridor onto its own chainage; `at`
+   *   is the parameter held fixed, or `'auto'` to seam at the widest gap.
    * @param {boolean} [options.draggable=true]
    * @param {(bin, event) => void} [options.onHover]
    * @param {(bin, event) => void} [options.onClick]
@@ -52,6 +57,10 @@ export class LensOverlay {
     this.renderer = new LensRenderer(options.style);
     this.layout = null;
     this._drag = null;
+    // Null rather than undefined: a hover change is now a repaint, and an
+    // unset field would make the first pointer move over empty map count as
+    // one.
+    this._hovered = null;
     this._transition = null;
 
     this._mount();
@@ -145,6 +154,7 @@ export class LensOverlay {
       normalisation: o.normalisation,
       placement: curveLength ? { ...o.placement, curveLength } : o.placement,
       marks: o.marks,
+      association: o.association,
       structure: o.structure,
       areal: o.areal,
       ring: { radius: this.renderer.style.ringRadius },
@@ -193,6 +203,44 @@ export class LensOverlay {
     return this.update({ placement: { mode: 'morph', morph: u } });
   }
 
+  /**
+   * Open the anchor from a closed ring (0) to a straight baseline (1).
+   *
+   * Deliberately not `update()`: the anchor is a drawing decision, and the
+   * curve keeps its length at every value, so the solved placement stays valid
+   * and there is nothing to recompute. That is what makes this cheap enough to
+   * drive from a slider on a field of lenses (docs/findings.md F-27).
+   */
+  setUnroll(u, at) {
+    this.options.anchor = {
+      ...this.options.anchor,
+      unroll: Math.min(1, Math.max(0, u)),
+      ...(at === undefined ? {} : { at }),
+    };
+    this.repaint();
+    return this.layout;
+  }
+
+  /** Replace the corridor path — from an edit, a preset or an imported line. */
+  setPath(path) {
+    return this.update({
+      selection: { ...this.options.selection, path, length: pathLength(path) },
+    });
+  }
+
+  /**
+   * Take the corridor path from a GeoJSON line the caller already has.
+   *
+   * Returns what the import did — how many parts were found, how far the route
+   * was simplified — because both are things the analyst should see rather
+   * than discover from a lens that has quietly become slow or coarse.
+   */
+  setPathFromGeoJSON(doc, options) {
+    const result = pathFromGeoJSON(doc, options);
+    this.setPath(result.path);
+    return result;
+  }
+
   state() {
     const settled = this.target ?? this.layout;
     return {
@@ -222,12 +270,45 @@ export class LensOverlay {
     return total;
   }
 
+  /**
+   * How far the anchor is unrolled, and the parameter held fixed.
+   *
+   * The default differs by anchor: a ring holds north at the top of the screen,
+   * while an open curve opens about its own midpoint rather than sliding away
+   * from one end. An open curve also has no seam to place — its ends are
+   * already its ends — so `'auto'` means nothing there and falls back.
+   */
+  _anchor(defaultAt = 0, { seam = true } = {}) {
+    const { unroll = 0, at = defaultAt } = this.options.anchor ?? {};
+    const u = Math.min(1, Math.max(0, unroll));
+    if (at !== 'auto') return { unroll: u, at };
+
+    // Seam the ring at the widest empty stretch, so opening it never cuts a
+    // mark in half. Read off the settled layout, not the animating one, so the
+    // seam does not wander during a transition.
+    const bins = seam ? (this.target ?? this.layout)?.bins ?? [] : [];
+    if (bins.length < 2) return { unroll: u, at: defaultAt };
+    const ts = bins.map((b) => b.t).sort((a, b) => a - b);
+    let gap = ts[0] + 1 - ts[ts.length - 1];
+    let widest = wrap01(ts[ts.length - 1] + gap / 2);
+    for (let i = 1; i < ts.length; i++) {
+      const d = ts[i] - ts[i - 1];
+      if (d > gap) {
+        gap = d;
+        widest = ts[i - 1] + d / 2;
+      }
+    }
+    return { unroll: u, at: wrap01(widest + 0.5) };
+  }
+
   frame() {
     const selection = this.options.selection;
+    const onRoute = selection.type === 'corridor' && selection.path?.length >= 2;
+    const { unroll, at } = onRoute ? this._anchor(0.5, { seam: false }) : this._anchor(0);
 
     // A corridor has no centre: its anchor is the projected path itself, so the
     // curve is rebuilt each paint while the layout stays untouched.
-    if (selection.type === 'corridor' && selection.path?.length >= 2) {
+    if (onRoute) {
       const pts = selection.path.map((c) => {
         const q = this.map.project(c);
         return [q.x, q.y];
@@ -235,14 +316,34 @@ export class LensOverlay {
       const mid = selection.path[Math.floor(selection.path.length / 2)];
       const a = this.map.project(mid);
       const b = this.map.project(destination(mid, 90, selection.width / 2));
+      // Straightening a route is the open-curve form of unrolling a ring: the
+      // strip keeps every member's chainage and offset and gives up its
+      // position, which is a linear cartogram (docs/findings.md F-28).
+      const drawn = straightenPath(pts, unroll, { at });
+      const halfWidthPx = Math.hypot(b.x - a.x, b.y - a.y);
       return {
         cx: pts[0][0],
         cy: pts[0][1],
-        curve: polylineCurve(pts, { closed: false }),
-        corridorHalfWidthPx: Math.hypot(b.x - a.x, b.y - a.y),
+        curve: polylineCurve(drawn, { closed: false }),
+        unroll,
+        ghost: unroll > 0.02 ? pts : null,
+        // A vertex on a straightened route is at a cartogram position, so it
+        // stops being something you can meaningfully drag.
+        nodes: this.options.draggable && unroll <= 0.02 ? pts : null,
+        corridorHalfWidthPx: halfWidthPx,
+        // Pixels per metre, which is what puts a leader's target at a real
+        // distance rather than a guessed one.
+        scalePx: halfWidthPx / (selection.width / 2),
         selectionRadiusPx: 0,
+        hovered: this._hovered?.key,
       };
     }
+
+    // The ring, at whatever curvature the anchor asks for. At `unroll = 0` this
+    // is `circleCurve` exactly, so nothing about the default path changes.
+    const ringRadius = this.layout?.ring?.radius ?? this.renderer.style.ringRadius;
+    const anchorCurve = (cx, cy) =>
+      (unroll > 0 ? arcCurve(cx, cy, ringRadius, { unroll, at }) : undefined);
 
     // A polygon carries its own boundary and its centre is the centroid the
     // layout resolved, so there is no radius to project.
@@ -254,17 +355,34 @@ export class LensOverlay {
           const q = this.map.project(c);
           return [q.x, q.y];
         }));
-      return { cx: p.x, cy: p.y, selectionRings: rings, selectionRadiusPx: 0 };
+      // A polygon has no radius to derive a scale from, so it is measured
+      // directly. Without it a leader has no honest length.
+      const east = centre ? this.map.project(destination(centre, 90, 100)) : p;
+      return {
+        cx: p.x,
+        cy: p.y,
+        curve: anchorCurve(p.x, p.y),
+        unroll,
+        selectionRings: rings,
+        selectionRadiusPx: 0,
+        scalePx: Math.hypot(east.x - p.x, east.y - p.y) / 100,
+        hovered: this._hovered?.key,
+      };
     }
 
     const p = this.map.project(this.options.center);
     // Radius in pixels, measured along a real geodesic so it stays correct at
     // high latitudes rather than assuming a local metres-per-pixel constant.
     const edge = this.map.project(destination(this.options.center, 90, selection.radius));
+    const radiusPx = Math.hypot(edge.x - p.x, edge.y - p.y);
     return {
       cx: p.x,
       cy: p.y,
-      selectionRadiusPx: Math.hypot(edge.x - p.x, edge.y - p.y),
+      curve: anchorCurve(p.x, p.y),
+      unroll,
+      selectionRadiusPx: radiusPx,
+      scalePx: selection.radius > 0 ? radiusPx / selection.radius : 0,
+      hovered: this._hovered?.key,
     };
   }
 
@@ -300,17 +418,58 @@ export class LensOverlay {
     const f = this.frame();
 
     if (this.options.selection.type === 'corridor') {
-      // Grab whichever endpoint is nearest, so a transect can be re-aimed.
+      // A straightened corridor is a cartogram: the vertices on screen are not
+      // where the route is, so editing is off until it is rolled back up.
+      if ((this.options.anchor?.unroll ?? 0) > 0.02) return;
+      if (e.button !== 0) return;
+
+      // Every vertex is a handle, not just the two ends. A transect is a
+      // two-node special case of a route, and a route that can only be
+      // re-aimed rather than shaped cannot follow a river or a ring road —
+      // which is most of the linear features worth lensing.
       const pts = this.options.selection.path;
-      const ends = [0, pts.length - 1].map((i) => {
-        const q = this.map.project(pts[i]);
-        return { i, d: Math.hypot(x - q.x, y - q.y) };
+      const screen = pts.map((c) => {
+        const q = this.map.project(c);
+        return [q.x, q.y];
       });
-      const nearest = ends.sort((a, b) => a.d - b.d)[0];
-      if (nearest.d > 16) return;
-      this._drag = { kind: 'endpoint', index: nearest.i };
-      this.map.dragPan.disable();
-      e.preventDefault();
+
+      let nearest = { i: -1, d: Infinity };
+      screen.forEach(([qx, qy], i) => {
+        const d = Math.hypot(x - qx, y - qy);
+        if (d < nearest.d) nearest = { i, d };
+      });
+
+      if (nearest.d <= 14) {
+        // Alt-click removes a node, which is the only way to get back down to
+        // a simpler route once one has been shaped.
+        if (e.altKey && pts.length > 2) {
+          this.options.selection = {
+            ...this.options.selection,
+            path: removeNode(pts, nearest.i),
+          };
+          this.options.selection.length = pathLength(this.options.selection.path);
+          this._scheduleRecompute();
+          e.preventDefault();
+          return;
+        }
+        this._drag = { kind: 'node', index: nearest.i };
+        this.map.dragPan.disable();
+        e.preventDefault();
+        return;
+      }
+
+      // Otherwise, grabbing the line itself inserts a vertex there and drags
+      // it — the same gesture as every polyline editor, and it means shaping a
+      // route needs no mode switch.
+      const hit = nearestSegment([x, y], screen);
+      if (hit.d <= 10) {
+        const path = insertNode(pts, hit.index + 1, this.map.unproject([x, y]).toArray());
+        this.options.selection = { ...this.options.selection, path, length: pathLength(path) };
+        this._drag = { kind: 'node', index: hit.index + 1 };
+        this.map.dragPan.disable();
+        this._scheduleRecompute();
+        e.preventDefault();
+      }
       return;
     }
 
@@ -332,6 +491,9 @@ export class LensOverlay {
         this._hovered = bin;
         this.options.onHover?.(bin, e);
         this.canvas.style.cursor = bin ? 'pointer' : '';
+        // The hovered mark is now something the renderer draws from, so a
+        // change of hover is a repaint — once per change, not per move.
+        this.repaint();
       }
       return;
     }
@@ -339,7 +501,7 @@ export class LensOverlay {
     // Dragging changes the selection at pointer rate, so coalesce to one
     // pipeline run per frame and skip the transition — animating towards a
     // target that moves every frame just adds lag (docs/findings.md F-3).
-    if (this._drag.kind === 'endpoint') {
+    if (this._drag.kind === 'node') {
       const path = [...this.options.selection.path];
       path[this._drag.index] = this.map.unproject([x, y]).toArray();
       this.options.selection = {
@@ -375,6 +537,22 @@ export class LensOverlay {
     this._drag = null;
     this.map.dragPan.enable();
   }
+}
+
+/** Closest segment of a projected polyline to a point, and how far away it is. */
+function nearestSegment([px, py], points) {
+  let best = { index: 0, d: Infinity, at: 0 };
+  for (let i = 0; i < points.length - 1; i++) {
+    const [ax, ay] = points[i];
+    const [bx, by] = points[i + 1];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const u = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / len2));
+    const d = Math.hypot(px - (ax + dx * u), py - (ay + dy * u));
+    if (d < best.d) best = { index: i, d, at: u };
+  }
+  return best;
 }
 
 /** Convenience wrapper. */

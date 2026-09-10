@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>glyphlens — corridor lens</title>
-<meta name="description" content="The same lens pipeline on an open curve: position along the strip means distance travelled, and spread means which side of the route." />
+<meta name="description" content="The same lens pipeline on an open curve: shape a route or drop in a GeoJSON line, and read what changes along it." />
 <meta property="og:title" content="glyphlens — corridor lens" />
 <meta property="og:description" content="The same lens pipeline on an open curve: position along the strip means distance travelled, and spread means which side of the route." />
 <meta property="og:type" content="website" />
@@ -25,10 +25,24 @@
     </header>
 
     <p class="hint">
-      Drag either endpoint to re-aim the transect. Everything else — binning,
-      normalisation, necklace placement, marks — is unchanged from the
-      <a href="./">ring lens</a>.
+      Shape the route directly on the map, or drop a GeoJSON line onto it.
+      Everything else — binning, normalisation, necklace placement, marks — is
+      unchanged from the <a href="./">ring lens</a>.
     </p>
+
+    <div class="field">
+      <span>Route</span>
+      <select id="route">
+        <option value="transect" selected>North–south transect</option>
+        <option value="ringroad">Ring road (western arc)</option>
+        <option value="custom" hidden>Imported line</option>
+      </select>
+      <label class="file">
+        <input id="geojson" type="file" accept=".geojson,.json,application/geo+json,application/json" />
+        <span>Load a GeoJSON line…</span>
+      </label>
+      <p class="hint" id="route-note">2 nodes.</p>
+    </div>
 
     <label class="field">
       <span>Corridor width <output id="width-out">600</output> m</span>
@@ -76,6 +90,7 @@
     <div class="readout">
       <div><strong id="stat-count">0</strong><em>in corridor</em></div>
       <div><strong id="stat-length">0</strong><em>km long</em></div>
+      <div><strong id="stat-nodes">2</strong><em>nodes</em></div>
       <div><strong id="stat-fill">0%</strong><em>strip used</em></div>
       <div><strong id="stat-sided">–</strong><em>one-sidedness</em></div>
       <div><strong id="stat-bias">–</strong><em>lateral bias</em></div>
@@ -83,7 +98,7 @@
 
     <ul id="legend" class="legend"></ul>
     <p class="status" id="status">Loading…</p>
-    <p class="credit"><a href="gallery.html">Gallery →</a> twelve points in the design space.<br />
+    <p class="credit"><a href="gallery.html">Gallery →</a> seventeen points in the design space.<br />
        <a href="continuum.html">Continuum →</a> one lens to a gridded glyphmap.<br />
        <a href="areal.html">Areal lens →</a> census-style geography.<br />
        Data © OpenStreetMap contributors.</p>

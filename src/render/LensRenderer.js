@@ -12,7 +12,7 @@
  */
 
 import { resolveStyle, resolveLod, colorFor } from './style.js';
-import { circleCurve } from '../core/curve.js';
+import { circleCurve, polylineCurve, wrap01, cyclicDelta } from '../core/curve.js';
 
 const TAU = Math.PI * 2;
 
@@ -48,10 +48,15 @@ export class LensRenderer {
   draw(ctx, layout, frame) {
     const { cx, cy, selectionRadiusPx } = frame;
     const ring = frame.ringRadius ?? layout.ring.radius;
+    const curve = frame.curve ?? circleCurve(cx, cy, ring);
+    // How far the anchor has been opened. A straightened corridor carries this
+    // on the frame, because a polyline has no curvature to read it from.
+    const unroll = frame.unroll ?? curve.unroll ?? 0;
     // A lens drawn at a dozen pixels cannot carry the chrome that reads well at
     // a hundred and fifty. Applied here rather than by the caller so a field
-    // and a single lens share one rule.
-    const lod = resolveLod(ring, this.style);
+    // and a single lens share one rule — and measured on the drawing rather
+    // than the ring, because an unrolled lens is much the bigger of the two.
+    const lod = resolveLod(ring, this.style, unroll);
     const s = lod ? { ...this.style, ...lod } : this.style;
     // Helpers read the effective style for the duration of this paint, the
     // same way `_valueFloor` is shared. Cleared at the end so the renderer
@@ -61,12 +66,25 @@ export class LensRenderer {
     // Marks are placed on a curve, never on "the ring". A disc lens supplies
     // none and gets a circle; a corridor lens supplies its projected path. This
     // is the property F-2 asks the core to preserve, exercised for real.
-    const curve = frame.curve ?? circleCurve(cx, cy, ring);
-    const onCircle = curve.kind === 'circle';
+    // The question the renderer actually needs is not "is this a circle" but
+    // "does this lens have a centre and a disc-shaped selection" — which a
+    // partly unrolled ring still does, and a corridor never did. Where true
+    // circular geometry is needed (annular sectors, arc text) `arcBasis` asks
+    // for it directly, and gets an answer for any curvature.
+    const ringLike = curve.kind !== 'polyline';
+    // Which way a mark grows from its anchor. `normal` is the curve's own
+    // outward normal; the rest trade adjacency for a common baseline direction
+    // (docs/design-space.md 3.5).
+    const orient = layout.marks?.orient ?? s.orient ?? 'normal';
 
     ctx.save();
 
-    if (onCircle) {
+    // Where the anchor has been flattened, the true geography is drawn behind
+    // it: an unrolled corridor is a cartogram, and a cartogram with nothing to
+    // read it against is just a chart (docs/findings.md F-28).
+    if (frame.ghost?.length > 1) this._drawGhost(ctx, frame.ghost);
+
+    if (ringLike) {
       // A polygon selection supplies its own boundary; a disc, annulus or
       // sector is described by its radius.
       const shape = frame.selectionRings;
@@ -102,19 +120,30 @@ export class LensRenderer {
     // Matches the layout's own test, so the compass appears exactly when the
     // angular axis is geographic — including categorical bins placed at their
     // mean bearing, which have no `bearing` of their own.
-    const geographic = onCircle
+    const geographic = ringLike
       && layout.bins.some((b) => b.bearing != null || b.meanBearing != null);
-    if (s.compass && geographic) this._drawCompass(ctx, cx, cy, ring);
+    // The compass and the bearing axis are one legend at two curvatures, so
+    // they cross-fade rather than switch: a rose of ticks inside the ring is
+    // unreadable once the ring is nearly straight, and an axis strung along a
+    // full circle is just a second ring.
+    if (s.compass && geographic) {
+      if (unroll < 0.45) this._drawCompass(ctx, cx, cy, ring, 1 - unroll / 0.45);
+      if (unroll > 0.15) {
+        this._drawBearingAxis(ctx, curve, Math.min(1, (unroll - 0.15) / 0.35));
+      }
+    }
 
     // One faint guide per concentric track, so a reader can tell which ring a
     // mark belongs to when tracks are close together.
-    if (onCircle) {
+    if (ringLike) {
       const tracks = [...new Set(layout.bins.map((b) => b.ringOffset ?? 0))]
         .filter((t) => t > 0);
       for (const t of tracks) {
+        const guide = sampleCurve(curve, 0, 1, 4, t);
         ctx.save();
         ctx.beginPath();
-        ctx.arc(cx, cy, ring + t, 0, TAU);
+        ctx.moveTo(guide[0][0], guide[0][1]);
+        for (let i = 1; i < guide.length; i++) ctx.lineTo(guide[i][0], guide[i][1]);
         ctx.strokeStyle = s.ringStroke;
         ctx.globalAlpha = s.trackOpacity ?? 0.22;
         ctx.lineWidth = 1;
@@ -129,39 +158,49 @@ export class LensRenderer {
     // Spread means different things on the two anchors. On a ring it is spread
     // in bearing; on a corridor it is spread *across* the route, which is a
     // reading a disc has no equivalent for (docs/findings.md F-15).
-    if (!onCircle && (structure === 'spread' || structure === 'both')) {
+    if (!ringLike && (structure === 'spread' || structure === 'both')) {
       for (const b of layout.bins) {
         this._drawLateral(ctx, b, layout, curve, frame.corridorHalfWidthPx);
       }
     }
-    if (onCircle && (structure === 'spread' || structure === 'both')) {
+    if (ringLike && (structure === 'spread' || structure === 'both')) {
       // Spread arcs of co-located bins land on top of each other, so with few
       // enough bins each gets its own concentric track. Past that they sit in
       // their own sectors already and staggering would only cost radius.
       const stagger = layout.bins.length <= (s.maxLabels ?? 12);
       layout.bins.forEach((b, i) => {
         const track = stagger ? i * (s.spreadStep ?? 5) : 0;
-        this._drawSpread(ctx, b, layout, cx, cy, ring, track);
+        this._drawSpread(ctx, b, layout, curve, track);
       });
     }
     if (structure === 'inclusions' || structure === 'both') {
       this._drawInclusions(
-        ctx, layout, curve, cx, cy, selectionRadiusPx, frame.corridorHalfWidthPx,
+        ctx, layout, curve, cx, cy, selectionRadiusPx, frame.corridorHalfWidthPx, ringLike,
       );
     }
-    if (onCircle && (structure === 'gradient' || structure === 'both') && layout.structure) {
+    if (ringLike && (structure === 'gradient' || structure === 'both') && layout.structure) {
       this._drawGradient(ctx, layout, cx, cy, selectionRadiusPx);
     }
 
-    for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, cx, cy, ring);
+    // Association, under the marks and over the structure: a leader is context
+    // for the mark it belongs to, never a reading of its own.
+    const led = this._drawLeaders(ctx, layout, curve, frame, orient, unroll);
+
+    for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, orient, led);
 
     if (s.showLabels) {
-      for (const b of layout.bins) {
-        this._drawLabel(ctx, b, layout, curve, cx, cy, ring, geographic);
-      }
+      for (const b of layout.bins) this._drawLabel(ctx, b, layout, curve, orient);
     }
 
-    if (onCircle && s.centreDot > 0) {
+    // Draggable vertices, drawn last so they sit above the band. The adapter
+    // only supplies them while the route is on its true geography: a node on a
+    // straightened corridor is at a cartogram position and dragging it would
+    // mean nothing.
+    if (frame.nodes?.length) this._drawNodes(ctx, frame.nodes);
+
+    // The centre survives the unroll: the selection has not moved, and the dot
+    // is what says so.
+    if (ringLike && s.centreDot > 0) {
       ctx.beginPath();
       ctx.arc(cx, cy, s.centreDot, 0, TAU);
       ctx.fillStyle = s.ringStroke;
@@ -211,10 +250,47 @@ export class LensRenderer {
       ctx.arc(cx, cy, ring, 0, TAU);
       return;
     }
-    const pts = curve.points ?? [];
+    const pts = curve.kind === 'arc' ? sampleCurve(curve) : (curve.points ?? []);
     if (pts.length === 0) return;
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  }
+
+  /**
+   * The route as it really runs, behind a straightened one.
+   *
+   * Faint and dashed: it is context for the strip, not a second reading, and
+   * the strip is the thing carrying the data.
+   */
+  _drawGhost(ctx, points) {
+    const s = this._s ?? this.style;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+    ctx.setLineDash(s.boundaryDash);
+    ctx.globalAlpha = s.ghostOpacity ?? 0.5;
+    ctx.strokeStyle = s.boundaryStroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Draggable path vertices. */
+  _drawNodes(ctx, nodes) {
+    const s = this._s ?? this.style;
+    const r = s.nodeRadius ?? 4;
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = s.ringStroke;
+    ctx.fillStyle = s.nodeFill ?? 'rgba(255,255,255,0.9)';
+    for (const [x, y] of nodes) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /**
@@ -243,9 +319,11 @@ export class LensRenderer {
     ctx.restore();
   }
 
-  _drawCompass(ctx, cx, cy, ring) {
+  _drawCompass(ctx, cx, cy, ring, alpha = 1) {
     const s = this._s ?? this.style;
+    if (alpha <= 0.01) return;
     ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.strokeStyle = s.compassColor;
     ctx.fillStyle = s.compassColor;
     ctx.lineWidth = 1;
@@ -272,6 +350,49 @@ export class LensRenderer {
   }
 
   /**
+   * The compass, restated as an axis on the curve itself.
+   *
+   * Once the ring is unrolled there is no inside to put a compass rose in, but
+   * the angular channel has not gone anywhere: it is now a position along a
+   * baseline. Ticks and cardinal labels are placed at the same parameters they
+   * always were, which is what makes the unroll legible as a change of anchor
+   * rather than a change of encoding.
+   */
+  _drawBearingAxis(ctx, curve, alpha = 1) {
+    const s = this._s ?? this.style;
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = s.compassColor;
+    ctx.fillStyle = s.compassColor;
+    ctx.lineWidth = 1;
+    ctx.font = s.font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < 16; i++) {
+      const t = i / 16;
+      const major = i % 4 === 0;
+      const len = major ? s.tickLength * 1.8 : s.tickLength;
+      const [x, y] = curve.pointAt(t);
+      const [nx, ny] = curve.normalAt(t);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - nx * len, y - ny * len);
+      ctx.stroke();
+    }
+
+    ['N', 'E', 'S', 'W'].forEach((label, i) => {
+      const t = i / 4;
+      const [x, y] = curve.pointAt(t);
+      const [nx, ny] = curve.normalAt(t);
+      const back = s.tickLength * 1.8 + 9;
+      ctx.fillText(label, x - nx * back, y - ny * back);
+    });
+    ctx.restore();
+  }
+
+  /**
    * Angular spread of a bin's members, as an arc on the ring.
    *
    * A bar drawn at a circular mean asserts a direction. This says how much that
@@ -279,7 +400,7 @@ export class LensRenderer {
    * diffuse one a wide faint band. It is the lens's diamond-cut steepness made
    * visible — see docs/findings.md F-10.
    */
-  _drawSpread(ctx, bin, layout, cx, cy, ring, track = 0) {
+  _drawSpread(ctx, bin, layout, curve, track = 0) {
     const s = this._s ?? this.style;
     const sd = bin.spread;
     if (!Number.isFinite(sd) || !bin.count || sd <= 0) return;
@@ -288,23 +409,31 @@ export class LensRenderer {
     // just be a second ring.
     if (sd >= 179) return;
 
-    const half = (sd / 360) * TAU;
-    const r = ring - (s.spreadOffset ?? 6) - track;
+    // The spread is a span of *bearing*, which is a span of curve parameter —
+    // so it is drawn by walking the curve rather than by sweeping an angle,
+    // and it survives the unroll as the same reading on a straight axis.
+    const halfT = sd / 720;
+    const offset = (s.spreadOffset ?? 6) + track;
+    const pts = sampleCurve(curve, bin.t - halfT, bin.t + halfT, 4, -offset);
+
     ctx.save();
     ctx.globalAlpha = s.spreadOpacity ?? 0.5;
     ctx.strokeStyle = s.spreadColor ?? colorFor(bin, layout, s);
     ctx.lineWidth = s.spreadWidth ?? 2.5;
     ctx.lineCap = 'butt';
     ctx.beginPath();
-    ctx.arc(cx, cy, r, bin.angle - half, bin.angle + half);
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     ctx.stroke();
 
     // End caps, so the extent is readable rather than fading ambiguously.
     ctx.lineWidth = 1;
-    for (const a of [bin.angle - half, bin.angle + half]) {
+    for (const t of [bin.t - halfT, bin.t + halfT]) {
+      const [x, y] = curve.pointAt(t);
+      const [nx, ny] = curve.normalAt(t);
       ctx.beginPath();
-      ctx.moveTo(...polar(cx, cy, r - 2.5, a));
-      ctx.lineTo(...polar(cx, cy, r + 2.5, a));
+      ctx.moveTo(x - nx * (offset + 2.5), y - ny * (offset + 2.5));
+      ctx.lineTo(x - nx * (offset - 2.5), y - ny * (offset - 2.5));
       ctx.stroke();
     }
     ctx.restore();
@@ -366,13 +495,14 @@ export class LensRenderer {
    * a selection defined by geodesic distance that is the truthful frame, and it
    * keeps the renderer free of any map dependency (docs/findings.md F-12).
    */
-  _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx) {
+  _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx, ringLike = true) {
     const s = this._s ?? this.style;
-    const onCircle = curve.kind === 'circle';
+    // Members are placed in the lens's own azimuthal frame, which an unrolled
+    // ring still has: the selection has not moved, only the chart around it.
     const radius = layout.selection?.radius ?? layout.structure?.radial?.max
       ?? Math.max(1, ...layout.bins.flatMap((b) => (b.items ?? []).map((i) => i.distance)));
     const halfWidth = (layout.selection?.width ?? 0) / 2;
-    if (onCircle ? !(selectionRadiusPx > 0 && radius > 0) : !(halfWidthPx > 0 && halfWidth > 0)) {
+    if (ringLike ? !(selectionRadiusPx > 0 && radius > 0) : !(halfWidthPx > 0 && halfWidth > 0)) {
       return;
     }
 
@@ -397,7 +527,7 @@ export class LensRenderer {
         const it = items[i];
         let x;
         let y;
-        if (onCircle) {
+        if (ringLike) {
           if (!Number.isFinite(it.distance) || !Number.isFinite(it.bearing)) continue;
           const r = (it.distance / radius) * selectionRadiusPx;
           const a = ((it.bearing - 90) / 180) * Math.PI;
@@ -458,11 +588,10 @@ export class LensRenderer {
     ctx.restore();
   }
 
-  _drawMark(ctx, bin, layout, curve, cx, cy, ring) {
+  _drawMark(ctx, bin, layout, curve, orient = 'normal', led = null) {
     const s = this._s ?? this.style;
     const type = layout.marks?.type ?? 'bar';
     if (!Number.isFinite(bin.size) || bin.size <= 0.1) return;
-    const onCircle = curve.kind === 'circle';
 
     ctx.save();
     ctx.globalAlpha = s.markOpacity * (0.45 + 0.55 * (bin.confidence ?? 1));
@@ -472,9 +601,15 @@ export class LensRenderer {
     // placement is `stacked`.
     const track = bin.ringOffset ?? 0;
     const [px0, py0] = curve.pointAt(bin.t);
-    const [nx, ny] = curve.normalAt(bin.t);
+    const [nx, ny, tx, ty] = markAxes(curve, bin.t, orient);
     const bx = px0 + nx * track;
     const by = py0 + ny * track;
+    // Curved bar edges need the circle the mark actually sits on, which is the
+    // *anchor's* circle rather than the lens's — they are the same thing only
+    // while the ring is closed. Beyond a few thousand pixels of radius the
+    // curvature is under a tenth of a pixel across a bar, so the straight-edged
+    // path is not an approximation anyone can see.
+    const basis = orient === 'normal' ? arcBasis(curve) : null;
 
     if (type === 'rose') {
       const outer = Math.max(bin.size, s.minRoseRadius ?? 6);
@@ -497,16 +632,16 @@ export class LensRenderer {
       const extent = inward ? -bin.size : bin.size;
       const half = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 0.5);
 
-      if (onCircle) {
+      if (basis) {
         // Curved edges are worth the special case on a ring: at the widths a
         // 24-sector rose uses, a straight-edged quad reads as a mistake.
-        const r0 = ring + track;
+        const angle = curve.angleAt(bin.t);
+        const r0 = basis.radius + track;
         const r1 = r0 + extent;
         const halfAngle = half / r0;
-        annularSector(ctx, cx, cy, Math.min(r0, r1), Math.max(r0, r1),
-          bin.angle - halfAngle, bin.angle + halfAngle);
+        annularSector(ctx, basis.cx, basis.cy, Math.min(r0, r1), Math.max(r0, r1),
+          angle - halfAngle, angle + halfAngle);
       } else {
-        const [tx, ty] = curve.tangentAt(bin.t);
         ctx.beginPath();
         ctx.moveTo(bx - tx * half, by - ty * half);
         ctx.lineTo(bx + tx * half, by + ty * half);
@@ -518,19 +653,91 @@ export class LensRenderer {
     }
 
     // Displacement indicator: how far placement moved this mark off its true
-    // bearing. Unresolved policy question — see docs/findings.md Q-2.
-    if (onCircle && Math.abs(bin.displacement ?? 0) > s.displacementThreshold) {
-      const trueAngle = (bin.preferredT ?? bin.t) * TAU - Math.PI / 2;
+    // bearing. Drawn on the curve rather than at an angle, so it survives the
+    // unroll. A leader says the same thing and more, so the tick is only drawn
+    // where no leader was — see docs/findings.md Q-2.
+    if (!led?.has(bin.key) && Math.abs(bin.displacement ?? 0) > s.displacementThreshold) {
+      const trueT = bin.preferredT ?? bin.t;
+      const [x, y] = curve.pointAt(trueT);
+      const [ax, ay] = curve.normalAt(trueT);
       ctx.globalAlpha = 1;
       ctx.strokeStyle = s.displacementColor;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(...polar(cx, cy, ring - 3, trueAngle));
-      ctx.lineTo(...polar(cx, cy, ring - 9, trueAngle));
+      ctx.moveTo(x - ax * 3, y - ay * 3);
+      ctx.lineTo(x - ax * 9, y - ay * 9);
       ctx.stroke();
     }
 
     ctx.restore();
+  }
+
+  /**
+   * Leader lines: what ties a mark back to what it summarises (`hAssoc`).
+   *
+   * Adjacency does this for free while a mark sits on a ring around its own
+   * selection, which is why the library got this far without leaders. Two
+   * things break it, and they are the same break by degrees:
+   *
+   * - **placement**, which slides a mark off its true bearing to avoid an
+   *   overlap — the residual the displacement tick was gesturing at
+   *   (docs/findings.md Q-2);
+   * - **the anchor**, which under `unroll` detaches the whole chart from the
+   *   geography it describes (docs/findings.md F-28).
+   *
+   * So one encoding answers both, and `auto` fades it in exactly as adjacency
+   * fades out. Returns the set of bin keys that got one, so the mark stage can
+   * drop the tick it replaces.
+   */
+  _drawLeaders(ctx, layout, curve, frame, orient, unroll) {
+    const s = this._s ?? this.style;
+    const drawn = new Set();
+    const assoc = { ...(s.association ?? {}), ...(layout.association ?? {}) };
+    const mode = assoc.mode ?? 'auto';
+    if (mode === 'adjacency' || mode === 'none' || s.leaders === false) return drawn;
+
+    const threshold = assoc.threshold ?? s.displacementThreshold ?? 6;
+    const minLength = assoc.minLength ?? s.leaderMinLength ?? 7;
+
+    ctx.save();
+    ctx.lineWidth = s.leaderWidth ?? 1;
+    for (const bin of layout.bins) {
+      if (!bin.count) continue;
+      const hovered = frame.hovered != null && frame.hovered === bin.key;
+      const displaced = leaderGap(bin) > threshold;
+      // How much of the association the layout has already given away. A mark
+      // still sitting on its own bearing, on a closed ring, needs no line.
+      const strength = mode === 'leader' ? 1
+        : mode === 'hover' ? (hovered ? 1 : 0)
+          : Math.max(unroll, displaced || hovered ? 1 : 0);
+      if (strength <= 0.02) continue;
+
+      const line = leaderAnchors(layout, bin, curve, frame, orient);
+      if (!line) continue;
+      const [[x0, y0], [x1, y1]] = line;
+      if (Math.hypot(x1 - x0, y1 - y0) < minLength) continue;
+
+      const colour = s.leaderColor ?? colorFor(bin, layout, s);
+      ctx.globalAlpha = (s.leaderOpacity ?? 0.5) * strength;
+      ctx.strokeStyle = colour;
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+
+      // A dot at the far end, because a bare line is ambiguous about which of
+      // its ends is the claim.
+      const dot = s.leaderDot ?? 2;
+      if (dot > 0) {
+        ctx.beginPath();
+        ctx.arc(x1, y1, dot, 0, TAU);
+        ctx.fill();
+      }
+      drawn.add(bin.key);
+    }
+    ctx.restore();
+    return drawn;
   }
 
   /**
@@ -572,13 +779,13 @@ export class LensRenderer {
     }
   }
 
-  _drawLabel(ctx, bin, layout, curve, cx, cy, ring, geographic) {
+  _drawLabel(ctx, bin, layout, curve, orient = 'normal') {
     const s = this._s ?? this.style;
     // Per-mark text only pays for itself while there are few enough marks to
     // read. Past that the compass carries the angular reading and the labels
     // would just be a ring of noise.
     if (layout.bins.length > (s.maxLabels ?? 12)) {
-      if (s.showValues && bin.raw > 0) this._drawValue(ctx, bin, layout, curve, cx, cy, ring);
+      if (s.showValues && bin.raw > 0) this._drawValue(ctx, bin, layout, curve, orient);
       return;
     }
     if (bin.raw === 0) return;
@@ -590,18 +797,20 @@ export class LensRenderer {
     const extent = this._markExtent(bin, layout);
     const gap = s.labelGap ?? 24;
     const offset = bin.signed < 0 ? -(extent + gap) : extent + gap;
-    if (curve.kind === 'circle') {
-      drawArcText(ctx, bin.label, cx, cy, ring + track + offset, bin.angle, {
-        font: s.font,
-        color: s.labelColor,
-      });
+    const basis = orient === 'normal' ? arcBasis(curve) : null;
+    if (basis) {
+      drawArcText(ctx, bin.label, basis.cx, basis.cy,
+        basis.radius + track + offset, curve.angleAt(bin.t), {
+          font: s.font,
+          color: s.labelColor,
+        });
     } else {
       // Off a circle there is no arc to follow, so the label is set upright.
       // It also goes on the *far* side of the curve from the mark: on a ring
       // the arc text and the value sit at different radii and never meet, but
       // on a strip they share one axis and would collide.
       const [px0, py0] = curve.pointAt(bin.t);
-      const [nx, ny] = curve.normalAt(bin.t);
+      const [nx, ny] = markAxes(curve, bin.t, orient);
       const bx = px0 + nx * track;
       const by = py0 + ny * track;
       const back = -(s.stripLabelOffset ?? 12);
@@ -613,7 +822,7 @@ export class LensRenderer {
       ctx.fillText(bin.label, bx + nx * back, by + ny * back);
       ctx.restore();
     }
-    if (s.showValues) this._drawValue(ctx, bin, layout, curve, cx, cy, ring);
+    if (s.showValues) this._drawValue(ctx, bin, layout, curve, orient);
   }
 
   /**
@@ -626,14 +835,14 @@ export class LensRenderer {
     return type === 'disc' || type === 'rose' ? bin.size * 2 : bin.size;
   }
 
-  _drawValue(ctx, bin, layout, curve, cx, cy, ring) {
+  _drawValue(ctx, bin, layout, curve, orient = 'normal') {
     const s = this._s ?? this.style;
     if (Math.abs(bin.size ?? 0) < this._valueFloor) return;
     const extent = this._markExtent(bin, layout);
     const gap = s.valueGap ?? 10;
     const along = (bin.ringOffset ?? 0) + (bin.signed < 0 ? -(extent + gap) : extent + gap);
     const [bx, by] = curve.pointAt(bin.t);
-    const [nx, ny] = curve.normalAt(bin.t);
+    const [nx, ny] = markAxes(curve, bin.t, orient);
     const [x, y] = [bx + nx * along, by + ny * along];
     ctx.save();
     ctx.font = s.valueFont;
@@ -647,12 +856,16 @@ export class LensRenderer {
   /** Which bin, if any, is under a canvas point. */
   hitTest(layout, frame, px, py) {
     const ring = frame.ringRadius ?? layout.ring.radius;
+    const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
     // Match the level of detail the lens was painted at, so hit areas cannot
     // disagree with what is on screen.
-    const lod = resolveLod(ring, this.style);
+    const lod = resolveLod(ring, this.style, frame.unroll ?? curve.unroll ?? 0);
     this._s = lod ? { ...this.style, ...lod } : this.style;
-    const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
-    const onCircle = curve.kind === 'circle';
+    const orient = layout.marks?.orient ?? this._s.orient ?? 'normal';
+    // The polar test is exact, but only while the marks really are radial about
+    // the lens centre. Unroll the anchor or stand the marks upright and the
+    // footprint is an oriented rectangle instead, so the test has to be one.
+    const polarTest = curve.kind === 'circle' && orient === 'normal';
     const dx = px - frame.cx;
     const dy = py - frame.cy;
     const r = Math.hypot(dx, dy);
@@ -660,14 +873,23 @@ export class LensRenderer {
     const type = layout.marks?.type ?? 'bar';
 
     for (const bin of layout.bins) {
-      if (!onCircle) {
-        // Off a circle, test against the mark's own footprint directly.
-        const [bx, by] = curve.pointAt(bin.t);
-        const [nx, ny] = curve.normalAt(bin.t);
-        const mid = bin.size / 2;
-        const cxm = bx + nx * mid;
-        const cym = by + ny * mid;
-        if (Math.hypot(px - cxm, py - cym) <= Math.max(bin.halfWidthPx, mid, 6)) return bin;
+      if (!polarTest) {
+        if (!Number.isFinite(bin.size) || bin.size <= 0) continue;
+        const track = bin.ringOffset ?? 0;
+        const [px0, py0] = curve.pointAt(bin.t);
+        const [nx, ny, tx, ty] = markAxes(curve, bin.t, orient);
+        const ox = px0 + nx * track;
+        const oy = py0 + ny * track;
+        const along = (px - ox) * nx + (py - oy) * ny;
+        const across = (px - ox) * tx + (py - oy) * ty;
+        if (type === 'disc' || type === 'rose') {
+          if (Math.hypot(along - bin.size, across) <= Math.max(bin.size, 6)) return bin;
+          continue;
+        }
+        const half = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 3);
+        const lo = Math.min(0, (bin.signed ?? 1) < 0 ? -bin.size : bin.size);
+        const hi = Math.max(0, (bin.signed ?? 1) < 0 ? -bin.size : bin.size);
+        if (along >= lo && along <= hi && Math.abs(across) <= half) return bin;
         continue;
       }
       const track = bin.ringOffset ?? 0;
@@ -689,6 +911,150 @@ export class LensRenderer {
 }
 
 const polar = (cx, cy, r, a) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+
+/**
+ * The two axes a mark is drawn in: the direction it grows, and the direction
+ * its width runs. The width axis is always the growth axis turned a quarter
+ * turn, so a mark stays square to itself whatever it is aligned to.
+ *
+ * - `normal`  — the curve's own outward normal. Radial on a ring, lateral on a
+ *   route. Association is maximal: the mark points at what it summarises.
+ * - `up`      — screen vertical, always. Every mark shares one baseline
+ *   direction, so lengths compare directly; on a closed ring the marks in the
+ *   lower half grow back across the lens, which is why this belongs with an
+ *   unrolled or open anchor.
+ * - `upright` — vertical, but signed by the normal, so marks never grow into
+ *   the lens interior. The compromise: a shared axis, two baselines.
+ */
+export function markAxes(curve, t, orient = 'normal') {
+  let ux;
+  let uy;
+  if (orient === 'up') {
+    ux = 0;
+    uy = -1;
+  } else {
+    const [nx, ny] = curve.normalAt(t);
+    if (orient === 'upright') {
+      ux = 0;
+      uy = ny > 0 ? 1 : -1;
+    } else {
+      ux = nx;
+      uy = ny;
+    }
+  }
+  return [ux, uy, -uy, ux];
+}
+
+/**
+ * Where a leader runs from and to, or `null` if there is nothing to point at.
+ *
+ * The target is **the position placement tried to honour**, at the members'
+ * own mean distance from the anchor — not the rim, and not the mark's actual
+ * position. So the line is precisely the association the layout gave away,
+ * whether it gave it away to avoid an overlap or by unrolling the anchor.
+ *
+ * Everything is measured in the lens's own azimuthal frame, the same one the
+ * inclusions use, so no map projection is involved (docs/findings.md F-12).
+ * `frame.scalePx` is pixels per metre; without it there is no honest way to
+ * place the target and the leader is skipped rather than guessed.
+ */
+export function leaderAnchors(layout, bin, curve, frame, orient = 'normal') {
+  const track = bin.ringOffset ?? 0;
+  const [bx, by] = curve.pointAt(bin.t);
+  const [ux, uy] = markAxes(curve, bin.t, orient);
+  const from = [bx + ux * track, by + uy * track];
+  const to = leaderTarget(layout, bin, curve, frame);
+  return to ? [from, to] : null;
+}
+
+/**
+ * How far a mark sits from the position its data actually occupies, in degrees
+ * of curve parameter.
+ *
+ * Deliberately not `bin.displacement`, which is the necklace solver's own
+ * residual — how far it had to move a mark from the position it was *asked*
+ * for. Under block placement it asks for a nominal slot, so the solver reports
+ * no displacement at all while every mark is as far from its bearing as it can
+ * be. That is the layout where association is most missing, so the leader has
+ * to measure the gap itself.
+ */
+export function leaderGap(bin) {
+  const bearing = bin.meanBearing ?? bin.bearing;
+  const trueT = bin.position != null || bearing == null
+    ? bin.preferredT ?? bin.t
+    : wrap01(bearing / 360);
+  return Math.abs(cyclicDelta(bin.t, trueT)) * 360;
+}
+
+function leaderTarget(layout, bin, curve, frame) {
+  // The parameter the mark was placed *for*, which is what it is a summary of.
+  const t = bin.preferredT ?? bin.t;
+
+  if (curve.kind === 'polyline') {
+    // On a route, the geography is the route: the true path where the anchor
+    // has been straightened away from it, the drawn one otherwise.
+    const source = frame.ghost?.length > 1
+      ? polylineCurve(frame.ghost, { closed: false })
+      : curve;
+    const [x, y] = source.pointAt(t);
+    const halfWidth = (layout.selection?.width ?? 0) / 2;
+    const mean = bin.structure?.lateral?.mean;
+    if (!(halfWidth > 0) || !Number.isFinite(mean) || !(frame.corridorHalfWidthPx > 0)) {
+      return [x, y];
+    }
+    const [nx, ny] = source.normalAt(t);
+    const across = (mean / halfWidth) * frame.corridorHalfWidthPx;
+    return [x + nx * across, y + ny * across];
+  }
+
+  // A ring's angular axis only means bearing when the bins carry one, and the
+  // members' own circular mean is not a substitute: a distance band's members
+  // run all the way round, so their mean direction is the arbitrary number
+  // F-6 warns about and a leader drawn to it would be a confident lie.
+  const bearing = bin.meanBearing ?? bin.bearing;
+  if (bearing == null || frame.cx == null) return null;
+
+  const scale = frame.scalePx
+    ?? (frame.selectionRadiusPx > 0 && layout.selection?.radius > 0
+      ? frame.selectionRadiusPx / layout.selection.radius
+      : 0);
+  const distance = bin.structure?.radial?.mean;
+  if (!(scale > 0) || !Number.isFinite(distance) || distance <= 0) return null;
+
+  const a = ((bearing - 90) / 180) * Math.PI;
+  return [frame.cx + Math.cos(a) * distance * scale, frame.cy + Math.sin(a) * distance * scale];
+}
+
+/**
+ * The circle a mark sits on, if drawing it as an annular sector is still worth
+ * doing. An unrolling ring's radius runs off to infinity, and past a few
+ * thousand pixels the curvature across one mark is under a tenth of a pixel —
+ * so the cutoff is where the special case stops buying anything, not where it
+ * stops being defined.
+ */
+export function arcBasis(curve, maxRadius = 4000) {
+  const r = curve.radius;
+  if (!curve.angleAt || !Number.isFinite(r) || r > maxRadius) return null;
+  return { cx: curve.cx, cy: curve.cy, radius: r };
+}
+
+/** Points along a curve, offset along its normal, at roughly `step` pixels. */
+export function sampleCurve(curve, t0 = 0, t1 = 1, step = 3, offset = 0) {
+  const span = Math.abs(t1 - t0) * curve.length;
+  const n = Math.max(2, Math.min(720, Math.ceil(span / step)));
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const t = t0 + ((t1 - t0) * i) / n;
+    const [x, y] = curve.pointAt(t);
+    if (offset === 0) {
+      out.push([x, y]);
+    } else {
+      const [nx, ny] = curve.normalAt(t);
+      out.push([x + nx * offset, y + ny * offset]);
+    }
+  }
+  return out;
+}
 
 const angleDelta = (a, b) => ((((b - a) % TAU) + TAU + Math.PI) % TAU) - Math.PI;
 

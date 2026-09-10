@@ -156,7 +156,18 @@ async function fetchAmenities(center, radiusM) {
 // --------------------------------------------------------------- controls
 
 function bindControls() {
-  mountDisplay($('display'), { map, lens: lens, marks: ['bar', 'disc', 'rose'] });
+  mountDisplay($('display'), {
+    map,
+    lens: lens,
+    marks: ['bar', 'disc', 'rose'],
+    anchor: {
+      label: 'Unroll the ring',
+      hint: 'Opens the ring into a straight axis of the same length, holding'
+        + ' north at the top. Nothing is recomputed — the marks keep the'
+        + ' positions the necklace solved, so this is the same chart on a'
+        + ' different anchor.',
+    },
+  });
 
   $('search-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -173,7 +184,9 @@ function bindControls() {
     const morphable = mode === 'categorical' || mode === 'cross';
     $('morph').disabled = !morphable;
     $('morph-hint').textContent = morphable
-      ? 'Drag to move each bar from its slot in a sorted legend to the direction that category actually lies in.'
+      ? 'Drag to move each bar from its slot in a sorted legend to the direction'
+        + ' that category actually lies in. Leader lines fade in as the bars'
+        + ' leave their bearings.'
       : 'Not applicable: these bins are already positioned by bearing.';
 
     lens.update({

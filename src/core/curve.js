@@ -19,7 +19,12 @@ const TAU = Math.PI * 2;
 /** Wrap `t` into [0, 1). */
 export const wrap01 = (t) => ((t % 1) + 1) % 1;
 
-/** Smallest signed difference between two cyclic parameters, in (-0.5, 0.5]. */
+/**
+ * Smallest signed difference between two cyclic parameters, in [-0.5, 0.5).
+ *
+ * Half-open at the top, which is what decides the seam: a point exactly half a
+ * turn from an open curve's anchor belongs to its start, not its end.
+ */
 export function cyclicDelta(a, b) {
   return ((((b - a) % 1) + 1.5) % 1) - 0.5;
 }
@@ -110,4 +115,120 @@ export function polylineCurve(points, { closed = false } = {}) {
       return [ty, -tx];
     },
   };
+}
+
+/**
+ * A circular arc of *fixed arc length*, from a closed ring to a straight line.
+ *
+ * `unroll = 0` is the ring; `unroll = 1` is a straight horizontal baseline of
+ * the same length; anything between is the arc you get by bending that line
+ * back up. Curvature is `kappa = 1 - unroll`, so the arc's own radius is
+ * `radius / kappa` and it always subtends `2*pi*kappa`.
+ *
+ * Holding *length* constant rather than radius is the whole trick. Placement
+ * works in the cyclic parameter `t` and reserves half-widths as a fraction of
+ * the curve, so if the curve keeps its length the solved layout stays valid at
+ * every value of `unroll` — the unroll is a change of anchor, not a re-solve.
+ * Nothing upstream of the renderer sees it. See docs/findings.md F-27.
+ *
+ * `at` is the parameter held fixed: that point does not move as the curve
+ * opens, and the seam therefore falls at `at + 0.5`. The default holds north
+ * at the top of the ring, so an unrolled lens reads as a bearing profile
+ * centred on north, running west (left) through north to east (right), with
+ * marks growing upwards from the baseline.
+ *
+ * The arc also rotates about its anchor as it opens, by exactly enough to land
+ * flat. Without that, the baseline's direction would be whatever the ring's
+ * tangent happened to be at the anchor — vertical for an anchor due east — and
+ * moving the seam would tip the chart over. Since the rotation is proportional
+ * to `unroll` it is zero for the closed ring, so the family still starts at
+ * `circleCurve` exactly, and every anchor ends at the same horizontal baseline
+ * with marks growing up. That is what makes `at: 'auto'` safe to use.
+ *
+ * Points are computed from the anchor by chord and turn rather than from the
+ * arc's centre, which is what keeps it well-conditioned as the centre runs off
+ * to infinity: at `unroll = 1` the arc centre is not a finite point at all.
+ */
+export function arcCurve(cx, cy, radius, { unroll = 0, at = 0 } = {}) {
+  const u = Math.min(1, Math.max(0, unroll));
+  if (u <= 0) return circleCurve(cx, cy, radius);
+
+  const kappa = 1 - u;
+  const length = TAU * radius;
+  const anchor = wrap01(at);
+  // Canvas angle of the anchor on the original ring, and the anchor point
+  // itself — the one point shared by every curve in the family.
+  const a0 = anchor * TAU - Math.PI / 2;
+  const ax = cx + radius * Math.cos(a0);
+  const ay = cy + radius * Math.sin(a0);
+  const R = kappa > 0 ? radius / kappa : Infinity;
+  // Spin the arc about its anchor as it opens, so that it lands horizontal
+  // whichever parameter is held fixed. Zero at `unroll = 0` by construction.
+  const base = a0 - u * (a0 + Math.PI / 2);
+  const angleAt = (t) => base + cyclicDelta(anchor, t) * TAU * kappa;
+
+  return {
+    kind: 'arc',
+    closed: false,
+    length,
+    unroll: u,
+    curvature: kappa,
+    anchor,
+    /** Centre of the arc's own circle — not the lens centre, and infinite at `unroll = 1`. */
+    cx: ax - R * Math.cos(base),
+    cy: ay - R * Math.sin(base),
+    radius: R,
+    angleAt,
+    pointAt(t) {
+      const d = cyclicDelta(anchor, t);
+      const half = d * Math.PI * kappa; // half the turn from the anchor
+      // Chord from the anchor: 2R sin(half), written so that R never appears.
+      const chord = d * length * sinc(half);
+      const dir = base + half;
+      return [ax - chord * Math.sin(dir), ay + chord * Math.cos(dir)];
+    },
+    tangentAt(t) {
+      const a = angleAt(t);
+      return [-Math.sin(a), Math.cos(a)];
+    },
+    normalAt(t) {
+      const a = angleAt(t);
+      return [Math.cos(a), Math.sin(a)];
+    },
+  };
+}
+
+const sinc = (x) => (Math.abs(x) < 1e-8 ? 1 : Math.sin(x) / x);
+
+/**
+ * The open-curve counterpart of `arcCurve`: straighten a polyline towards a
+ * horizontal line of the same length.
+ *
+ * `unroll = 0` leaves the route where it is on the map; `unroll = 1` lays it
+ * out flat, each vertex at its own chainage. The result is a *linear
+ * cartogram*: chainage and offset are preserved exactly and position is not,
+ * which is the trade a route profile makes and the reason the true path is
+ * worth drawing behind it (docs/findings.md F-28).
+ *
+ * `at` is the fraction of length held fixed, so the route opens about its own
+ * midpoint by default rather than sliding off one end.
+ */
+export function straightenPath(points, unroll, { at = 0.5 } = {}) {
+  const u = Math.min(1, Math.max(0, unroll));
+  if (u <= 0 || !points || points.length < 2) return points;
+
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+  }
+  const total = cum[cum.length - 1];
+  if (!(total > 0)) return points;
+
+  const [ax, ay] = polylineCurve(points).pointAt(at);
+  const s0 = Math.min(Math.max(at, 0), 1) * total;
+
+  return points.map((p, i) => [
+    p[0] + (ax + (cum[i] - s0) - p[0]) * u,
+    p[1] + (ay - p[1]) * u,
+  ]);
 }

@@ -161,6 +161,12 @@ function bindControls() {
     // `setStyle` discards the district outlines, so they have to be re-added
     // after every basemap swap.
     restore: () => drawBoundaries(units),
+    anchor: {
+      label: 'Unroll the ring',
+      hint: 'Each district keeps the arc it subtends, laid out along a straight'
+        + ' axis instead of around one. Useful where the necklace is crowded'
+        + ' and the district names have nowhere to go.',
+    },
     extras: [{
       id: 'boundaries',
       label: 'District outlines',

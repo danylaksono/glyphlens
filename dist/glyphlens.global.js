@@ -11,28 +11,28 @@ var glyphlens = (function (exports) {
    * turn a compass bearing into a canvas angle.
    */
 
-  const EARTH_RADIUS = 6371008.8; // metres, IUGG mean radius
+  const EARTH_RADIUS$1 = 6371008.8; // metres, IUGG mean radius
 
-  const toRad = (deg) => (deg * Math.PI) / 180;
+  const toRad$1 = (deg) => (deg * Math.PI) / 180;
   const toDeg = (rad) => (rad * 180) / Math.PI;
 
   /** Great-circle distance in metres. */
   function distance([lng1, lat1], [lng2, lat2]) {
-    const phi1 = toRad(lat1);
-    const phi2 = toRad(lat2);
-    const dPhi = toRad(lat2 - lat1);
-    const dLambda = toRad(lng2 - lng1);
+    const phi1 = toRad$1(lat1);
+    const phi2 = toRad$1(lat2);
+    const dPhi = toRad$1(lat2 - lat1);
+    const dLambda = toRad$1(lng2 - lng1);
     const a =
       Math.sin(dPhi / 2) ** 2 +
       Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
-    return 2 * EARTH_RADIUS * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return 2 * EARTH_RADIUS$1 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   /** Initial bearing in degrees, 0 = north, increasing clockwise. */
   function bearing([lng1, lat1], [lng2, lat2]) {
-    const phi1 = toRad(lat1);
-    const phi2 = toRad(lat2);
-    const dLambda = toRad(lng2 - lng1);
+    const phi1 = toRad$1(lat1);
+    const phi2 = toRad$1(lat2);
+    const dLambda = toRad$1(lng2 - lng1);
     const y = Math.sin(dLambda) * Math.cos(phi2);
     const x =
       Math.cos(phi1) * Math.sin(phi2) -
@@ -54,10 +54,10 @@ var glyphlens = (function (exports) {
 
   /** Point at `distanceM` along `bearingDeg` from `origin`. */
   function destination([lng, lat], bearingDeg, distanceM) {
-    const delta = distanceM / EARTH_RADIUS;
-    const theta = toRad(bearingDeg);
-    const phi1 = toRad(lat);
-    const lambda1 = toRad(lng);
+    const delta = distanceM / EARTH_RADIUS$1;
+    const theta = toRad$1(bearingDeg);
+    const phi1 = toRad$1(lat);
+    const lambda1 = toRad$1(lng);
     const sinPhi2 =
       Math.sin(phi1) * Math.cos(delta) +
       Math.cos(phi1) * Math.sin(delta) * Math.cos(theta);
@@ -75,7 +75,7 @@ var glyphlens = (function (exports) {
    * Compass bearing (0 = north, clockwise) to canvas angle in radians
    * (0 = +x axis, clockwise because canvas y points down).
    */
-  const bearingToScreenAngle = (bearingDeg) => toRad(bearingDeg - 90);
+  const bearingToScreenAngle = (bearingDeg) => toRad$1(bearingDeg - 90);
 
   /** Inverse of {@link bearingToScreenAngle}. */
   const screenAngleToBearing = (rad) => (toDeg(rad) + 450) % 360;
@@ -83,7 +83,7 @@ var glyphlens = (function (exports) {
   /** Ground resolution in metres per pixel for a Web Mercator tile pyramid. */
   function metresPerPixel(lat, zoom, tileSize = 512) {
     return (
-      (Math.cos(toRad(lat)) * 2 * Math.PI * EARTH_RADIUS) /
+      (Math.cos(toRad$1(lat)) * 2 * Math.PI * EARTH_RADIUS$1) /
       (tileSize * 2 ** zoom)
     );
   }
@@ -109,8 +109,8 @@ var glyphlens = (function (exports) {
    */
   function projectOntoPath(point, path) {
     const lat0 = path.reduce((s, p) => s + p[1], 0) / path.length;
-    const kx = (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat0));
-    const ky = (Math.PI / 180) * EARTH_RADIUS;
+    const kx = (Math.PI / 180) * EARTH_RADIUS$1 * Math.cos(toRad$1(lat0));
+    const ky = (Math.PI / 180) * EARTH_RADIUS$1;
     const xy = ([lng, lat]) => [lng * kx, lat * ky];
 
     const p = xy(point);
@@ -190,8 +190,8 @@ var glyphlens = (function (exports) {
   /** Local equirectangular scale factors at a latitude: metres per degree. */
   function localScale(lat) {
     return [
-      (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat)),
-      (Math.PI / 180) * EARTH_RADIUS,
+      (Math.PI / 180) * EARTH_RADIUS$1 * Math.cos(toRad$1(lat)),
+      (Math.PI / 180) * EARTH_RADIUS$1,
     ];
   }
 
@@ -276,7 +276,7 @@ var glyphlens = (function (exports) {
     if (!ring?.length) return null;
     if (pointInPolygon(center, rings)) return null;
 
-    const bearings = ring.map((p) => toRad(bearing(center, p)));
+    const bearings = ring.map((p) => toRad$1(bearing(center, p)));
     // Work relative to the first vertex so the sweep is unwrapped rather than
     // split at north, then take the extremes.
     const base = bearings[0];
@@ -292,7 +292,7 @@ var glyphlens = (function (exports) {
 
   var geo = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    EARTH_RADIUS: EARTH_RADIUS,
+    EARTH_RADIUS: EARTH_RADIUS$1,
     angularExtent: angularExtent,
     bearing: bearing,
     bearingDelta: bearingDelta,
@@ -308,7 +308,7 @@ var glyphlens = (function (exports) {
     projectOntoPath: projectOntoPath,
     screenAngleToBearing: screenAngleToBearing,
     toDeg: toDeg,
-    toRad: toRad
+    toRad: toRad$1
   });
 
   /**
@@ -1269,7 +1269,12 @@ var glyphlens = (function (exports) {
   /** Wrap `t` into [0, 1). */
   const wrap01 = (t) => ((t % 1) + 1) % 1;
 
-  /** Smallest signed difference between two cyclic parameters, in (-0.5, 0.5]. */
+  /**
+   * Smallest signed difference between two cyclic parameters, in [-0.5, 0.5).
+   *
+   * Half-open at the top, which is what decides the seam: a point exactly half a
+   * turn from an open curve's anchor belongs to its start, not its end.
+   */
   function cyclicDelta(a, b) {
     return ((((b - a) % 1) + 1.5) % 1) - 0.5;
   }
@@ -1360,6 +1365,122 @@ var glyphlens = (function (exports) {
         return [ty, -tx];
       },
     };
+  }
+
+  /**
+   * A circular arc of *fixed arc length*, from a closed ring to a straight line.
+   *
+   * `unroll = 0` is the ring; `unroll = 1` is a straight horizontal baseline of
+   * the same length; anything between is the arc you get by bending that line
+   * back up. Curvature is `kappa = 1 - unroll`, so the arc's own radius is
+   * `radius / kappa` and it always subtends `2*pi*kappa`.
+   *
+   * Holding *length* constant rather than radius is the whole trick. Placement
+   * works in the cyclic parameter `t` and reserves half-widths as a fraction of
+   * the curve, so if the curve keeps its length the solved layout stays valid at
+   * every value of `unroll` — the unroll is a change of anchor, not a re-solve.
+   * Nothing upstream of the renderer sees it. See docs/findings.md F-27.
+   *
+   * `at` is the parameter held fixed: that point does not move as the curve
+   * opens, and the seam therefore falls at `at + 0.5`. The default holds north
+   * at the top of the ring, so an unrolled lens reads as a bearing profile
+   * centred on north, running west (left) through north to east (right), with
+   * marks growing upwards from the baseline.
+   *
+   * The arc also rotates about its anchor as it opens, by exactly enough to land
+   * flat. Without that, the baseline's direction would be whatever the ring's
+   * tangent happened to be at the anchor — vertical for an anchor due east — and
+   * moving the seam would tip the chart over. Since the rotation is proportional
+   * to `unroll` it is zero for the closed ring, so the family still starts at
+   * `circleCurve` exactly, and every anchor ends at the same horizontal baseline
+   * with marks growing up. That is what makes `at: 'auto'` safe to use.
+   *
+   * Points are computed from the anchor by chord and turn rather than from the
+   * arc's centre, which is what keeps it well-conditioned as the centre runs off
+   * to infinity: at `unroll = 1` the arc centre is not a finite point at all.
+   */
+  function arcCurve(cx, cy, radius, { unroll = 0, at = 0 } = {}) {
+    const u = Math.min(1, Math.max(0, unroll));
+    if (u <= 0) return circleCurve(cx, cy, radius);
+
+    const kappa = 1 - u;
+    const length = TAU$2 * radius;
+    const anchor = wrap01(at);
+    // Canvas angle of the anchor on the original ring, and the anchor point
+    // itself — the one point shared by every curve in the family.
+    const a0 = anchor * TAU$2 - Math.PI / 2;
+    const ax = cx + radius * Math.cos(a0);
+    const ay = cy + radius * Math.sin(a0);
+    const R = kappa > 0 ? radius / kappa : Infinity;
+    // Spin the arc about its anchor as it opens, so that it lands horizontal
+    // whichever parameter is held fixed. Zero at `unroll = 0` by construction.
+    const base = a0 - u * (a0 + Math.PI / 2);
+    const angleAt = (t) => base + cyclicDelta(anchor, t) * TAU$2 * kappa;
+
+    return {
+      kind: 'arc',
+      closed: false,
+      length,
+      unroll: u,
+      curvature: kappa,
+      anchor,
+      /** Centre of the arc's own circle — not the lens centre, and infinite at `unroll = 1`. */
+      cx: ax - R * Math.cos(base),
+      cy: ay - R * Math.sin(base),
+      radius: R,
+      angleAt,
+      pointAt(t) {
+        const d = cyclicDelta(anchor, t);
+        const half = d * Math.PI * kappa; // half the turn from the anchor
+        // Chord from the anchor: 2R sin(half), written so that R never appears.
+        const chord = d * length * sinc(half);
+        const dir = base + half;
+        return [ax - chord * Math.sin(dir), ay + chord * Math.cos(dir)];
+      },
+      tangentAt(t) {
+        const a = angleAt(t);
+        return [-Math.sin(a), Math.cos(a)];
+      },
+      normalAt(t) {
+        const a = angleAt(t);
+        return [Math.cos(a), Math.sin(a)];
+      },
+    };
+  }
+
+  const sinc = (x) => (Math.abs(x) < 1e-8 ? 1 : Math.sin(x) / x);
+
+  /**
+   * The open-curve counterpart of `arcCurve`: straighten a polyline towards a
+   * horizontal line of the same length.
+   *
+   * `unroll = 0` leaves the route where it is on the map; `unroll = 1` lays it
+   * out flat, each vertex at its own chainage. The result is a *linear
+   * cartogram*: chainage and offset are preserved exactly and position is not,
+   * which is the trade a route profile makes and the reason the true path is
+   * worth drawing behind it (docs/findings.md F-28).
+   *
+   * `at` is the fraction of length held fixed, so the route opens about its own
+   * midpoint by default rather than sliding off one end.
+   */
+  function straightenPath(points, unroll, { at = 0.5 } = {}) {
+    const u = Math.min(1, Math.max(0, unroll));
+    if (u <= 0 || !points || points.length < 2) return points;
+
+    const cum = [0];
+    for (let i = 1; i < points.length; i++) {
+      cum.push(cum[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+    }
+    const total = cum[cum.length - 1];
+    if (!(total > 0)) return points;
+
+    const [ax, ay] = polylineCurve(points).pointAt(at);
+    const s0 = Math.min(Math.max(at, 0), 1) * total;
+
+    return points.map((p, i) => [
+      p[0] + (ax + (cum[i] - s0) - p[0]) * u,
+      p[1] + (ay - p[1]) * u,
+    ]);
   }
 
   /**
@@ -1926,6 +2047,9 @@ var glyphlens = (function (exports) {
    * @param {object} [config.normalisation]             `{ mode, baseline }`
    * @param {object} [config.placement]                 `{ mode, morph, gap, groupGap }`
    * @param {object} [config.marks]                     `{ type, maxLength, barWidth, minWidth }`
+   * @param {object} [config.association]               `{ mode, threshold }` — how a mark
+   *   is tied back to what it summarises. Carried through untouched: association
+   *   is drawn, not solved.
    * @param {object} config.ring                        `{ radius }` in pixels
    * @param {(f:any)=>[number,number]} [config.getPosition]
    * @returns {object} layout
@@ -2052,6 +2176,10 @@ var glyphlens = (function (exports) {
       binning: binSpec,
       normalisation: { ...normSpec, mode: normSpec.mode ?? 'count' },
       marks: markSpec,
+      // The association stage computes nothing — a leader is drawn from
+      // quantities the binning and placement stages already produced. It rides
+      // on the layout so the renderer needs no second channel for it.
+      association: config.association,
       bins: laid.bins,
       scale: laid.scale,
       closed,
@@ -2339,8 +2467,8 @@ var glyphlens = (function (exports) {
   /** Metres per degree of longitude and latitude at a given latitude. */
   function scaleAt(lat) {
     return [
-      (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat)),
-      (Math.PI / 180) * EARTH_RADIUS,
+      (Math.PI / 180) * EARTH_RADIUS$1 * Math.cos(toRad$1(lat)),
+      (Math.PI / 180) * EARTH_RADIUS$1,
     ];
   }
 
@@ -2562,6 +2690,11 @@ var glyphlens = (function (exports) {
     boundaryDash: [3, 4],
     corridorFill: 'rgba(20,20,25,0.07)',
     centreDot: 3,
+    // The route as it really runs, drawn behind a straightened one, and the
+    // handles that shape it.
+    ghostOpacity: 0.5,
+    nodeRadius: 4,
+    nodeFill: 'rgba(255,255,255,0.9)',
 
     // Exterior
     dimExterior: true,
@@ -2572,6 +2705,10 @@ var glyphlens = (function (exports) {
     barRadius: 2,
     markOpacity: 0.92,
     strokeMarks: false,
+    // Which way a mark grows: 'normal' (the curve's outward normal), 'up'
+    // (screen vertical, one shared baseline direction) or 'upright' (vertical,
+    // but never growing back into the lens). See docs/design-space.md §3.5.
+    orient: 'normal',
 
     // Compass — only drawn when the angular axis is geographic, because that is
     // the only time it is telling the truth.
@@ -2615,8 +2752,23 @@ var glyphlens = (function (exports) {
 
     // Displacement indicator — see docs/findings.md Q-2. A tick back to the true
     // bearing whenever placement has moved a mark more than this many degrees.
+    // Under the default association mode a leader replaces it, and this is the
+    // threshold that decides when one is drawn.
     displacementThreshold: 6,
     displacementColor: 'rgba(20,20,25,0.3)',
+
+    // Association (docs/design-space.md §3.6). `mode`: 'auto' draws a leader
+    // wherever adjacency has broken down — a displaced mark, or an anchor that
+    // has been opened — and fades them in with the unroll; 'leader' always;
+    // 'hover' only for the mark under the pointer; 'adjacency' never, leaving
+    // the displacement tick.
+    association: { mode: 'auto' },
+    leaders: true,          // level of detail shuts them off; see resolveLod
+    leaderColor: null,      // null = the mark's own colour
+    leaderOpacity: 0.5,
+    leaderWidth: 1,
+    leaderDot: 2,           // marker at the target end, px
+    leaderMinLength: 7,     // below this the leader says nothing adjacency didn't
 
     palette: CATEGORICAL,
     markColor: null, // single hue for bins with no category (bearing / distance)
@@ -2629,6 +2781,7 @@ var glyphlens = (function (exports) {
     /** For dark basemaps. */
     night: {
       ringStroke: 'rgba(240,240,245,0.8)',
+      nodeFill: 'rgba(20,22,28,0.9)',
       boundaryStroke: 'rgba(240,240,245,0.4)',
       dimColor: 'rgba(12,14,20,0.6)',
       labelColor: 'rgba(240,240,245,0.75)',
@@ -2670,13 +2823,23 @@ var glyphlens = (function (exports) {
    * The thresholds are deliberately coarse. Chrome either fits or it does not,
    * and interpolating it produces a band of sizes where everything is present and
    * nothing is legible.
+   *
+   * The size that matters is **how far the drawing reaches**, not the ring's
+   * radius, and unrolling the anchor separates the two: a closed ring wraps its
+   * whole length into a footprint of 2r, while the same length laid flat spans
+   * 2*pi*r. So the radius is scaled towards its own half-length as the anchor
+   * opens — an identity at `unroll = 0`, and the reason a small lens stops
+   * shedding chrome once it has been opened into a strip that has room for it
+   * (docs/findings.md F-30).
    */
-  function resolveLod(ringRadius, style) {
+  function resolveLod(ringRadius, style, unroll = 0) {
     if (style.lod === false) return null;
-    const r = ringRadius ?? style.ringRadius;
+    const r = (ringRadius ?? style.ringRadius) * (1 + Math.min(1, Math.max(0, unroll)) * (Math.PI - 1));
     if (r >= (style.lodFull ?? 60)) return null;              // full chrome
     if (r >= (style.lodCompact ?? 26)) {
-      return { showLabels: false, showValues: false, compass: false, centreDot: 1.5 };
+      return {
+        showLabels: false, showValues: false, compass: false, centreDot: 1.5, leaders: false,
+      };
     }
     // Marks only. At this size the field is read as a surface, not as
     // individual charts, and everything else is noise.
@@ -2684,6 +2847,7 @@ var glyphlens = (function (exports) {
       showLabels: false,
       showValues: false,
       compass: false,
+      leaders: false,
       structure: 'none',
       centreDot: 0,
       ringWidth: 0.6,
@@ -2794,10 +2958,15 @@ var glyphlens = (function (exports) {
     draw(ctx, layout, frame) {
       const { cx, cy, selectionRadiusPx } = frame;
       const ring = frame.ringRadius ?? layout.ring.radius;
+      const curve = frame.curve ?? circleCurve(cx, cy, ring);
+      // How far the anchor has been opened. A straightened corridor carries this
+      // on the frame, because a polyline has no curvature to read it from.
+      const unroll = frame.unroll ?? curve.unroll ?? 0;
       // A lens drawn at a dozen pixels cannot carry the chrome that reads well at
       // a hundred and fifty. Applied here rather than by the caller so a field
-      // and a single lens share one rule.
-      const lod = resolveLod(ring, this.style);
+      // and a single lens share one rule — and measured on the drawing rather
+      // than the ring, because an unrolled lens is much the bigger of the two.
+      const lod = resolveLod(ring, this.style, unroll);
       const s = lod ? { ...this.style, ...lod } : this.style;
       // Helpers read the effective style for the duration of this paint, the
       // same way `_valueFloor` is shared. Cleared at the end so the renderer
@@ -2807,12 +2976,25 @@ var glyphlens = (function (exports) {
       // Marks are placed on a curve, never on "the ring". A disc lens supplies
       // none and gets a circle; a corridor lens supplies its projected path. This
       // is the property F-2 asks the core to preserve, exercised for real.
-      const curve = frame.curve ?? circleCurve(cx, cy, ring);
-      const onCircle = curve.kind === 'circle';
+      // The question the renderer actually needs is not "is this a circle" but
+      // "does this lens have a centre and a disc-shaped selection" — which a
+      // partly unrolled ring still does, and a corridor never did. Where true
+      // circular geometry is needed (annular sectors, arc text) `arcBasis` asks
+      // for it directly, and gets an answer for any curvature.
+      const ringLike = curve.kind !== 'polyline';
+      // Which way a mark grows from its anchor. `normal` is the curve's own
+      // outward normal; the rest trade adjacency for a common baseline direction
+      // (docs/design-space.md 3.5).
+      const orient = layout.marks?.orient ?? s.orient ?? 'normal';
 
       ctx.save();
 
-      if (onCircle) {
+      // Where the anchor has been flattened, the true geography is drawn behind
+      // it: an unrolled corridor is a cartogram, and a cartogram with nothing to
+      // read it against is just a chart (docs/findings.md F-28).
+      if (frame.ghost?.length > 1) this._drawGhost(ctx, frame.ghost);
+
+      if (ringLike) {
         // A polygon selection supplies its own boundary; a disc, annulus or
         // sector is described by its radius.
         const shape = frame.selectionRings;
@@ -2848,19 +3030,30 @@ var glyphlens = (function (exports) {
       // Matches the layout's own test, so the compass appears exactly when the
       // angular axis is geographic — including categorical bins placed at their
       // mean bearing, which have no `bearing` of their own.
-      const geographic = onCircle
+      const geographic = ringLike
         && layout.bins.some((b) => b.bearing != null || b.meanBearing != null);
-      if (s.compass && geographic) this._drawCompass(ctx, cx, cy, ring);
+      // The compass and the bearing axis are one legend at two curvatures, so
+      // they cross-fade rather than switch: a rose of ticks inside the ring is
+      // unreadable once the ring is nearly straight, and an axis strung along a
+      // full circle is just a second ring.
+      if (s.compass && geographic) {
+        if (unroll < 0.45) this._drawCompass(ctx, cx, cy, ring, 1 - unroll / 0.45);
+        if (unroll > 0.15) {
+          this._drawBearingAxis(ctx, curve, Math.min(1, (unroll - 0.15) / 0.35));
+        }
+      }
 
       // One faint guide per concentric track, so a reader can tell which ring a
       // mark belongs to when tracks are close together.
-      if (onCircle) {
+      if (ringLike) {
         const tracks = [...new Set(layout.bins.map((b) => b.ringOffset ?? 0))]
           .filter((t) => t > 0);
         for (const t of tracks) {
+          const guide = sampleCurve(curve, 0, 1, 4, t);
           ctx.save();
           ctx.beginPath();
-          ctx.arc(cx, cy, ring + t, 0, TAU);
+          ctx.moveTo(guide[0][0], guide[0][1]);
+          for (let i = 1; i < guide.length; i++) ctx.lineTo(guide[i][0], guide[i][1]);
           ctx.strokeStyle = s.ringStroke;
           ctx.globalAlpha = s.trackOpacity ?? 0.22;
           ctx.lineWidth = 1;
@@ -2875,39 +3068,49 @@ var glyphlens = (function (exports) {
       // Spread means different things on the two anchors. On a ring it is spread
       // in bearing; on a corridor it is spread *across* the route, which is a
       // reading a disc has no equivalent for (docs/findings.md F-15).
-      if (!onCircle && (structure === 'spread' || structure === 'both')) {
+      if (!ringLike && (structure === 'spread' || structure === 'both')) {
         for (const b of layout.bins) {
           this._drawLateral(ctx, b, layout, curve, frame.corridorHalfWidthPx);
         }
       }
-      if (onCircle && (structure === 'spread' || structure === 'both')) {
+      if (ringLike && (structure === 'spread' || structure === 'both')) {
         // Spread arcs of co-located bins land on top of each other, so with few
         // enough bins each gets its own concentric track. Past that they sit in
         // their own sectors already and staggering would only cost radius.
         const stagger = layout.bins.length <= (s.maxLabels ?? 12);
         layout.bins.forEach((b, i) => {
           const track = stagger ? i * (s.spreadStep ?? 5) : 0;
-          this._drawSpread(ctx, b, layout, cx, cy, ring, track);
+          this._drawSpread(ctx, b, layout, curve, track);
         });
       }
       if (structure === 'inclusions' || structure === 'both') {
         this._drawInclusions(
-          ctx, layout, curve, cx, cy, selectionRadiusPx, frame.corridorHalfWidthPx,
+          ctx, layout, curve, cx, cy, selectionRadiusPx, frame.corridorHalfWidthPx, ringLike,
         );
       }
-      if (onCircle && (structure === 'gradient' || structure === 'both') && layout.structure) {
+      if (ringLike && (structure === 'gradient' || structure === 'both') && layout.structure) {
         this._drawGradient(ctx, layout, cx, cy, selectionRadiusPx);
       }
 
-      for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, cx, cy, ring);
+      // Association, under the marks and over the structure: a leader is context
+      // for the mark it belongs to, never a reading of its own.
+      const led = this._drawLeaders(ctx, layout, curve, frame, orient, unroll);
+
+      for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, orient, led);
 
       if (s.showLabels) {
-        for (const b of layout.bins) {
-          this._drawLabel(ctx, b, layout, curve, cx, cy, ring, geographic);
-        }
+        for (const b of layout.bins) this._drawLabel(ctx, b, layout, curve, orient);
       }
 
-      if (onCircle && s.centreDot > 0) {
+      // Draggable vertices, drawn last so they sit above the band. The adapter
+      // only supplies them while the route is on its true geography: a node on a
+      // straightened corridor is at a cartogram position and dragging it would
+      // mean nothing.
+      if (frame.nodes?.length) this._drawNodes(ctx, frame.nodes);
+
+      // The centre survives the unroll: the selection has not moved, and the dot
+      // is what says so.
+      if (ringLike && s.centreDot > 0) {
         ctx.beginPath();
         ctx.arc(cx, cy, s.centreDot, 0, TAU);
         ctx.fillStyle = s.ringStroke;
@@ -2957,10 +3160,47 @@ var glyphlens = (function (exports) {
         ctx.arc(cx, cy, ring, 0, TAU);
         return;
       }
-      const pts = curve.points ?? [];
+      const pts = curve.kind === 'arc' ? sampleCurve(curve) : (curve.points ?? []);
       if (pts.length === 0) return;
       ctx.moveTo(pts[0][0], pts[0][1]);
       for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    }
+
+    /**
+     * The route as it really runs, behind a straightened one.
+     *
+     * Faint and dashed: it is context for the strip, not a second reading, and
+     * the strip is the thing carrying the data.
+     */
+    _drawGhost(ctx, points) {
+      const s = this._s ?? this.style;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+      ctx.setLineDash(s.boundaryDash);
+      ctx.globalAlpha = s.ghostOpacity ?? 0.5;
+      ctx.strokeStyle = s.boundaryStroke;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /** Draggable path vertices. */
+    _drawNodes(ctx, nodes) {
+      const s = this._s ?? this.style;
+      const r = s.nodeRadius ?? 4;
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = s.ringStroke;
+      ctx.fillStyle = s.nodeFill ?? 'rgba(255,255,255,0.9)';
+      for (const [x, y] of nodes) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     /**
@@ -2989,9 +3229,11 @@ var glyphlens = (function (exports) {
       ctx.restore();
     }
 
-    _drawCompass(ctx, cx, cy, ring) {
+    _drawCompass(ctx, cx, cy, ring, alpha = 1) {
       const s = this._s ?? this.style;
+      if (alpha <= 0.01) return;
       ctx.save();
+      ctx.globalAlpha = alpha;
       ctx.strokeStyle = s.compassColor;
       ctx.fillStyle = s.compassColor;
       ctx.lineWidth = 1;
@@ -3018,6 +3260,49 @@ var glyphlens = (function (exports) {
     }
 
     /**
+     * The compass, restated as an axis on the curve itself.
+     *
+     * Once the ring is unrolled there is no inside to put a compass rose in, but
+     * the angular channel has not gone anywhere: it is now a position along a
+     * baseline. Ticks and cardinal labels are placed at the same parameters they
+     * always were, which is what makes the unroll legible as a change of anchor
+     * rather than a change of encoding.
+     */
+    _drawBearingAxis(ctx, curve, alpha = 1) {
+      const s = this._s ?? this.style;
+      if (alpha <= 0.01) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = s.compassColor;
+      ctx.fillStyle = s.compassColor;
+      ctx.lineWidth = 1;
+      ctx.font = s.font;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (let i = 0; i < 16; i++) {
+        const t = i / 16;
+        const major = i % 4 === 0;
+        const len = major ? s.tickLength * 1.8 : s.tickLength;
+        const [x, y] = curve.pointAt(t);
+        const [nx, ny] = curve.normalAt(t);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - nx * len, y - ny * len);
+        ctx.stroke();
+      }
+
+      ['N', 'E', 'S', 'W'].forEach((label, i) => {
+        const t = i / 4;
+        const [x, y] = curve.pointAt(t);
+        const [nx, ny] = curve.normalAt(t);
+        const back = s.tickLength * 1.8 + 9;
+        ctx.fillText(label, x - nx * back, y - ny * back);
+      });
+      ctx.restore();
+    }
+
+    /**
      * Angular spread of a bin's members, as an arc on the ring.
      *
      * A bar drawn at a circular mean asserts a direction. This says how much that
@@ -3025,7 +3310,7 @@ var glyphlens = (function (exports) {
      * diffuse one a wide faint band. It is the lens's diamond-cut steepness made
      * visible — see docs/findings.md F-10.
      */
-    _drawSpread(ctx, bin, layout, cx, cy, ring, track = 0) {
+    _drawSpread(ctx, bin, layout, curve, track = 0) {
       const s = this._s ?? this.style;
       const sd = bin.spread;
       if (!Number.isFinite(sd) || !bin.count || sd <= 0) return;
@@ -3034,23 +3319,31 @@ var glyphlens = (function (exports) {
       // just be a second ring.
       if (sd >= 179) return;
 
-      const half = (sd / 360) * TAU;
-      const r = ring - (s.spreadOffset ?? 6) - track;
+      // The spread is a span of *bearing*, which is a span of curve parameter —
+      // so it is drawn by walking the curve rather than by sweeping an angle,
+      // and it survives the unroll as the same reading on a straight axis.
+      const halfT = sd / 720;
+      const offset = (s.spreadOffset ?? 6) + track;
+      const pts = sampleCurve(curve, bin.t - halfT, bin.t + halfT, 4, -offset);
+
       ctx.save();
       ctx.globalAlpha = s.spreadOpacity ?? 0.5;
       ctx.strokeStyle = s.spreadColor ?? colorFor(bin, layout, s);
       ctx.lineWidth = s.spreadWidth ?? 2.5;
       ctx.lineCap = 'butt';
       ctx.beginPath();
-      ctx.arc(cx, cy, r, bin.angle - half, bin.angle + half);
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
       ctx.stroke();
 
       // End caps, so the extent is readable rather than fading ambiguously.
       ctx.lineWidth = 1;
-      for (const a of [bin.angle - half, bin.angle + half]) {
+      for (const t of [bin.t - halfT, bin.t + halfT]) {
+        const [x, y] = curve.pointAt(t);
+        const [nx, ny] = curve.normalAt(t);
         ctx.beginPath();
-        ctx.moveTo(...polar(cx, cy, r - 2.5, a));
-        ctx.lineTo(...polar(cx, cy, r + 2.5, a));
+        ctx.moveTo(x - nx * (offset + 2.5), y - ny * (offset + 2.5));
+        ctx.lineTo(x - nx * (offset - 2.5), y - ny * (offset - 2.5));
         ctx.stroke();
       }
       ctx.restore();
@@ -3112,13 +3405,14 @@ var glyphlens = (function (exports) {
      * a selection defined by geodesic distance that is the truthful frame, and it
      * keeps the renderer free of any map dependency (docs/findings.md F-12).
      */
-    _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx) {
+    _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx, ringLike = true) {
       const s = this._s ?? this.style;
-      const onCircle = curve.kind === 'circle';
+      // Members are placed in the lens's own azimuthal frame, which an unrolled
+      // ring still has: the selection has not moved, only the chart around it.
       const radius = layout.selection?.radius ?? layout.structure?.radial?.max
         ?? Math.max(1, ...layout.bins.flatMap((b) => (b.items ?? []).map((i) => i.distance)));
       const halfWidth = (layout.selection?.width ?? 0) / 2;
-      if (onCircle ? !(selectionRadiusPx > 0 && radius > 0) : !(halfWidthPx > 0 && halfWidth > 0)) {
+      if (ringLike ? !(selectionRadiusPx > 0 && radius > 0) : !(halfWidthPx > 0 && halfWidth > 0)) {
         return;
       }
 
@@ -3143,7 +3437,7 @@ var glyphlens = (function (exports) {
           const it = items[i];
           let x;
           let y;
-          if (onCircle) {
+          if (ringLike) {
             if (!Number.isFinite(it.distance) || !Number.isFinite(it.bearing)) continue;
             const r = (it.distance / radius) * selectionRadiusPx;
             const a = ((it.bearing - 90) / 180) * Math.PI;
@@ -3204,11 +3498,10 @@ var glyphlens = (function (exports) {
       ctx.restore();
     }
 
-    _drawMark(ctx, bin, layout, curve, cx, cy, ring) {
+    _drawMark(ctx, bin, layout, curve, orient = 'normal', led = null) {
       const s = this._s ?? this.style;
       const type = layout.marks?.type ?? 'bar';
       if (!Number.isFinite(bin.size) || bin.size <= 0.1) return;
-      const onCircle = curve.kind === 'circle';
 
       ctx.save();
       ctx.globalAlpha = s.markOpacity * (0.45 + 0.55 * (bin.confidence ?? 1));
@@ -3218,9 +3511,15 @@ var glyphlens = (function (exports) {
       // placement is `stacked`.
       const track = bin.ringOffset ?? 0;
       const [px0, py0] = curve.pointAt(bin.t);
-      const [nx, ny] = curve.normalAt(bin.t);
+      const [nx, ny, tx, ty] = markAxes(curve, bin.t, orient);
       const bx = px0 + nx * track;
       const by = py0 + ny * track;
+      // Curved bar edges need the circle the mark actually sits on, which is the
+      // *anchor's* circle rather than the lens's — they are the same thing only
+      // while the ring is closed. Beyond a few thousand pixels of radius the
+      // curvature is under a tenth of a pixel across a bar, so the straight-edged
+      // path is not an approximation anyone can see.
+      const basis = orient === 'normal' ? arcBasis(curve) : null;
 
       if (type === 'rose') {
         const outer = Math.max(bin.size, s.minRoseRadius ?? 6);
@@ -3243,16 +3542,16 @@ var glyphlens = (function (exports) {
         const extent = inward ? -bin.size : bin.size;
         const half = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 0.5);
 
-        if (onCircle) {
+        if (basis) {
           // Curved edges are worth the special case on a ring: at the widths a
           // 24-sector rose uses, a straight-edged quad reads as a mistake.
-          const r0 = ring + track;
+          const angle = curve.angleAt(bin.t);
+          const r0 = basis.radius + track;
           const r1 = r0 + extent;
           const halfAngle = half / r0;
-          annularSector(ctx, cx, cy, Math.min(r0, r1), Math.max(r0, r1),
-            bin.angle - halfAngle, bin.angle + halfAngle);
+          annularSector(ctx, basis.cx, basis.cy, Math.min(r0, r1), Math.max(r0, r1),
+            angle - halfAngle, angle + halfAngle);
         } else {
-          const [tx, ty] = curve.tangentAt(bin.t);
           ctx.beginPath();
           ctx.moveTo(bx - tx * half, by - ty * half);
           ctx.lineTo(bx + tx * half, by + ty * half);
@@ -3264,19 +3563,91 @@ var glyphlens = (function (exports) {
       }
 
       // Displacement indicator: how far placement moved this mark off its true
-      // bearing. Unresolved policy question — see docs/findings.md Q-2.
-      if (onCircle && Math.abs(bin.displacement ?? 0) > s.displacementThreshold) {
-        const trueAngle = (bin.preferredT ?? bin.t) * TAU - Math.PI / 2;
+      // bearing. Drawn on the curve rather than at an angle, so it survives the
+      // unroll. A leader says the same thing and more, so the tick is only drawn
+      // where no leader was — see docs/findings.md Q-2.
+      if (!led?.has(bin.key) && Math.abs(bin.displacement ?? 0) > s.displacementThreshold) {
+        const trueT = bin.preferredT ?? bin.t;
+        const [x, y] = curve.pointAt(trueT);
+        const [ax, ay] = curve.normalAt(trueT);
         ctx.globalAlpha = 1;
         ctx.strokeStyle = s.displacementColor;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(...polar(cx, cy, ring - 3, trueAngle));
-        ctx.lineTo(...polar(cx, cy, ring - 9, trueAngle));
+        ctx.moveTo(x - ax * 3, y - ay * 3);
+        ctx.lineTo(x - ax * 9, y - ay * 9);
         ctx.stroke();
       }
 
       ctx.restore();
+    }
+
+    /**
+     * Leader lines: what ties a mark back to what it summarises (`hAssoc`).
+     *
+     * Adjacency does this for free while a mark sits on a ring around its own
+     * selection, which is why the library got this far without leaders. Two
+     * things break it, and they are the same break by degrees:
+     *
+     * - **placement**, which slides a mark off its true bearing to avoid an
+     *   overlap — the residual the displacement tick was gesturing at
+     *   (docs/findings.md Q-2);
+     * - **the anchor**, which under `unroll` detaches the whole chart from the
+     *   geography it describes (docs/findings.md F-28).
+     *
+     * So one encoding answers both, and `auto` fades it in exactly as adjacency
+     * fades out. Returns the set of bin keys that got one, so the mark stage can
+     * drop the tick it replaces.
+     */
+    _drawLeaders(ctx, layout, curve, frame, orient, unroll) {
+      const s = this._s ?? this.style;
+      const drawn = new Set();
+      const assoc = { ...(s.association ?? {}), ...(layout.association ?? {}) };
+      const mode = assoc.mode ?? 'auto';
+      if (mode === 'adjacency' || mode === 'none' || s.leaders === false) return drawn;
+
+      const threshold = assoc.threshold ?? s.displacementThreshold ?? 6;
+      const minLength = assoc.minLength ?? s.leaderMinLength ?? 7;
+
+      ctx.save();
+      ctx.lineWidth = s.leaderWidth ?? 1;
+      for (const bin of layout.bins) {
+        if (!bin.count) continue;
+        const hovered = frame.hovered != null && frame.hovered === bin.key;
+        const displaced = leaderGap(bin) > threshold;
+        // How much of the association the layout has already given away. A mark
+        // still sitting on its own bearing, on a closed ring, needs no line.
+        const strength = mode === 'leader' ? 1
+          : mode === 'hover' ? (hovered ? 1 : 0)
+            : Math.max(unroll, displaced || hovered ? 1 : 0);
+        if (strength <= 0.02) continue;
+
+        const line = leaderAnchors(layout, bin, curve, frame, orient);
+        if (!line) continue;
+        const [[x0, y0], [x1, y1]] = line;
+        if (Math.hypot(x1 - x0, y1 - y0) < minLength) continue;
+
+        const colour = s.leaderColor ?? colorFor(bin, layout, s);
+        ctx.globalAlpha = (s.leaderOpacity ?? 0.5) * strength;
+        ctx.strokeStyle = colour;
+        ctx.fillStyle = colour;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+
+        // A dot at the far end, because a bare line is ambiguous about which of
+        // its ends is the claim.
+        const dot = s.leaderDot ?? 2;
+        if (dot > 0) {
+          ctx.beginPath();
+          ctx.arc(x1, y1, dot, 0, TAU);
+          ctx.fill();
+        }
+        drawn.add(bin.key);
+      }
+      ctx.restore();
+      return drawn;
     }
 
     /**
@@ -3318,13 +3689,13 @@ var glyphlens = (function (exports) {
       }
     }
 
-    _drawLabel(ctx, bin, layout, curve, cx, cy, ring, geographic) {
+    _drawLabel(ctx, bin, layout, curve, orient = 'normal') {
       const s = this._s ?? this.style;
       // Per-mark text only pays for itself while there are few enough marks to
       // read. Past that the compass carries the angular reading and the labels
       // would just be a ring of noise.
       if (layout.bins.length > (s.maxLabels ?? 12)) {
-        if (s.showValues && bin.raw > 0) this._drawValue(ctx, bin, layout, curve, cx, cy, ring);
+        if (s.showValues && bin.raw > 0) this._drawValue(ctx, bin, layout, curve, orient);
         return;
       }
       if (bin.raw === 0) return;
@@ -3336,18 +3707,20 @@ var glyphlens = (function (exports) {
       const extent = this._markExtent(bin, layout);
       const gap = s.labelGap ?? 24;
       const offset = bin.signed < 0 ? -(extent + gap) : extent + gap;
-      if (curve.kind === 'circle') {
-        drawArcText(ctx, bin.label, cx, cy, ring + track + offset, bin.angle, {
-          font: s.font,
-          color: s.labelColor,
-        });
+      const basis = orient === 'normal' ? arcBasis(curve) : null;
+      if (basis) {
+        drawArcText(ctx, bin.label, basis.cx, basis.cy,
+          basis.radius + track + offset, curve.angleAt(bin.t), {
+            font: s.font,
+            color: s.labelColor,
+          });
       } else {
         // Off a circle there is no arc to follow, so the label is set upright.
         // It also goes on the *far* side of the curve from the mark: on a ring
         // the arc text and the value sit at different radii and never meet, but
         // on a strip they share one axis and would collide.
         const [px0, py0] = curve.pointAt(bin.t);
-        const [nx, ny] = curve.normalAt(bin.t);
+        const [nx, ny] = markAxes(curve, bin.t, orient);
         const bx = px0 + nx * track;
         const by = py0 + ny * track;
         const back = -(s.stripLabelOffset ?? 12);
@@ -3359,7 +3732,7 @@ var glyphlens = (function (exports) {
         ctx.fillText(bin.label, bx + nx * back, by + ny * back);
         ctx.restore();
       }
-      if (s.showValues) this._drawValue(ctx, bin, layout, curve, cx, cy, ring);
+      if (s.showValues) this._drawValue(ctx, bin, layout, curve, orient);
     }
 
     /**
@@ -3372,14 +3745,14 @@ var glyphlens = (function (exports) {
       return type === 'disc' || type === 'rose' ? bin.size * 2 : bin.size;
     }
 
-    _drawValue(ctx, bin, layout, curve, cx, cy, ring) {
+    _drawValue(ctx, bin, layout, curve, orient = 'normal') {
       const s = this._s ?? this.style;
       if (Math.abs(bin.size ?? 0) < this._valueFloor) return;
       const extent = this._markExtent(bin, layout);
       const gap = s.valueGap ?? 10;
       const along = (bin.ringOffset ?? 0) + (bin.signed < 0 ? -(extent + gap) : extent + gap);
       const [bx, by] = curve.pointAt(bin.t);
-      const [nx, ny] = curve.normalAt(bin.t);
+      const [nx, ny] = markAxes(curve, bin.t, orient);
       const [x, y] = [bx + nx * along, by + ny * along];
       ctx.save();
       ctx.font = s.valueFont;
@@ -3393,12 +3766,16 @@ var glyphlens = (function (exports) {
     /** Which bin, if any, is under a canvas point. */
     hitTest(layout, frame, px, py) {
       const ring = frame.ringRadius ?? layout.ring.radius;
+      const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
       // Match the level of detail the lens was painted at, so hit areas cannot
       // disagree with what is on screen.
-      const lod = resolveLod(ring, this.style);
+      const lod = resolveLod(ring, this.style, frame.unroll ?? curve.unroll ?? 0);
       this._s = lod ? { ...this.style, ...lod } : this.style;
-      const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
-      const onCircle = curve.kind === 'circle';
+      const orient = layout.marks?.orient ?? this._s.orient ?? 'normal';
+      // The polar test is exact, but only while the marks really are radial about
+      // the lens centre. Unroll the anchor or stand the marks upright and the
+      // footprint is an oriented rectangle instead, so the test has to be one.
+      const polarTest = curve.kind === 'circle' && orient === 'normal';
       const dx = px - frame.cx;
       const dy = py - frame.cy;
       const r = Math.hypot(dx, dy);
@@ -3406,14 +3783,23 @@ var glyphlens = (function (exports) {
       const type = layout.marks?.type ?? 'bar';
 
       for (const bin of layout.bins) {
-        if (!onCircle) {
-          // Off a circle, test against the mark's own footprint directly.
-          const [bx, by] = curve.pointAt(bin.t);
-          const [nx, ny] = curve.normalAt(bin.t);
-          const mid = bin.size / 2;
-          const cxm = bx + nx * mid;
-          const cym = by + ny * mid;
-          if (Math.hypot(px - cxm, py - cym) <= Math.max(bin.halfWidthPx, mid, 6)) return bin;
+        if (!polarTest) {
+          if (!Number.isFinite(bin.size) || bin.size <= 0) continue;
+          const track = bin.ringOffset ?? 0;
+          const [px0, py0] = curve.pointAt(bin.t);
+          const [nx, ny, tx, ty] = markAxes(curve, bin.t, orient);
+          const ox = px0 + nx * track;
+          const oy = py0 + ny * track;
+          const along = (px - ox) * nx + (py - oy) * ny;
+          const across = (px - ox) * tx + (py - oy) * ty;
+          if (type === 'disc' || type === 'rose') {
+            if (Math.hypot(along - bin.size, across) <= Math.max(bin.size, 6)) return bin;
+            continue;
+          }
+          const half = Math.max(bin.markHalfWidthPx ?? bin.halfWidthPx, 3);
+          const lo = Math.min(0, (bin.signed ?? 1) < 0 ? -bin.size : bin.size);
+          const hi = Math.max(0, (bin.signed ?? 1) < 0 ? -bin.size : bin.size);
+          if (along >= lo && along <= hi && Math.abs(across) <= half) return bin;
           continue;
         }
         const track = bin.ringOffset ?? 0;
@@ -3435,6 +3821,150 @@ var glyphlens = (function (exports) {
   }
 
   const polar = (cx, cy, r, a) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+
+  /**
+   * The two axes a mark is drawn in: the direction it grows, and the direction
+   * its width runs. The width axis is always the growth axis turned a quarter
+   * turn, so a mark stays square to itself whatever it is aligned to.
+   *
+   * - `normal`  — the curve's own outward normal. Radial on a ring, lateral on a
+   *   route. Association is maximal: the mark points at what it summarises.
+   * - `up`      — screen vertical, always. Every mark shares one baseline
+   *   direction, so lengths compare directly; on a closed ring the marks in the
+   *   lower half grow back across the lens, which is why this belongs with an
+   *   unrolled or open anchor.
+   * - `upright` — vertical, but signed by the normal, so marks never grow into
+   *   the lens interior. The compromise: a shared axis, two baselines.
+   */
+  function markAxes(curve, t, orient = 'normal') {
+    let ux;
+    let uy;
+    if (orient === 'up') {
+      ux = 0;
+      uy = -1;
+    } else {
+      const [nx, ny] = curve.normalAt(t);
+      if (orient === 'upright') {
+        ux = 0;
+        uy = ny > 0 ? 1 : -1;
+      } else {
+        ux = nx;
+        uy = ny;
+      }
+    }
+    return [ux, uy, -uy, ux];
+  }
+
+  /**
+   * Where a leader runs from and to, or `null` if there is nothing to point at.
+   *
+   * The target is **the position placement tried to honour**, at the members'
+   * own mean distance from the anchor — not the rim, and not the mark's actual
+   * position. So the line is precisely the association the layout gave away,
+   * whether it gave it away to avoid an overlap or by unrolling the anchor.
+   *
+   * Everything is measured in the lens's own azimuthal frame, the same one the
+   * inclusions use, so no map projection is involved (docs/findings.md F-12).
+   * `frame.scalePx` is pixels per metre; without it there is no honest way to
+   * place the target and the leader is skipped rather than guessed.
+   */
+  function leaderAnchors(layout, bin, curve, frame, orient = 'normal') {
+    const track = bin.ringOffset ?? 0;
+    const [bx, by] = curve.pointAt(bin.t);
+    const [ux, uy] = markAxes(curve, bin.t, orient);
+    const from = [bx + ux * track, by + uy * track];
+    const to = leaderTarget(layout, bin, curve, frame);
+    return to ? [from, to] : null;
+  }
+
+  /**
+   * How far a mark sits from the position its data actually occupies, in degrees
+   * of curve parameter.
+   *
+   * Deliberately not `bin.displacement`, which is the necklace solver's own
+   * residual — how far it had to move a mark from the position it was *asked*
+   * for. Under block placement it asks for a nominal slot, so the solver reports
+   * no displacement at all while every mark is as far from its bearing as it can
+   * be. That is the layout where association is most missing, so the leader has
+   * to measure the gap itself.
+   */
+  function leaderGap(bin) {
+    const bearing = bin.meanBearing ?? bin.bearing;
+    const trueT = bin.position != null || bearing == null
+      ? bin.preferredT ?? bin.t
+      : wrap01(bearing / 360);
+    return Math.abs(cyclicDelta(bin.t, trueT)) * 360;
+  }
+
+  function leaderTarget(layout, bin, curve, frame) {
+    // The parameter the mark was placed *for*, which is what it is a summary of.
+    const t = bin.preferredT ?? bin.t;
+
+    if (curve.kind === 'polyline') {
+      // On a route, the geography is the route: the true path where the anchor
+      // has been straightened away from it, the drawn one otherwise.
+      const source = frame.ghost?.length > 1
+        ? polylineCurve(frame.ghost, { closed: false })
+        : curve;
+      const [x, y] = source.pointAt(t);
+      const halfWidth = (layout.selection?.width ?? 0) / 2;
+      const mean = bin.structure?.lateral?.mean;
+      if (!(halfWidth > 0) || !Number.isFinite(mean) || !(frame.corridorHalfWidthPx > 0)) {
+        return [x, y];
+      }
+      const [nx, ny] = source.normalAt(t);
+      const across = (mean / halfWidth) * frame.corridorHalfWidthPx;
+      return [x + nx * across, y + ny * across];
+    }
+
+    // A ring's angular axis only means bearing when the bins carry one, and the
+    // members' own circular mean is not a substitute: a distance band's members
+    // run all the way round, so their mean direction is the arbitrary number
+    // F-6 warns about and a leader drawn to it would be a confident lie.
+    const bearing = bin.meanBearing ?? bin.bearing;
+    if (bearing == null || frame.cx == null) return null;
+
+    const scale = frame.scalePx
+      ?? (frame.selectionRadiusPx > 0 && layout.selection?.radius > 0
+        ? frame.selectionRadiusPx / layout.selection.radius
+        : 0);
+    const distance = bin.structure?.radial?.mean;
+    if (!(scale > 0) || !Number.isFinite(distance) || distance <= 0) return null;
+
+    const a = ((bearing - 90) / 180) * Math.PI;
+    return [frame.cx + Math.cos(a) * distance * scale, frame.cy + Math.sin(a) * distance * scale];
+  }
+
+  /**
+   * The circle a mark sits on, if drawing it as an annular sector is still worth
+   * doing. An unrolling ring's radius runs off to infinity, and past a few
+   * thousand pixels the curvature across one mark is under a tenth of a pixel —
+   * so the cutoff is where the special case stops buying anything, not where it
+   * stops being defined.
+   */
+  function arcBasis(curve, maxRadius = 4000) {
+    const r = curve.radius;
+    if (!curve.angleAt || !Number.isFinite(r) || r > maxRadius) return null;
+    return { cx: curve.cx, cy: curve.cy, radius: r };
+  }
+
+  /** Points along a curve, offset along its normal, at roughly `step` pixels. */
+  function sampleCurve(curve, t0 = 0, t1 = 1, step = 3, offset = 0) {
+    const span = Math.abs(t1 - t0) * curve.length;
+    const n = Math.max(2, Math.min(720, Math.ceil(span / step)));
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const t = t0 + ((t1 - t0) * i) / n;
+      const [x, y] = curve.pointAt(t);
+      if (offset === 0) {
+        out.push([x, y]);
+      } else {
+        const [nx, ny] = curve.normalAt(t);
+        out.push([x + nx * offset, y + ny * offset]);
+      }
+    }
+    return out;
+  }
 
   const angleDelta = (a, b) => ((((b - a) % TAU) + TAU + Math.PI) % TAU) - Math.PI;
 
@@ -3489,6 +4019,205 @@ var glyphlens = (function (exports) {
   }
 
   /**
+   * Routes — turning a line somebody already has into a corridor path.
+   *
+   * A corridor lens is defined by a polyline, and the interesting polylines
+   * already exist: a river, a railway, a bus route, a coastline, a planned cycle
+   * lane, the boundary of a district. All of them arrive as GeoJSON, so the
+   * library's job is to accept the shapes people actually have rather than to
+   * demand an array of pairs.
+   *
+   * Simplification is not cosmetic here. Every member is projected onto every
+   * segment of the path to get its chainage and offset, so the selection stage is
+   * O(features x vertices): a 4000-vertex river against 5000 places is twenty
+   * million projections per drag frame, and the lens stops being interactive
+   * long before it stops being correct. Douglas-Peucker to a node budget makes
+   * the cost predictable, and at corridor widths of hundreds of metres a tolerance
+   * of a few tens of metres is invisible. See docs/findings.md F-29.
+   */
+
+  const EARTH_RADIUS = 6371008.8;
+  const toRad = (d) => (d * Math.PI) / 180;
+
+  /**
+   * Local equirectangular metres, good enough for simplification: the tolerance
+   * is a threshold on a distance, not a measurement to report.
+   */
+  function projector(path) {
+    const lat0 = path.reduce((s, p) => s + p[1], 0) / path.length;
+    const kx = (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat0));
+    const ky = (Math.PI / 180) * EARTH_RADIUS;
+    return ([lng, lat]) => [lng * kx, lat * ky];
+  }
+
+  /** Perpendicular distance from `p` to the segment `a`-`b`, in projected units. */
+  function segmentDistance(p, a, b) {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+    const u = Math.min(1, Math.max(0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+    return Math.hypot(p[0] - (a[0] + dx * u), p[1] - (a[1] + dy * u));
+  }
+
+  /**
+   * Douglas-Peucker, iterative so a long route cannot blow the stack.
+   *
+   * @param {Array<[number, number]>} path  [lng, lat] vertices
+   * @param {number} tolerance              metres; vertices closer than this to
+   *                                        the line they sit on are dropped
+   */
+  function simplifyPath(path, tolerance = 25) {
+    if (!path || path.length <= 2 || !(tolerance > 0)) return path ?? [];
+    const xy = projector(path);
+    const pts = path.map(xy);
+    const keep = new Uint8Array(path.length);
+    keep[0] = 1;
+    keep[path.length - 1] = 1;
+
+    const stack = [[0, path.length - 1]];
+    while (stack.length) {
+      const [lo, hi] = stack.pop();
+      let worst = 0;
+      let index = -1;
+      for (let i = lo + 1; i < hi; i++) {
+        const d = segmentDistance(pts[i], pts[lo], pts[hi]);
+        if (d > worst) {
+          worst = d;
+          index = i;
+        }
+      }
+      if (index >= 0 && worst > tolerance) {
+        keep[index] = 1;
+        stack.push([lo, index], [index, hi]);
+      }
+    }
+
+    return path.filter((_, i) => keep[i]);
+  }
+
+  /**
+   * Simplify until the path fits a node budget.
+   *
+   * The budget is the thing a caller can reason about — "keep it interactive" —
+   * whereas a tolerance in metres depends on how long the route is and how
+   * wiggly. Doubling from a fine tolerance converges in a handful of passes and
+   * never over-simplifies a route that was already short.
+   */
+  function fitNodeBudget(path, maxNodes = 200, { start = 5 } = {}) {
+    if (!path || path.length <= maxNodes) return path ?? [];
+    let tolerance = start;
+    let out = simplifyPath(path, tolerance);
+    while (out.length > maxNodes && tolerance < 1e6) {
+      tolerance *= 2;
+      out = simplifyPath(path, tolerance);
+    }
+    return out;
+  }
+
+  /** Every LineString-like coordinate array inside a GeoJSON value. */
+  function collectLines(node, out = []) {
+    if (!node || typeof node !== 'object') return out;
+
+    if (Array.isArray(node.features)) {
+      for (const f of node.features) collectLines(f, out);
+      return out;
+    }
+    if (node.type === 'Feature') return collectLines(node.geometry, out);
+    if (node.type === 'GeometryCollection') {
+      for (const g of node.geometries ?? []) collectLines(g, out);
+      return out;
+    }
+
+    const c = node.coordinates;
+    if (!Array.isArray(c)) return out;
+    switch (node.type) {
+      case 'LineString':
+        out.push(c);
+        break;
+      case 'MultiLineString':
+        for (const part of c) out.push(part);
+        break;
+      // A polygon's rings are perfectly good routes: a corridor along an admin
+      // boundary or a ring road is exactly the "linear feature" case, and asking
+      // the user to convert it first would be pedantry.
+      case 'Polygon':
+        for (const ring of c) out.push(ring);
+        break;
+      case 'MultiPolygon':
+        for (const poly of c) for (const ring of poly) out.push(ring);
+        break;
+    }
+    return out;
+  }
+
+  const planarLength = (line) => {
+    const xy = projector(line);
+    let total = 0;
+    for (let i = 1; i < line.length; i++) {
+      const a = xy(line[i - 1]);
+      const b = xy(line[i]);
+      total += Math.hypot(b[0] - a[0], b[1] - a[1]);
+    }
+    return total;
+  };
+
+  /**
+   * A corridor path from whatever GeoJSON the user has.
+   *
+   * Accepts a FeatureCollection, Feature, geometry, or a bare coordinate array.
+   * Multi-part geometries are common in real route data — a river split at every
+   * confluence, a bus route as one feature per direction — and joining the parts
+   * would invent segments that do not exist, so the **longest** part is taken and
+   * the rest reported rather than silently merged.
+   *
+   * @returns {{ path: Array<[number, number]>, parts: number, dropped: number,
+   *             nodes: number, sourceNodes: number }}
+   */
+  function pathFromGeoJSON(input, { maxNodes = 200 } = {}) {
+    const doc = typeof input === 'string' ? JSON.parse(input) : input;
+    const lines = Array.isArray(doc) && Array.isArray(doc[0])
+      ? [doc]
+      : collectLines(doc);
+
+    const usable = lines
+      .map((line) => line.filter(
+        (p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]),
+      ))
+      .filter((line) => line.length >= 2)
+      .map((line) => line.map(([lng, lat]) => [lng, lat]));
+
+    if (usable.length === 0) {
+      throw new Error('No LineString, MultiLineString or Polygon ring found in that GeoJSON.');
+    }
+
+    usable.sort((a, b) => planarLength(b) - planarLength(a));
+    const longest = usable[0];
+    const path = fitNodeBudget(longest, maxNodes);
+
+    return {
+      path,
+      parts: usable.length,
+      dropped: usable.length - 1,
+      nodes: path.length,
+      sourceNodes: longest.length,
+    };
+  }
+
+  /** Insert a vertex into a path, returning a new array. */
+  function insertNode(path, index, coord) {
+    const next = [...path];
+    next.splice(Math.min(Math.max(index, 0), path.length), 0, coord);
+    return next;
+  }
+
+  /** Remove a vertex, refusing to leave fewer than two. */
+  function removeNode(path, index) {
+    if (path.length <= 2) return path;
+    return path.filter((_, i) => i !== index);
+  }
+
+  /**
    * MapLibre GL adapter.
    *
    * Puts a canvas over the map and keeps a lens on it. The split that matters:
@@ -3518,6 +4247,10 @@ var glyphlens = (function (exports) {
      * @param {import('maplibre-gl').Map} map
      * @param {object} options  everything `computeLens` takes, plus:
      * @param {object} [options.style]      renderer style / preset
+     * @param {object} [options.anchor]     `{ unroll: 0..1, at }` — the curve the
+     *   marks are drawn on. `unroll` opens the ring into a straight baseline of
+     *   the same length, and straightens a corridor onto its own chainage; `at`
+     *   is the parameter held fixed, or `'auto'` to seam at the widest gap.
      * @param {boolean} [options.draggable=true]
      * @param {(bin, event) => void} [options.onHover]
      * @param {(bin, event) => void} [options.onClick]
@@ -3536,6 +4269,10 @@ var glyphlens = (function (exports) {
       this.renderer = new LensRenderer(options.style);
       this.layout = null;
       this._drag = null;
+      // Null rather than undefined: a hover change is now a repaint, and an
+      // unset field would make the first pointer move over empty map count as
+      // one.
+      this._hovered = null;
       this._transition = null;
 
       this._mount();
@@ -3629,6 +4366,7 @@ var glyphlens = (function (exports) {
         normalisation: o.normalisation,
         placement: curveLength ? { ...o.placement, curveLength } : o.placement,
         marks: o.marks,
+        association: o.association,
         structure: o.structure,
         areal: o.areal,
         ring: { radius: this.renderer.style.ringRadius },
@@ -3677,6 +4415,44 @@ var glyphlens = (function (exports) {
       return this.update({ placement: { mode: 'morph', morph: u } });
     }
 
+    /**
+     * Open the anchor from a closed ring (0) to a straight baseline (1).
+     *
+     * Deliberately not `update()`: the anchor is a drawing decision, and the
+     * curve keeps its length at every value, so the solved placement stays valid
+     * and there is nothing to recompute. That is what makes this cheap enough to
+     * drive from a slider on a field of lenses (docs/findings.md F-27).
+     */
+    setUnroll(u, at) {
+      this.options.anchor = {
+        ...this.options.anchor,
+        unroll: Math.min(1, Math.max(0, u)),
+        ...(at === undefined ? {} : { at }),
+      };
+      this.repaint();
+      return this.layout;
+    }
+
+    /** Replace the corridor path — from an edit, a preset or an imported line. */
+    setPath(path) {
+      return this.update({
+        selection: { ...this.options.selection, path, length: pathLength(path) },
+      });
+    }
+
+    /**
+     * Take the corridor path from a GeoJSON line the caller already has.
+     *
+     * Returns what the import did — how many parts were found, how far the route
+     * was simplified — because both are things the analyst should see rather
+     * than discover from a lens that has quietly become slow or coarse.
+     */
+    setPathFromGeoJSON(doc, options) {
+      const result = pathFromGeoJSON(doc, options);
+      this.setPath(result.path);
+      return result;
+    }
+
     state() {
       const settled = this.target ?? this.layout;
       return {
@@ -3706,12 +4482,45 @@ var glyphlens = (function (exports) {
       return total;
     }
 
+    /**
+     * How far the anchor is unrolled, and the parameter held fixed.
+     *
+     * The default differs by anchor: a ring holds north at the top of the screen,
+     * while an open curve opens about its own midpoint rather than sliding away
+     * from one end. An open curve also has no seam to place — its ends are
+     * already its ends — so `'auto'` means nothing there and falls back.
+     */
+    _anchor(defaultAt = 0, { seam = true } = {}) {
+      const { unroll = 0, at = defaultAt } = this.options.anchor ?? {};
+      const u = Math.min(1, Math.max(0, unroll));
+      if (at !== 'auto') return { unroll: u, at };
+
+      // Seam the ring at the widest empty stretch, so opening it never cuts a
+      // mark in half. Read off the settled layout, not the animating one, so the
+      // seam does not wander during a transition.
+      const bins = seam ? (this.target ?? this.layout)?.bins ?? [] : [];
+      if (bins.length < 2) return { unroll: u, at: defaultAt };
+      const ts = bins.map((b) => b.t).sort((a, b) => a - b);
+      let gap = ts[0] + 1 - ts[ts.length - 1];
+      let widest = wrap01(ts[ts.length - 1] + gap / 2);
+      for (let i = 1; i < ts.length; i++) {
+        const d = ts[i] - ts[i - 1];
+        if (d > gap) {
+          gap = d;
+          widest = ts[i - 1] + d / 2;
+        }
+      }
+      return { unroll: u, at: wrap01(widest + 0.5) };
+    }
+
     frame() {
       const selection = this.options.selection;
+      const onRoute = selection.type === 'corridor' && selection.path?.length >= 2;
+      const { unroll, at } = onRoute ? this._anchor(0.5, { seam: false }) : this._anchor(0);
 
       // A corridor has no centre: its anchor is the projected path itself, so the
       // curve is rebuilt each paint while the layout stays untouched.
-      if (selection.type === 'corridor' && selection.path?.length >= 2) {
+      if (onRoute) {
         const pts = selection.path.map((c) => {
           const q = this.map.project(c);
           return [q.x, q.y];
@@ -3719,14 +4528,34 @@ var glyphlens = (function (exports) {
         const mid = selection.path[Math.floor(selection.path.length / 2)];
         const a = this.map.project(mid);
         const b = this.map.project(destination(mid, 90, selection.width / 2));
+        // Straightening a route is the open-curve form of unrolling a ring: the
+        // strip keeps every member's chainage and offset and gives up its
+        // position, which is a linear cartogram (docs/findings.md F-28).
+        const drawn = straightenPath(pts, unroll, { at });
+        const halfWidthPx = Math.hypot(b.x - a.x, b.y - a.y);
         return {
           cx: pts[0][0],
           cy: pts[0][1],
-          curve: polylineCurve(pts, { closed: false }),
-          corridorHalfWidthPx: Math.hypot(b.x - a.x, b.y - a.y),
+          curve: polylineCurve(drawn, { closed: false }),
+          unroll,
+          ghost: unroll > 0.02 ? pts : null,
+          // A vertex on a straightened route is at a cartogram position, so it
+          // stops being something you can meaningfully drag.
+          nodes: this.options.draggable && unroll <= 0.02 ? pts : null,
+          corridorHalfWidthPx: halfWidthPx,
+          // Pixels per metre, which is what puts a leader's target at a real
+          // distance rather than a guessed one.
+          scalePx: halfWidthPx / (selection.width / 2),
           selectionRadiusPx: 0,
+          hovered: this._hovered?.key,
         };
       }
+
+      // The ring, at whatever curvature the anchor asks for. At `unroll = 0` this
+      // is `circleCurve` exactly, so nothing about the default path changes.
+      const ringRadius = this.layout?.ring?.radius ?? this.renderer.style.ringRadius;
+      const anchorCurve = (cx, cy) =>
+        (unroll > 0 ? arcCurve(cx, cy, ringRadius, { unroll, at }) : undefined);
 
       // A polygon carries its own boundary and its centre is the centroid the
       // layout resolved, so there is no radius to project.
@@ -3738,17 +4567,34 @@ var glyphlens = (function (exports) {
             const q = this.map.project(c);
             return [q.x, q.y];
           }));
-        return { cx: p.x, cy: p.y, selectionRings: rings, selectionRadiusPx: 0 };
+        // A polygon has no radius to derive a scale from, so it is measured
+        // directly. Without it a leader has no honest length.
+        const east = centre ? this.map.project(destination(centre, 90, 100)) : p;
+        return {
+          cx: p.x,
+          cy: p.y,
+          curve: anchorCurve(p.x, p.y),
+          unroll,
+          selectionRings: rings,
+          selectionRadiusPx: 0,
+          scalePx: Math.hypot(east.x - p.x, east.y - p.y) / 100,
+          hovered: this._hovered?.key,
+        };
       }
 
       const p = this.map.project(this.options.center);
       // Radius in pixels, measured along a real geodesic so it stays correct at
       // high latitudes rather than assuming a local metres-per-pixel constant.
       const edge = this.map.project(destination(this.options.center, 90, selection.radius));
+      const radiusPx = Math.hypot(edge.x - p.x, edge.y - p.y);
       return {
         cx: p.x,
         cy: p.y,
-        selectionRadiusPx: Math.hypot(edge.x - p.x, edge.y - p.y),
+        curve: anchorCurve(p.x, p.y),
+        unroll,
+        selectionRadiusPx: radiusPx,
+        scalePx: selection.radius > 0 ? radiusPx / selection.radius : 0,
+        hovered: this._hovered?.key,
       };
     }
 
@@ -3784,17 +4630,58 @@ var glyphlens = (function (exports) {
       const f = this.frame();
 
       if (this.options.selection.type === 'corridor') {
-        // Grab whichever endpoint is nearest, so a transect can be re-aimed.
+        // A straightened corridor is a cartogram: the vertices on screen are not
+        // where the route is, so editing is off until it is rolled back up.
+        if ((this.options.anchor?.unroll ?? 0) > 0.02) return;
+        if (e.button !== 0) return;
+
+        // Every vertex is a handle, not just the two ends. A transect is a
+        // two-node special case of a route, and a route that can only be
+        // re-aimed rather than shaped cannot follow a river or a ring road —
+        // which is most of the linear features worth lensing.
         const pts = this.options.selection.path;
-        const ends = [0, pts.length - 1].map((i) => {
-          const q = this.map.project(pts[i]);
-          return { i, d: Math.hypot(x - q.x, y - q.y) };
+        const screen = pts.map((c) => {
+          const q = this.map.project(c);
+          return [q.x, q.y];
         });
-        const nearest = ends.sort((a, b) => a.d - b.d)[0];
-        if (nearest.d > 16) return;
-        this._drag = { kind: 'endpoint', index: nearest.i };
-        this.map.dragPan.disable();
-        e.preventDefault();
+
+        let nearest = { i: -1, d: Infinity };
+        screen.forEach(([qx, qy], i) => {
+          const d = Math.hypot(x - qx, y - qy);
+          if (d < nearest.d) nearest = { i, d };
+        });
+
+        if (nearest.d <= 14) {
+          // Alt-click removes a node, which is the only way to get back down to
+          // a simpler route once one has been shaped.
+          if (e.altKey && pts.length > 2) {
+            this.options.selection = {
+              ...this.options.selection,
+              path: removeNode(pts, nearest.i),
+            };
+            this.options.selection.length = pathLength(this.options.selection.path);
+            this._scheduleRecompute();
+            e.preventDefault();
+            return;
+          }
+          this._drag = { kind: 'node', index: nearest.i };
+          this.map.dragPan.disable();
+          e.preventDefault();
+          return;
+        }
+
+        // Otherwise, grabbing the line itself inserts a vertex there and drags
+        // it — the same gesture as every polyline editor, and it means shaping a
+        // route needs no mode switch.
+        const hit = nearestSegment([x, y], screen);
+        if (hit.d <= 10) {
+          const path = insertNode(pts, hit.index + 1, this.map.unproject([x, y]).toArray());
+          this.options.selection = { ...this.options.selection, path, length: pathLength(path) };
+          this._drag = { kind: 'node', index: hit.index + 1 };
+          this.map.dragPan.disable();
+          this._scheduleRecompute();
+          e.preventDefault();
+        }
         return;
       }
 
@@ -3816,6 +4703,9 @@ var glyphlens = (function (exports) {
           this._hovered = bin;
           this.options.onHover?.(bin, e);
           this.canvas.style.cursor = bin ? 'pointer' : '';
+          // The hovered mark is now something the renderer draws from, so a
+          // change of hover is a repaint — once per change, not per move.
+          this.repaint();
         }
         return;
       }
@@ -3823,7 +4713,7 @@ var glyphlens = (function (exports) {
       // Dragging changes the selection at pointer rate, so coalesce to one
       // pipeline run per frame and skip the transition — animating towards a
       // target that moves every frame just adds lag (docs/findings.md F-3).
-      if (this._drag.kind === 'endpoint') {
+      if (this._drag.kind === 'node') {
         const path = [...this.options.selection.path];
         path[this._drag.index] = this.map.unproject([x, y]).toArray();
         this.options.selection = {
@@ -3859,6 +4749,22 @@ var glyphlens = (function (exports) {
       this._drag = null;
       this.map.dragPan.enable();
     }
+  }
+
+  /** Closest segment of a projected polyline to a point, and how far away it is. */
+  function nearestSegment([px, py], points) {
+    let best = { index: 0, d: Infinity, at: 0 };
+    for (let i = 0; i < points.length - 1; i++) {
+      const [ax, ay] = points[i];
+      const [bx, by] = points[i + 1];
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      const u = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / len2));
+      const d = Math.hypot(px - (ax + dx * u), py - (ay + dy * u));
+      if (d < best.d) best = { index: i, d, at: u };
+    }
+    return best;
   }
 
   /** Convenience wrapper. */
@@ -4051,6 +4957,8 @@ var glyphlens = (function (exports) {
   exports.addLens = addLens;
   exports.aggregate = aggregate;
   exports.angularHistogram = angularHistogram;
+  exports.arcBasis = arcBasis;
+  exports.arcCurve = arcCurve;
   exports.areaFractionInside = areaFractionInside;
   exports.arealSelect = arealSelect;
   exports.bin = bin;
@@ -4076,29 +4984,37 @@ var glyphlens = (function (exports) {
   exports.elasticityProfile = elasticityProfile;
   exports.fieldBaseline = fieldBaseline;
   exports.fitNecklaceScale = fitNecklaceScale;
+  exports.fitNodeBudget = fitNodeBudget;
   exports.geo = geo;
   exports.hexLattice = hexLattice;
+  exports.insertNode = insertNode;
   exports.isotonic = isotonic;
   exports.isotonicBoundedSpan = isotonicBoundedSpan;
   exports.lateralStats = lateralStats;
   exports.lerpCyclic = lerpCyclic;
   exports.lerpLayout = lerpLayout;
+  exports.markAxes = markAxes;
   exports.normalise = normalise;
   exports.normaliseRings = normaliseRings;
+  exports.pathFromGeoJSON = pathFromGeoJSON;
   exports.placeByBearing = placeByBearing;
   exports.placeNecklace = placeNecklace;
   exports.polylineCurve = polylineCurve;
   exports.profileOf = profileOf;
   exports.radialHistogram = radialHistogram;
   exports.radialStats = radialStats;
+  exports.removeNode = removeNode;
   exports.resolveStyle = resolveStyle;
+  exports.sampleCurve = sampleCurve;
   exports.select = select;
   exports.selectComplement = selectComplement;
   exports.selectCorridor = selectCorridor;
   exports.selectPolygon = selectPolygon;
   exports.selectionArea = selectionArea;
+  exports.simplifyPath = simplifyPath;
   exports.spacingForCount = spacingForCount;
   exports.spatialIndex = spatialIndex;
+  exports.straightenPath = straightenPath;
   exports.wrap01 = wrap01;
 
   return exports;
