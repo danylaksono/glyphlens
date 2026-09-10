@@ -23,7 +23,10 @@
  */
 
 import { computeLens, lerpLayout } from '../core/layout.js';
-import { computeField, hexLattice, spacingForCount, TOUCHING } from '../core/field.js';
+import { computeField, TOUCHING } from '../core/field.js';
+import {
+  lattice, relaxedLattice, voronoiCells, spacingForCount, LATTICES,
+} from '../core/lattice.js';
 import { LensRenderer } from '../render/LensRenderer.js';
 import { destination, distance, pathLength } from '../core/geo.js';
 import { normaliseRings } from '../core/selection.js';
@@ -581,6 +584,13 @@ export class FieldOverlay {
       count: 60,
       coverRadius: 4000,
       packing: TOUCHING,
+      // Which tiling the centres sit on: 'hex' (default), 'square',
+      // 'triangle', or 'relaxed' for a Lloyd-relaxed lattice inside
+      // `boundary`. See docs/findings.md F-34 and F-35.
+      lattice: 'hex',
+      // `false` | 'selection' (the disc each lens actually counted) |
+      // 'lattice' (the cell of ground nearest this centre) | 'both'.
+      cells: false,
       minCount: 3,
       binning: { mode: 'angular', bins: 12 },
       normalisation: { mode: 'count' },
@@ -649,10 +659,23 @@ export class FieldOverlay {
   recompute() {
     const o = this.options;
     const centre = o.center ?? this.map.getCenter().toArray();
-    const spacing = spacingForCount(o.count, o.coverRadius);
-    const radius = spacing * o.packing;
+    const kind = o.lattice ?? 'hex';
 
-    const centres = hexLattice({ center: centre, radius: o.coverRadius, spacing });
+    // A relaxed lattice fills a shape rather than covering a radius, so it is
+    // the one kind that needs a boundary — and it derives its own spacing from
+    // that shape's area rather than being told one.
+    const built = kind === 'relaxed' && o.boundary
+      ? this._relaxed(o)
+      : lattice({
+        kind,
+        center: centre,
+        radius: o.coverRadius,
+        spacing: spacingForCount(o.count, o.coverRadius, kind),
+      });
+
+    const { centres, cells: cellSpecs } = built;
+    const spacing = built.spacing;
+    const radius = spacing * o.packing;
 
     // The ring is sized so a lens and its marks stay inside the cell it
     // represents. Without this the glyphs of neighbouring cells overlap and the
@@ -662,6 +685,8 @@ export class FieldOverlay {
 
     this.field = computeField({
       centres,
+      cells: cellSpecs,
+      kind: built.kind,
       data: o.data ?? [],
       getPosition: o.getPosition,
       selection: { type: 'disc', radius },
@@ -676,6 +701,16 @@ export class FieldOverlay {
     });
 
     this._ringRadius = ringRadius;
+    this._mpp = mpp;
+    // The disc is one number for the whole field; the cell's shape comes from
+    // the lattice, per centre, and rides on each layout.
+    this._cellDiscPx = radius / mpp;
+    // A relaxed lattice has no regular cell, so its boundaries are the real
+    // Voronoi polygons, clipped to the shape. Computed once per recompute
+    // rather than per paint: it is O(n²) and the centres do not move.
+    this._cellRings = kind === 'relaxed' && o.boundary
+      ? voronoiCells(centres, normaliseRings({ rings: o.boundary }))
+      : null;
     this.options.onChange?.(this.state());
     this.repaint();
     return this.field;
@@ -695,11 +730,74 @@ export class FieldOverlay {
     return this.update({ count: Math.max(1, Math.round(count)) });
   }
 
+  /**
+   * Show where one cell ends and the next begins: `'selection'` for the disc
+   * each lens actually counted, `'lattice'` for the hexagon of ground nearest
+   * this centre, `'both'`, or `false`.
+   *
+   * A repaint, not a recompute — the cells are a frame of reference, and
+   * nothing about the field depends on whether they are drawn.
+   */
+  setCells(cells) {
+    this.options.cells = cells;
+    this.repaint();
+    return this.field;
+  }
+
   state() {
     return {
       stats: this.field.stats,
       ringRadius: this._ringRadius,
       count: this.options.count,
+      lattice: this.field.stats?.kind,
+      // The disc every lens counted, and the typical cell it sits in, so a
+      // caller can report both without re-deriving the lattice.
+      cell: {
+        disc: this._cellDiscPx,
+        radius: (this.field.lenses[0]?.cell?.circumradius ?? 0) / (this._mpp || 1),
+      },
+    };
+  }
+
+  /**
+   * A relaxed lattice, computed once per shape rather than once per zoom.
+   *
+   * Nothing about it depends on the viewport — the centres are geographic and
+   * the relaxation is expensive — so re-running it on every `zoomend`, which
+   * is what a field otherwise does, would be both wasteful and visibly
+   * unstable: a different seed path would settle somewhere slightly different.
+   */
+  _relaxed(o) {
+    const key = `${o.count}|${o.seed ?? 1}|${o.iterations ?? ''}|${JSON.stringify(o.boundary)}`;
+    if (this._relaxedCache?.key !== key) {
+      this._relaxedCache = {
+        key,
+        value: relaxedLattice({
+          rings: normaliseRings({ rings: o.boundary }),
+          count: o.count,
+          ...(o.iterations ? { iterations: o.iterations } : {}),
+          seed: o.seed ?? 1,
+        }),
+      };
+    }
+    return this._relaxedCache.value;
+  }
+
+  /** One cell's screen geometry: the disc it counted, and the ground it owns. */
+  _cellFor(layout, wantDisc, wantCell) {
+    const spec = layout.cell;
+    const ring = wantCell && spec?.ringIndex != null
+      ? this._cellRings?.[spec.ringIndex]?.map((c) => {
+        const q = this.map.project(c);
+        return [q.x, q.y];
+      })
+      : null;
+    return {
+      disc: wantDisc ? this._cellDiscPx : 0,
+      radius: wantCell && spec ? spec.circumradius / this._mpp : 0,
+      sides: spec?.sides ?? 0,
+      rotate: spec?.rotate ?? 0,
+      ring,
     };
   }
 
@@ -709,7 +807,12 @@ export class FieldOverlay {
     ctx.clearRect(0, 0, this._css.w, this._css.h);
 
     const ring = this._ringRadius;
-    const pad = ring * 3;
+    const cells = this.options.cells;
+    const wantDisc = cells === 'selection' || cells === 'both';
+    const wantCell = cells === 'lattice' || cells === 'both';
+    // Cull against the cell rather than the ring once one is drawn: a cell is
+    // nearly twice the ring's radius, so the old margin clipped its outline.
+    const pad = Math.max(ring, cells ? this._cellDiscPx * 2 : 0) * 3;
     for (const layout of this.field.lenses) {
       const p = this.map.project(layout.center);
       // Cheap cull: a field can hold thousands of lenses and most of them are
@@ -722,6 +825,7 @@ export class FieldOverlay {
         cy: p.y,
         ringRadius: ring,
         selectionRadiusPx: 0,
+        cell: cells ? this._cellFor(layout, wantDisc, wantCell) : null,
       });
     }
   }

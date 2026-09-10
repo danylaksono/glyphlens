@@ -1040,6 +1040,206 @@ now drawn only where no leader replaced it. What stays open is the *policy*
 question: at what displacement a symbol should be dropped or merged rather than
 drawn with a longer line.
 
+### F-32. A straightened anchor splits the within-unit layer in two
+
+Recorded 2026-09-10, from a reader's question about the corridor demo: are the
+members drawn inside the corridor, or inside the baseline? It looked like the
+baseline, and that looked wrong.
+
+They were right about the behaviour and it is worth stating exactly why it is
+not wrong, because the question turns out to name a real fork.
+
+Straightening a corridor moves the *unit*. So when the within-unit layer is
+drawn — the members as inclusions, the lateral spread — there are two honest
+answers to where they go, and until now the renderer had silently taken one:
+
+- **`unit`** — the members belong to the unit and go wherever the unit went.
+  Every member keeps its true chainage and offset, which are the only two
+  quantities a corridor lens reads, so nothing about the reading is lost. It is
+  also the only frame in which inclusions do their job at all: their whole point
+  (Honeycomb's amber inclusions,
+  [F-12](#f-12-inclusions-are-drawn-in-the-lenss-own-frame-not-the-maps)) is to
+  show the distribution *through* the aggregate, and members two hundred pixels
+  from their own bar are a scatterplot, not an inclusion.
+- **`geographic`** — the members belong to the map and stay on the true path.
+  The strip then carries only the aggregates, and the leaders tie the two
+  together. This is the classic strip-map layout: a profile beside a map.
+
+`unit` stays the default, and on the reading a corridor lens exists for it is
+not merely defensible but better. One-sidedness
+([F-15](#f-15-a-corridor-has-a-second-axis-a-disc-does-not)) is the thing a
+count erases, and on a bent route "left of travel" rotates with every bend and
+is genuinely hard to see. Straightened, left is always up. **The cartogram is
+the better frame for the reading the encoding was built for**, which is not the
+answer intuition gives.
+
+The confusion itself was a legitimate finding, though, and it was not about the
+members. A straightened corridor was being drawn as a grey band with a thin
+dashed line somewhere else on the map, so the band read as a *chart's plot
+background* rather than as the corridor, and anything inside it read as noise
+in an axis. The fix was to the ghost, not the members: the true path now carries
+the corridor's own width, faintly, so the strip is visibly the same shape drawn
+straight. **A cartogram has to show what it is a cartogram of** — F-28 said
+that about the path, and the path alone was not enough.
+
+The two frames are identical until an anchor is flattened, which is why nothing
+above the renderer has to know about the distinction, and why it can be a style
+token rather than a pipeline stage.
+
+### F-33. A field's cells tessellate and its lenses do not
+
+Recorded 2026-09-10, from a reader's question about the continuum: where is the
+boundary of each circle, does it fill the space, is it a Delaunay triangulation?
+
+None of the above, and the question was better than the implementation. A field
+puts its centres on a **hexagonal lattice** and gives each one a **disc** of
+`spacing × packing`. There is no triangulation and no Voronoi partition of the
+data; the hexagon is only implied, as the set of ground nearer this centre than
+any other.
+
+So there are two shapes per cell and they are not the same shape:
+
+- the **disc** is the selection — the boundary that actually decided what this
+  lens counted;
+- the **hexagon** is the lattice cell — what tessellates, and what no lens ever
+  selected.
+
+At the default packing (`TOUCHING`, 0.5) the disc is exactly *inscribed* in the
+hexagon: they agree at six points and nowhere else, and the corners are outside
+every disc. A hexagonal lattice gives each centre `(√3/2)·s²` of ground and a
+touching disc covers `π·(s/2)²` of it, so **coverage is π/(2√3) ≈ 90.7%** and
+about **9% of the map is in no lens at all**. Anything standing in those curved
+triangles is counted nowhere. Push packing past `1/√3 ≈ 0.577` and it inverts:
+the discs overlap, coverage exceeds 1, and members are counted twice.
+
+Neither is a defect — both are the ordinary consequence of sampling a plane
+with discs — but both were **invisible**, because the field drew no boundary at
+all (`selectionRadiusPx: 0`). A glyph map with no cell edges reads as though it
+partitions the ground, which is the one thing it does not do.
+
+Fixed by making it visible rather than by changing it. `cells` draws the disc,
+the hexagon, or both, and `stats.coverage` reports the number. Drawing only the
+hexagon would be the comfortable lie — it looks like a tessellation, so it reads
+as though every place is in exactly one cell — which is why the two are separate
+values rather than one "show cells" toggle.
+
+Two smaller things fell out. The repaint cull was sized on the ring, which is
+just over half a cell, so cell outlines were clipped near the edge of the
+viewport until it was sized on whichever is larger. And cell outlines are
+deliberately **not** shed by level of detail: they are asked for explicitly, and
+at four hundred cells the honeycomb is exactly the thing being asked about.
+
+The general lesson is the one [F-19](#f-19-a-field-needs-one-baseline-not-one-per-cell)
+started: **a field inherits every one of a lens's choices and makes them harder
+to see.** One lens with a dashed boundary is obviously a disc over a map; four
+hundred of them with no boundary look like a partition of it.
+
+### F-34. The lattice is an axis, and the choice costs measurable ground
+
+Recorded 2026-09-11, prompted by the obvious follow-up to F-33: if the hexagon
+is only one tiling, why is it the only one?
+
+No good reason, and there are exactly three regular tilings. Naming them is the
+first hazard, because the tiling and the point arrangement are **duals** and
+the words collide:
+
+| `kind` | Cell | The points are | Neighbours |
+| --- | --- | --- | --- |
+| `hex` | hexagon | a *triangular* lattice | 6 |
+| `square` | square | a square lattice | 4 |
+| `triangle` | triangle | a *honeycomb* — two interleaved triangular lattices | 3 |
+
+The library names them after the **cell**, because that is what a reader sees.
+The third is the one that surprises: triangular cells come from a honeycomb
+arrangement of centres, which is what makes it a pair of interleaved lattices
+rather than one.
+
+Keeping `spacing` meaning "distance to a nearest neighbour" makes one fact true
+of all three, and it is what lets everything downstream stay ignorant of which
+is in use: **the disc that just touches its neighbours is exactly inscribed in
+the cell**, at `spacing / 2`, for every tiling.
+
+What differs is how much of the cell that disc covers, and the spread is much
+larger than intuition suggests:
+
+| Cell | Coverage at touching | |
+| --- | --- | --- |
+| hexagon | `π/(2√3)` | 90.7% |
+| square | `π/4` | 78.5% |
+| triangle | `π/(3√3)` | 60.5% |
+
+So the lattice sets a **ceiling on how much ground a field can reach without
+counting anything twice**, and that ceiling is the reason to choose one. It
+also retrospectively justifies the hexagonal default, which until now was
+justified only by "it is what the gridded-glyphmap work uses".
+
+Two things the build corrected:
+
+- A triangle has no half-turn symmetry, so the honeycomb's two sublattices
+  point opposite ways. Cells carry their own rotation rather than reading it
+  from the tiling, or they cannot tile.
+- `spacingForCount` inverted a count using a constant fitted to hexagons, which
+  gave squares a quarter fewer cells than asked for. It now refines the
+  analytic estimate by counting — the count falls monotonically with spacing,
+  so it is a bisection. That matters more than it sounds: **comparing two
+  lattices is only fair at the same count**, and the axis exists to be
+  compared.
+
+### F-35. Relaxation is the lattice for a shape rather than a plane
+
+Recorded 2026-09-11. Proof of concept, at the reader's suggestion and with
+their scope: the space this opens is much larger than what is built here.
+
+Every lattice in F-34 assumes the study area is the whole plane. Real ones are
+shapes — a city boundary, a catchment, a park — and clipping a lattice to one
+leaves the edge cells sliced arbitrarily, each holding a different and
+meaningless amount of ground. That is a real defect and not a cosmetic one: an
+edge cell's count is a fact about where the lattice happened to fall.
+
+**Lloyd's algorithm** answers the same question the lattice does — *where do
+the centres go?* — for a region that has a boundary. Scatter points, repeatedly
+move each to the centroid of the ground nearest it, and they settle into a
+centroidal Voronoi tessellation: evenly spaced, and filling the shape exactly.
+The cells are not congruent, which is the price, and they tile the polygon with
+no gaps and no overlaps, which is what a clipped lattice cannot do at all.
+
+Two implementation choices worth recording, because they pull in opposite
+directions:
+
+- **The assignment step is sampled, not triangulated.** A real implementation
+  builds a Delaunay triangulation; this walks a sample grid and takes the
+  nearest site. It converges to the same place, is a few dozen lines instead of
+  a few thousand, and keeps the zero-dependency core. It costs
+  O(passes × samples × sites), which is why it is memoised per shape rather
+  than recomputed per zoom.
+- **The cells themselves are exact.** A Voronoi cell is *by definition* the
+  intersection of one half-plane per rival, so clipping the boundary polygon
+  against each bisector is the definition rather than an approximation. O(n²)
+  in the sites, and at the counts a field uses that is not worth optimising.
+
+Three things only showed up once it ran:
+
+- A cell that wraps around a **concavity** has a centroid outside the shape it
+  belongs to, so sites escaped the polygon. Every sample is inside by
+  construction, so the nearest sample is the closest legal place to stand.
+- The convergence tolerance was a hundredth of a *sample step* — a precision
+  the discretisation cannot resolve, so it never reported convergence.
+  Expressed against the spacing being solved for, it settles in forty-odd
+  passes. **A tolerance belongs to the quantity being solved for, not to the
+  machinery solving it.**
+- Lloyd converges linearly, so a cap of 32 passes stopped it just short. It
+  exits early the moment it settles, so a higher cap costs nothing when it is
+  not needed.
+
+What this opens and does not answer: whether cells should be **weighted** by
+data density rather than area (a capacity-constrained Voronoi, which would give
+every lens a similar number of members instead of a similar amount of ground);
+whether the lens radius should follow each cell's own nearest-neighbour
+distance rather than one field-wide spacing; and whether an irregular lattice
+costs the reader the very thing a regular one buys, which is that every glyph
+is comparable because every cell is identical. That last is the question that
+matters and none of this settles it.
+
 ---
 
 ## Open questions

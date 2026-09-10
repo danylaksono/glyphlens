@@ -157,6 +157,10 @@ function bindControls() {
     lens.update({ marks: { structure: e.target.value } });
   });
 
+  $('structure-frame').addEventListener('change', (e) => {
+    lens.update({ marks: { structureFrame: e.target.value }, animate: false });
+  });
+
   $('normalisation').addEventListener('change', (e) => {
     lens.update({ normalisation: { mode: e.target.value } });
   });

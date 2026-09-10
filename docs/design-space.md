@@ -390,6 +390,18 @@ These disagree in the case that matters. Provision balanced by *count* but not b
 other — has `sidedness = 0` and a clearly non-zero `bias`. Reporting either
 alone would hide it.
 
+Straightening the anchor (§3.4b) splits this layer in two, because it moves the
+unit. `marks.structureFrame` says which the members belong to: `unit` (default)
+draws them wherever the unit went, keeping every member's true chainage and
+offset and putting them back *through* their own aggregate; `geographic` leaves
+them on the true path, so the strip carries only the aggregates and the leaders
+tie the two together. The frames are identical until something is unrolled.
+
+The default is not the intuitive answer and is the better one: on a bent route
+"left of travel" rotates with every bend, and one-sidedness — the reading this
+axis exists for — is far easier to see on a straight band where left is always
+up ([F-32](findings.md#f-32-a-straightened-anchor-splits-the-within-unit-layer-in-two)).
+
 One-sided provision along a river, a railway or a single-sided main road is
 common and analytically important, and a count for that stretch erases it
 entirely. See [F-15](findings.md#f-15-a-corridor-has-a-second-axis-a-disc-does-not).
@@ -452,6 +464,44 @@ be added, and neither is a lens concept: a hexagonal lattice for the centres,
 and a spatial index so a field of *m* lenses over *n* features does not cost
 O(n·m). The three preconditions recorded in
 [F-2](findings.md#f-2-what-the-continuum-needs-from-the-core) all paid off.
+
+**The lattice tessellates and the lenses do not**, which is worth stating
+plainly because a glyph map looks like a partition. Centres sit on a lattice;
+each selects a *disc* of `spacing × packing`. At the default packing the discs
+merely touch, so the cell's corners belong to no lens; above `1/√3` they
+overlap and double-count. `cells` draws the disc, the implied cell or both, and
+`stats.coverage` reports the ratio — because neither the gaps nor the overlaps
+are visible otherwise
+([F-33](findings.md#f-33-a-fields-cells-tessellate-and-its-lenses-do-not)).
+
+**Which lattice is itself an axis**, and not a free one. There are three regular
+tilings, named here after the cell rather than the point arrangement they are
+dual to:
+
+| `lattice` | Cell | Points are | Neighbours | Coverage at touching |
+|---|---|---|---|---|
+| `hex` | hexagon | a triangular lattice | 6 | `π/(2√3)` = 90.7% |
+| `square` | square | a square lattice | 4 | `π/4` = 78.5% |
+| `triangle` | triangle | a honeycomb — two interleaved lattices | 3 | `π/(3√3)` = 60.5% |
+
+`spacing` means the same thing throughout — the distance to a nearest
+neighbour — which makes the touching disc exactly inscribed in the cell for all
+three, and is what lets every stage downstream stay ignorant of the choice. What
+the choice buys is the ceiling on how much ground a field can reach without
+counting anything twice, which is also the belated justification for the
+hexagonal default
+([F-34](findings.md#f-34-the-lattice-is-an-axis-and-the-choice-costs-measurable-ground)).
+
+**A fourth, for regions rather than planes.** Every regular lattice assumes the
+study area is unbounded; clipping one to a real boundary slices its edge cells
+into arbitrary fragments. `lattice: 'relaxed'` runs Lloyd's algorithm inside a
+polygon instead, settling the centres into a centroidal Voronoi tessellation —
+evenly spaced, cells filling the shape exactly, and no two congruent. Built as
+a proof of concept; what it opens (density-weighted cells, per-cell radii, and
+whether an irregular lattice costs the comparability a regular one buys) is
+recorded in
+[F-35](findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane)
+and not explored.
 
 Two things it settled:
 
@@ -533,12 +583,12 @@ As of v0.1, against the axes above.
 | Anchor | ring, arc, straight axis (`unroll`), straightened corridor, `at: 'auto'` seam | — |
 | Marks | `bar`, `disc`, `rose`; `orient: normal / up / upright` | `wedge`, `spark`, `stream` |
 | Association | `adjacency`, `leader` (`auto` / always / hover), brush hooks, displacement indicator | `colour` ramps |
-| Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity | — |
+| Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity; `structureFrame` | — |
 | Curves | circle, arc, polyline (open + closed), marks placed on any | — |
 | Routes | GeoJSON import, node editing, simplification to a budget | — |
-| Continuum | hex lattice, spatial index, fields of lenses, level of detail | small-multiples layout (non-geographic) |
+| Continuum | hex / square / triangular lattices, Lloyd-relaxed lattices in a polygon, spatial index, fields of lenses, level of detail, cell boundaries + coverage | small-multiples layout (non-geographic) |
 
-`examples/gallery.html` shows seventeen of these combinations side by side on one
+`examples/gallery.html` shows eighteen of these combinations side by side on one
 dataset, each captioned with the path it takes through the pipeline. It is the
 most direct evidence for the framework's central claim — that these are one
 object with different arguments rather than a set of separate techniques — and

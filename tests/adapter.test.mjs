@@ -15,7 +15,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LensOverlay } from '../src/adapters/maplibre.js';
+import { LensOverlay, FieldOverlay } from '../src/adapters/maplibre.js';
 
 const SCALE = 4000;
 const ORIGIN = [110.3695, -7.7956];
@@ -49,6 +49,7 @@ function stubEnvironment() {
 
   const map = {
     getContainer: () => container,
+    getCenter: () => ({ toArray: () => [...ORIGIN] }),
     on(name, fn) { listeners.set(name, fn); },
     off() {},
     dragPan: { enable() {}, disable() {} },
@@ -323,4 +324,33 @@ test('hovering a mark repaints, because something is now drawn from it', () => {
   lens._pointerMove(down(20, 20));
   lens._pointerMove(down(22, 22));
   assert.equal(paints, 0);
+});
+
+test('a field can show where one cell ends and the next begins', () => {
+  const { map } = stubEnvironment();
+  const field = new FieldOverlay(map, {
+    center: ORIGIN,
+    data: PLACES,
+    getPosition: (f) => [f.lng, f.lat],
+    coverRadius: 1200,
+    count: 12,
+    minCount: 1,
+    binning: { mode: 'angular', bins: 8 },
+  });
+
+  const { cell, stats } = field.state();
+  // The disc is the selection; the cell is the ground nearest this centre.
+  // At the default packing the disc is inscribed in the cell, so it is
+  // smaller — by exactly the ratio that leaves the corners uncovered.
+  assert.ok(cell.disc > 0 && cell.radius > cell.disc);
+  assert.ok(Math.abs(cell.disc / cell.radius - Math.sqrt(3) / 2) < 1e-9);
+  assert.ok(stats.coverage > 0.9 && stats.coverage < 0.91);
+  assert.equal(stats.kind, 'hex');
+
+  // Drawing them is a repaint, not a recompute: nothing about the field
+  // depends on whether its boundaries are visible.
+  const before = field.field;
+  field.setCells('both');
+  assert.equal(field.field, before);
+  assert.equal(field.options.cells, 'both');
 });

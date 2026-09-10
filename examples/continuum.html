@@ -56,10 +56,36 @@
 
     <details class="field group" id="display" open></details>
 
+    <label class="field">
+      <span>Lattice</span>
+      <select id="lattice">
+        <option value="hex" selected>Hexagonal cells (6 neighbours)</option>
+        <option value="square">Square cells (4 neighbours)</option>
+        <option value="triangle">Triangular cells (3 — a honeycomb)</option>
+      </select>
+      <p class="hint">There are three regular tilings and the choice is not free:
+         with touching discs they reach 91%, 79% and 60% of the ground. Watch the
+         coverage readout, not the picture.</p>
+    </label>
+
+    <label class="field">
+      <span>Cell boundaries</span>
+      <select id="cells">
+        <option value="" selected>None</option>
+        <option value="selection">The disc each lens counted</option>
+        <option value="lattice">The lattice cell (hexagon)</option>
+        <option value="both">Both</option>
+      </select>
+      <p class="hint">The lattice tessellates, but a lens selects a <em>disc</em>.
+         At the default packing the discs only touch, so the cell's corners are
+         in no lens at all.</p>
+    </label>
+
     <div class="readout">
       <div><strong id="stat-drawn">0</strong><em>lenses drawn</em></div>
       <div><strong id="stat-ring">0</strong><em>px ring</em></div>
       <div><strong id="stat-members">0</strong><em>places binned</em></div>
+      <div><strong id="stat-coverage">–</strong><em>ground covered</em></div>
     </div>
 
     <ul id="legend" class="legend"></ul>

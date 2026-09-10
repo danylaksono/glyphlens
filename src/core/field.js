@@ -16,52 +16,26 @@
  */
 
 import { computeLens } from './layout.js';
-import { EARTH_RADIUS, toRad } from './geo.js';
 import { bin } from './binning.js';
 import { profileOf } from './normalise.js';
+import { scaleAt, latticeCoverage } from './lattice.js';
 
-/** Metres per degree of longitude and latitude at a given latitude. */
-function scaleAt(lat) {
-  return [
-    (Math.PI / 180) * EARTH_RADIUS * Math.cos(toRad(lat)),
-    (Math.PI / 180) * EARTH_RADIUS,
-  ];
-}
-
-/**
- * A hexagonal lattice of centres covering a radius around a point.
- *
- * Hexagonal rather than square because it is what the gridded-glyphmap work
- * uses, and because every cell has six equidistant neighbours instead of a mix
- * of four near and four far — which matters once these are read as a surface.
- *
- * @param {object} options
- * @param {[number, number]} options.center  [lng, lat]
- * @param {number} options.radius            metres to cover from the centre
- * @param {number} options.spacing           metres between adjacent centres
- * @returns {Array<[number, number]>} centres, ordered top-left to bottom-right
- */
-export function hexLattice({ center, radius, spacing }) {
-  if (!(spacing > 0) || !(radius > 0)) return [center];
-  const [kx, ky] = scaleAt(center[1]);
-  const rowHeight = spacing * (Math.sqrt(3) / 2);
-  const rows = Math.ceil(radius / rowHeight);
-  const cols = Math.ceil(radius / spacing);
-
-  const out = [];
-  for (let r = -rows; r <= rows; r++) {
-    const y = r * rowHeight;
-    // Odd rows shift by half a spacing: that offset is what makes it hexagonal
-    // rather than a rectangular grid with a different aspect ratio.
-    const shift = (r & 1) === 0 ? 0 : spacing / 2;
-    for (let c = -cols; c <= cols; c++) {
-      const x = c * spacing + shift;
-      if (Math.hypot(x, y) > radius) continue;
-      out.push([center[0] + x / kx, center[1] + y / ky]);
-    }
-  }
-  return out;
-}
+// Where the centres come from now lives in its own module, because there is
+// more than one answer: three regular tilings and a relaxed one
+// (docs/findings.md F-34, F-35). Re-exported here so a caller who thinks in
+// fields need not know that.
+export {
+  lattice,
+  hexLattice,
+  relaxedLattice,
+  voronoiCells,
+  nearestSpacing,
+  latticeCoverage,
+  cellRadius,
+  spacingForCount,
+  touchingRadius,
+  LATTICES,
+} from './lattice.js';
 
 /**
  * A uniform grid hash over the data, in a local metric frame.
@@ -115,12 +89,18 @@ export function spatialIndex(features, { getPosition, origin, cellSize }) {
  *
  * @param {object} config  everything `computeLens` takes, plus:
  * @param {Array<[number, number]>} config.centres
+ * @param {object[]} [config.cells]     one per centre, describing its cell —
+ *   carried through onto the layouts so the renderer can draw a boundary
+ *   without re-deriving the lattice
+ * @param {string} [config.kind='hex']  which lattice the centres came from
  * @param {number} [config.minCount=1]  skip lenses holding fewer members than this
  * @returns {{ lenses: object[], stats: object }}
  */
 export function computeField(config) {
   const {
     centres = [],
+    cells = null,
+    kind = 'hex',
     data = [],
     getPosition = (f) => [f.lng ?? f.lon, f.lat],
     selection = { type: 'disc', radius: 400 },
@@ -149,11 +129,11 @@ export function computeField(config) {
   let members = 0;
   let skipped = 0;
 
-  for (const centre of centres) {
+  centres.forEach((centre, i) => {
     const candidates = index.near(centre, radius);
     if (candidates.length < minCount) {
       skipped++;
-      continue;
+      return;
     }
     const layout = computeLens({
       ...config,
@@ -164,11 +144,13 @@ export function computeField(config) {
     });
     if (layout.stats.count < minCount) {
       skipped++;
-      continue;
+      return;
     }
     members += layout.stats.count;
-    lenses.push(layout);
-  }
+    // The cell rides on the layout because lenses are dropped as they are
+    // computed, so their indices stop matching the centres they came from.
+    lenses.push(cells?.[i] ? { ...layout, cell: cells[i] } : layout);
+  });
 
   return {
     lenses,
@@ -180,6 +162,11 @@ export function computeField(config) {
       members,
       spacing: config.spacing ?? null,
       radius,
+      kind,
+      // What the lattice does with the ground between its discs — see
+      // `latticeCoverage`. Null when the caller supplied centres directly and
+      // there is no spacing to reason about.
+      coverage: latticeCoverage(radius, config.spacing, kind),
     },
   };
 }
@@ -200,20 +187,16 @@ export function fieldBaseline(data, config) {
 }
 
 function emptyStats() {
-  return { centres: 0, drawn: 0, skipped: 0, members: 0, spacing: null, radius: 0 };
-}
-
-/**
- * Spacing that yields roughly `count` lenses over a circle of `radius`.
- *
- * The continuum control is more legible as "how many" than "how far apart", but
- * spacing is what the lattice actually takes, so this inverts it: a hexagonal
- * lattice packs about `1.103 · area / spacing²` centres into a given area.
- */
-export function spacingForCount(count, radius) {
-  if (!(count > 0) || !(radius > 0)) return radius;
-  const area = Math.PI * radius * radius;
-  return Math.sqrt((1.103 * area) / count);
+  return {
+    centres: 0,
+    drawn: 0,
+    skipped: 0,
+    members: 0,
+    spacing: null,
+    radius: 0,
+    kind: 'hex',
+    coverage: null,
+  };
 }
 
 /** Ratio of lens radius to lattice spacing at which discs just touch. */

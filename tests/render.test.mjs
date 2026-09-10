@@ -379,3 +379,85 @@ test('level of detail measures the drawing, not the ring', () => {
   assert.equal(dots(0), 0);
   assert.ok(dots(1) > 4);
 });
+
+// ------------------------------------------------- the within-unit frame
+
+test('the within-unit layer follows the chart or stays on the route', () => {
+  const layout = corridorLens();
+  const pts = [[120, 80], [260, 300], [300, 520]];
+  const straight = straightenPath(pts, 1);
+  const curve = polylineCurve(straight, { closed: false });
+
+  const members = (structureFrame) => {
+    const ctx = recorder();
+    new LensRenderer({ compass: false }).draw(
+      ctx,
+      { ...layout, marks: { ...layout.marks, structure: 'inclusions', structureFrame } },
+      {
+        cx: pts[0][0],
+        cy: pts[0][1],
+        selectionRadiusPx: 0,
+        corridorHalfWidthPx: 40,
+        curve,
+        ghost: pts,
+        unroll: 1,
+        association: { mode: 'adjacency' },
+      },
+    );
+    // Members are the only thing drawn as small filled circles.
+    return ctx.calls
+      .filter(([name, , , r]) => name === 'arc' && r > 0 && r < 3)
+      .map(([, x, y]) => [x, y]);
+  };
+
+  const inStrip = members('unit');
+  const onRoute = members('geographic');
+  assert.ok(inStrip.length > 10 && onRoute.length === inStrip.length);
+
+  const near = (p, line) => {
+    let best = Infinity;
+    for (let i = 0; i < line.length - 1; i++) {
+      const [ax, ay] = line[i];
+      const [bx, by] = line[i + 1];
+      const dx = bx - ax;
+      const dy = by - ay;
+      const u = Math.min(1, Math.max(0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / (dx * dx + dy * dy)));
+      best = Math.min(best, Math.hypot(p[0] - (ax + dx * u), p[1] - (ay + dy * u)));
+    }
+    return best;
+  };
+  // Each set is inside the band it was drawn against — that is the claim.
+  for (const p of inStrip) assert.ok(near(p, straight) <= 41, `${p} outside the strip`);
+  for (const p of onRoute) assert.ok(near(p, pts) <= 41, `${p} outside the route`);
+
+  // And the two really are different places: the route leaves the strip, so
+  // some members have to leave it too. (Only some — where the straightened
+  // route still runs through its own true position, the frames agree.)
+  const farFromStrip = onRoute.filter((p) => near(p, straight) > 41).length;
+  const farFromRoute = inStrip.filter((p) => near(p, pts) > 41).length;
+  assert.ok(farFromStrip > 0, 'geographic members never left the strip');
+  assert.ok(farFromRoute > 0, 'strip members never left the route');
+});
+
+test('the two frames are the same thing until an anchor is straightened', () => {
+  const layout = corridorLens();
+  const pts = [[120, 80], [260, 300], [300, 520]];
+  const paint = (structureFrame) => {
+    const ctx = recorder();
+    new LensRenderer({ compass: false }).draw(
+      ctx,
+      { ...layout, marks: { ...layout.marks, structure: 'both', structureFrame } },
+      {
+        cx: pts[0][0],
+        cy: pts[0][1],
+        selectionRadiusPx: 0,
+        corridorHalfWidthPx: 40,
+        curve: polylineCurve(pts, { closed: false }),
+        ghost: null,
+        unroll: 0,
+      },
+    );
+    return ctx.calls;
+  };
+  assert.deepEqual(paint('unit'), paint('geographic'));
+});

@@ -22,8 +22,12 @@ import {
 import { normalise, profileOf } from '../src/core/normalise.js';
 import { computeLens } from '../src/core/layout.js';
 import {
-  hexLattice, spatialIndex, computeField, fieldBaseline, spacingForCount,
+  spatialIndex, computeField, fieldBaseline, TOUCHING,
 } from '../src/core/field.js';
+import {
+  lattice, hexLattice, relaxedLattice, voronoiCells, nearestSpacing,
+  latticeCoverage, cellRadius, spacingForCount, touchingRadius, LATTICES,
+} from '../src/core/lattice.js';
 import { resolveStyle, resolveLod } from '../src/render/style.js';
 import {
   circularStats,
@@ -1310,4 +1314,248 @@ test('a corridor lens is unchanged by how its anchor is later drawn', () => {
   });
   assert.ok(layout.bins.length > 0);
   assert.ok(layout.bins.every((b) => b.t >= 0 && b.t <= 1));
+});
+
+// ------------------------------------------------------- the lattice's cells
+
+test('the lattice really is a lattice: every centre has six at one spacing', () => {
+  // The hexagon drawn as a cell is only the Voronoi cell if this holds.
+  const spacing = 400;
+  const centres = hexLattice({ center: [110.37, -7.79], radius: 2000, spacing });
+  const xy = ([lng, lat]) => [lng * 111320 * Math.cos((-7.79 * Math.PI) / 180), lat * 110540];
+  const pts = centres.map(xy);
+
+  // Take a centre well inside the lattice, so it has all six neighbours.
+  const mid = pts[Math.floor(pts.length / 2)];
+  const distances = pts
+    .map((p) => Math.hypot(p[0] - mid[0], p[1] - mid[1]))
+    .filter((d) => d > 1)
+    .sort((a, b) => a - b);
+  const nearest = distances.slice(0, 6);
+  for (const d of nearest) assert.ok(Math.abs(d - spacing) < spacing * 0.02, `${d}`);
+  // And the seventh is further off, so "six neighbours" is not an accident of
+  // the tolerance.
+  assert.ok(distances[6] > spacing * 1.5, `${distances[6]}`);
+});
+
+test('a lattice cell is inscribed by the touching disc', () => {
+  const spacing = 1000;
+  // Circumradius s/sqrt(3), inradius s/2 — and the inradius is exactly the
+  // radius at which neighbouring discs touch, which is what makes the default
+  // packing the one where disc and hexagon agree at six points and nowhere else.
+  assert.ok(Math.abs(cellRadius(spacing) - spacing / Math.sqrt(3)) < 1e-9);
+  const inradius = cellRadius(spacing) * (Math.sqrt(3) / 2);
+  assert.ok(Math.abs(inradius - spacing * TOUCHING) < 1e-9);
+});
+
+test('coverage says what the lattice does with the ground between its discs', () => {
+  // Touching discs on a hexagonal lattice cover pi/(2*sqrt(3)) of the plane.
+  // The remaining ~9% is in no lens, and nothing standing there is counted.
+  const touching = latticeCoverage(1000 * TOUCHING, 1000);
+  assert.ok(Math.abs(touching - Math.PI / (2 * Math.sqrt(3))) < 1e-9);
+  assert.ok(touching > 0.9 && touching < 0.91);
+
+  // At the circumradius the discs cover everything and then some: the excess
+  // is double counting, not extra ground.
+  assert.ok(latticeCoverage(1000 / Math.sqrt(3), 1000) > 1);
+  // Below touching they pull apart fast — area goes as the square.
+  assert.ok(latticeCoverage(250, 1000) < touching / 3);
+  assert.equal(latticeCoverage(0, 1000), null);
+  assert.equal(latticeCoverage(500, 0), null);
+});
+
+test('a field reports its coverage alongside its counts', () => {
+  const data = Array.from({ length: 300 }, (_, i) => ({
+    lng: 110.37 + Math.cos(i * 2.4) * 0.01,
+    lat: -7.79 + Math.sin(i * 1.1) * 0.01,
+  }));
+  const spacing = spacingForCount(30, 1500);
+  const field = computeField({
+    centres: hexLattice({ center: [110.37, -7.79], radius: 1500, spacing }),
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: spacing * TOUCHING },
+    binning: { mode: 'angular', bins: 8 },
+    spacing,
+    minCount: 1,
+    ring: { radius: 40 },
+  });
+  assert.ok(Math.abs(field.stats.coverage - Math.PI / (2 * Math.sqrt(3))) < 1e-9);
+  // Supplying centres without a spacing leaves it unanswerable rather than
+  // guessed at.
+  const loose = computeField({
+    centres: [[110.37, -7.79]],
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: 400 },
+    ring: { radius: 40 },
+  });
+  assert.equal(loose.stats.coverage, null);
+});
+
+// -------------------------------------------------- the lattice as an axis
+
+const metric = (centres, lat = -7.79) => {
+  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
+  return centres.map(([lng, la]) => [lng * kx, la * 110540]);
+};
+
+/** Sorted distances from one interior point to every other. */
+function neighbourhood(centres) {
+  const pts = metric(centres);
+  const mid = pts[Math.floor(pts.length / 2)];
+  return pts
+    .map((p) => Math.hypot(p[0] - mid[0], p[1] - mid[1]))
+    .filter((d) => d > 1)
+    .sort((a, b) => a - b);
+}
+
+test('each lattice gives its points the neighbours its cell implies', () => {
+  // The dual: a hexagonal cell means six neighbours, a square four, a
+  // triangular cell three — that last being a honeycomb, which is the one that
+  // surprises. If this is wrong, the drawn cell is not the Voronoi cell.
+  for (const [kind, expected] of [['hex', 6], ['square', 4], ['triangle', 3]]) {
+    const spacing = 400;
+    const { centres } = lattice({ kind, center: [110.37, -7.79], radius: 3000, spacing });
+    const d = neighbourhood(centres);
+    for (let i = 0; i < expected; i++) {
+      assert.ok(Math.abs(d[i] - spacing) < spacing * 0.02, `${kind}[${i}] = ${d[i]}`);
+    }
+    // And the next one out is clearly further, so the count is not an artefact
+    // of the tolerance.
+    assert.ok(d[expected] > spacing * 1.2, `${kind}: ${expected + 1}th at ${d[expected]}`);
+  }
+});
+
+test('every lattice inscribes its touching disc in its own cell', () => {
+  // The one fact that lets the rest of the library ignore which lattice is in
+  // use: `spacing / 2` is the touching radius *and* the cell's inradius, for
+  // all three tilings.
+  const spacing = 1000;
+  for (const kind of ['hex', 'square', 'triangle']) {
+    const { sides } = LATTICES[kind];
+    const inradius = cellRadius(spacing, kind) * Math.cos(Math.PI / sides);
+    assert.ok(Math.abs(inradius - touchingRadius(spacing)) < 1e-9, kind);
+  }
+});
+
+test('the lattice sets the ceiling on how much ground a field can reach', () => {
+  // The reason the axis is worth having: at touching packing the three tilings
+  // are 91%, 79% and 60%, and nothing else about the field changes that.
+  const s = 1000;
+  const at = (kind) => latticeCoverage(touchingRadius(s), s, kind);
+  assert.ok(Math.abs(at('hex') - Math.PI / (2 * Math.sqrt(3))) < 1e-9);
+  assert.ok(Math.abs(at('square') - Math.PI / 4) < 1e-9);
+  assert.ok(Math.abs(at('triangle') - Math.PI / (3 * Math.sqrt(3))) < 1e-9);
+  assert.ok(at('hex') > at('square') && at('square') > at('triangle'));
+  // An unknown kind falls back rather than returning nonsense.
+  assert.equal(at('rhombus'), at('hex'));
+});
+
+test('a triangular lattice alternates the way its cells point', () => {
+  // A triangle has no half-turn symmetry, so the honeycomb's two sublattices
+  // must be drawn opposite ways or the cells cannot tile.
+  const { cells } = lattice({
+    kind: 'triangle', center: [110.37, -7.79], radius: 2000, spacing: 400,
+  });
+  const rotations = [...new Set(cells.map((c) => c.rotate))].sort((a, b) => a - b);
+  assert.deepEqual(rotations, [30, 90]);
+  assert.ok(cells.every((c) => c.sides === 3));
+});
+
+test('spacingForCount inverts each lattice against its own density', () => {
+  for (const kind of ['hex', 'square', 'triangle']) {
+    for (const count of [12, 60, 400]) {
+      const spacing = spacingForCount(count, 3000, kind);
+      const { centres } = lattice({ kind, center: [110.37, -7.79], radius: 3000, spacing });
+      // Within a quarter of the ask: the lattice is clipped to a circle, so
+      // exactness is not available, but the knob has to track.
+      assert.ok(
+        Math.abs(centres.length - count) < count * 0.25,
+        `${kind} wanted ${count}, got ${centres.length}`,
+      );
+    }
+  }
+});
+
+test('hexLattice is unchanged by the lattice axis existing', () => {
+  const args = { center: [110.37, -7.79], radius: 1500, spacing: 300 };
+  assert.deepEqual(hexLattice(args), lattice({ kind: 'hex', ...args }).centres);
+});
+
+// ------------------------------------------------ relaxation into a boundary
+
+// A deliberately awkward shape: concave, so a bounding box is no substitute
+// for the polygon, and a clipped regular lattice would slice its edge cells.
+const BOUNDARY = [[
+  [110.350, -7.800], [110.370, -7.812], [110.390, -7.800], [110.386, -7.775],
+  [110.372, -7.786], [110.358, -7.774],
+]];
+
+test('a relaxed lattice puts every centre inside the polygon', () => {
+  const { centres, spacing, converged } = relaxedLattice({ rings: BOUNDARY, count: 24 });
+  assert.equal(centres.length, 24);
+  for (const c of centres) assert.ok(pointInPolygon(c, BOUNDARY), `${c} escaped`);
+  assert.ok(spacing > 0);
+  assert.ok(converged);
+});
+
+test('relaxation is what makes the spacing even', () => {
+  const spread = (centres) => {
+    const d = nearestSpacing(centres);
+    const mean = d.reduce((s, v) => s + v, 0) / d.length;
+    return Math.sqrt(d.reduce((s, v) => s + (v - mean) ** 2, 0) / d.length) / mean;
+  };
+  const scattered = relaxedLattice({ rings: BOUNDARY, count: 30, iterations: 0 });
+  const relaxed = relaxedLattice({ rings: BOUNDARY, count: 30, iterations: 40 });
+  // Lloyd's whole purpose: the coefficient of variation of nearest-neighbour
+  // distance collapses.
+  assert.ok(spread(relaxed.centres) < spread(scattered.centres) * 0.6,
+    `${spread(relaxed.centres)} vs ${spread(scattered.centres)}`);
+});
+
+test('a relaxed lattice is deterministic, and steerable by its seed', () => {
+  const a = relaxedLattice({ rings: BOUNDARY, count: 16, seed: 7 });
+  const b = relaxedLattice({ rings: BOUNDARY, count: 16, seed: 7 });
+  assert.deepEqual(a.centres, b.centres);
+  const c = relaxedLattice({ rings: BOUNDARY, count: 16, seed: 8 });
+  assert.notDeepEqual(a.centres, c.centres);
+});
+
+test('relaxed cells tile the polygon exactly, which is the point of them', () => {
+  const { centres } = relaxedLattice({ rings: BOUNDARY, count: 20 });
+  const cells = voronoiCells(centres, BOUNDARY);
+  assert.equal(cells.length, 20);
+  for (const cell of cells) assert.ok(cell.length >= 3, 'a site got no ground');
+
+  // The cells' areas sum to the polygon's own — no gaps, no double cover.
+  // This is the property a clipped regular lattice cannot have.
+  const area = (ring) => {
+    let sum = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      sum += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    }
+    return Math.abs(sum) / 2;
+  };
+  const total = cells.reduce((s, c) => s + area(c), 0);
+  assert.ok(Math.abs(total - area(BOUNDARY[0])) < area(BOUNDARY[0]) * 1e-6,
+    `${total} vs ${area(BOUNDARY[0])}`);
+});
+
+test('each relaxed cell contains its own site and no other', () => {
+  const { centres } = relaxedLattice({ rings: BOUNDARY, count: 14, seed: 3 });
+  const cells = voronoiCells(centres, BOUNDARY);
+  centres.forEach((site, i) => {
+    assert.ok(pointInPolygon(site, [cells[i]]), `site ${i} outside its own cell`);
+    for (let j = 0; j < centres.length; j++) {
+      if (j === i) continue;
+      assert.ok(!pointInPolygon(centres[j], [cells[i]]), `site ${j} inside cell ${i}`);
+    }
+  });
+});
+
+test('relaxation degrades gracefully on nothing in particular', () => {
+  assert.deepEqual(relaxedLattice({ rings: [], count: 10 }).centres, []);
+  assert.deepEqual(relaxedLattice({ rings: BOUNDARY, count: 0 }).centres, []);
+  assert.deepEqual(voronoiCells([], BOUNDARY), []);
 });
