@@ -29,6 +29,12 @@ export const DEFAULT_STYLE = {
   // handles that shape it.
   ghostOpacity: 0.5,
   ghostBandOpacity: 0.5,   // the true corridor's width behind a straightened one
+  // Cell outlines for a field. Not shed by level of detail: they are asked for
+  // explicitly, and at high counts the honeycomb is exactly the thing being
+  // asked about.
+  cellStroke: 'rgba(20,20,25,0.4)',
+  cellWidth: 1,
+  cellOpacity: 0.55,
   nodeRadius: 4,
   nodeFill: 'rgba(255,255,255,0.9)',
 

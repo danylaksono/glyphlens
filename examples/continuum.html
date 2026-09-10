@@ -56,10 +56,24 @@
 
     <details class="field group" id="display" open></details>
 
+    <label class="field">
+      <span>Cell boundaries</span>
+      <select id="cells">
+        <option value="" selected>None</option>
+        <option value="selection">The disc each lens counted</option>
+        <option value="lattice">The lattice cell (hexagon)</option>
+        <option value="both">Both</option>
+      </select>
+      <p class="hint">The lattice is hexagonal, but a lens selects a <em>disc</em>.
+         At the default packing the discs only touch, so the hexagon's corners —
+         about 9% of the ground — are in no lens at all.</p>
+    </label>
+
     <div class="readout">
       <div><strong id="stat-drawn">0</strong><em>lenses drawn</em></div>
       <div><strong id="stat-ring">0</strong><em>px ring</em></div>
       <div><strong id="stat-members">0</strong><em>places binned</em></div>
+      <div><strong id="stat-coverage">–</strong><em>ground covered</em></div>
     </div>
 
     <ul id="legend" class="legend"></ul>

@@ -23,7 +23,9 @@
  */
 
 import { computeLens, lerpLayout } from '../core/layout.js';
-import { computeField, hexLattice, spacingForCount, TOUCHING } from '../core/field.js';
+import {
+  computeField, hexLattice, spacingForCount, cellRadius, TOUCHING,
+} from '../core/field.js';
 import { LensRenderer } from '../render/LensRenderer.js';
 import { destination, distance, pathLength } from '../core/geo.js';
 import { normaliseRings } from '../core/selection.js';
@@ -581,6 +583,9 @@ export class FieldOverlay {
       count: 60,
       coverRadius: 4000,
       packing: TOUCHING,
+      // `false` | 'selection' (the disc each lens actually counted) |
+      // 'lattice' (the hexagon of ground nearest this centre) | 'both'.
+      cells: false,
       minCount: 3,
       binning: { mode: 'angular', bins: 12 },
       normalisation: { mode: 'count' },
@@ -676,6 +681,9 @@ export class FieldOverlay {
     });
 
     this._ringRadius = ringRadius;
+    // Both cell shapes in pixels, so the painter needs no geometry of its own.
+    this._cellDiscPx = radius / mpp;
+    this._cellHexPx = cellRadius(spacing) / mpp;
     this.options.onChange?.(this.state());
     this.repaint();
     return this.field;
@@ -695,11 +703,28 @@ export class FieldOverlay {
     return this.update({ count: Math.max(1, Math.round(count)) });
   }
 
+  /**
+   * Show where one cell ends and the next begins: `'selection'` for the disc
+   * each lens actually counted, `'lattice'` for the hexagon of ground nearest
+   * this centre, `'both'`, or `false`.
+   *
+   * A repaint, not a recompute — the cells are a frame of reference, and
+   * nothing about the field depends on whether they are drawn.
+   */
+  setCells(cells) {
+    this.options.cells = cells;
+    this.repaint();
+    return this.field;
+  }
+
   state() {
     return {
       stats: this.field.stats,
       ringRadius: this._ringRadius,
       count: this.options.count,
+      // Both cell shapes in pixels, so a caller can report them without
+      // re-deriving the lattice.
+      cell: { disc: this._cellDiscPx, hex: this._cellHexPx },
     };
   }
 
@@ -709,7 +734,14 @@ export class FieldOverlay {
     ctx.clearRect(0, 0, this._css.w, this._css.h);
 
     const ring = this._ringRadius;
-    const pad = ring * 3;
+    const cells = this.options.cells;
+    const cell = cells ? {
+      disc: cells === 'selection' || cells === 'both' ? this._cellDiscPx : 0,
+      hex: cells === 'lattice' || cells === 'both' ? this._cellHexPx : 0,
+    } : null;
+    // Cull against the cell rather than the ring once one is drawn: a cell is
+    // nearly twice the ring's radius, so the old margin clipped its outline.
+    const pad = Math.max(ring, cell ? Math.max(cell.disc, cell.hex) : 0) * 3;
     for (const layout of this.field.lenses) {
       const p = this.map.project(layout.center);
       // Cheap cull: a field can hold thousands of lenses and most of them are
@@ -722,6 +754,7 @@ export class FieldOverlay {
         cy: p.y,
         ringRadius: ring,
         selectionRadiusPx: 0,
+        cell,
       });
     }
   }

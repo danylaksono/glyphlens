@@ -44,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (169 tests, no runtime dependencies)
+npm test        # node --test (174 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -201,6 +201,22 @@ Two things worth knowing. A field derives **one** shared baseline for `lq` and
 the renderer sheds chrome as rings shrink; below about ten pixels the glyph
 stops carrying multivariate information and the field reads as a density
 surface, which is the resolution limit of the technique rather than a bug.
+
+**The lattice tessellates; the lenses do not.** Centres sit on a hexagonal
+lattice, and each selects a *disc* of `spacing × packing` — there is no Voronoi
+or Delaunay partition of the data anywhere. At the default packing the discs
+merely touch, so they cover `π/(2√3) ≈ 90.7%` of the ground and the corners of
+each hexagon are in **no** lens; above `1/√3 ≈ 0.577` they overlap and count
+some places twice. Both are invisible unless you ask:
+
+```js
+field.setCells('both');     // 'selection' (the disc) · 'lattice' (the hexagon)
+field.state().stats.coverage;   // 0.907 at the default packing
+```
+
+Drawing only the hexagon would be the comfortable lie — it looks like a
+tessellation, so it reads as though every place is in exactly one cell — which
+is why the two are separate values rather than one toggle.
 
 ### Areal units: census-style geography
 

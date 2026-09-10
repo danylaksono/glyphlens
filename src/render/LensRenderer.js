@@ -84,6 +84,11 @@ export class LensRenderer {
     // read it against is just a chart (docs/findings.md F-28).
     if (frame.ghost?.length > 1) this._drawGhost(ctx, frame.ghost, frame.corridorHalfWidthPx);
 
+    // A field's cell, when the caller wants to see where one lens ends and the
+    // next begins. Under everything else, because it is a frame of reference
+    // rather than a reading.
+    if (frame.cell) this._drawCell(ctx, cx, cy, frame.cell);
+
     if (ringLike) {
       // A polygon selection supplies its own boundary; a disc, annulus or
       // sector is described by its radius.
@@ -301,6 +306,50 @@ export class LensRenderer {
     ctx.strokeStyle = s.boundaryStroke;
     ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Where a field's cell begins and ends.
+   *
+   * Two different shapes, and the difference is the point. The **disc** is the
+   * selection: the boundary that actually decided what this lens counted. The
+   * **hexagon** is the lattice cell — the ground closer to this centre than to
+   * any other — which is what tessellates, and which no lens ever selected.
+   *
+   * Drawing only the hexagon would be the comfortable lie: it looks like a
+   * tessellation, so it reads as though every place is in exactly one cell. At
+   * the default packing the discs merely touch, so the corners of the hexagon
+   * are in no lens at all (docs/findings.md F-33).
+   */
+  _drawCell(ctx, cx, cy, cell) {
+    const s = this._s ?? this.style;
+    ctx.save();
+    ctx.strokeStyle = s.cellStroke;
+    ctx.lineWidth = s.cellWidth ?? 1;
+    ctx.globalAlpha = s.cellOpacity ?? 0.55;
+
+    if (cell.hex > 0) {
+      // A regular hexagon with a vertex due north: the Voronoi cell of a
+      // lattice whose six neighbours sit at 0, 60, ... degrees.
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = ((30 + i * 60) / 180) * Math.PI;
+        const x = cx + Math.cos(a) * cell.hex;
+        const y = cy + Math.sin(a) * cell.hex;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    if (cell.disc > 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, cell.disc, 0, TAU);
+      ctx.setLineDash(s.boundaryDash);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 

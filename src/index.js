@@ -39,6 +39,8 @@ export {
   spatialIndex,
   fieldBaseline,
   spacingForCount,
+  latticeCoverage,
+  cellRadius,
   TOUCHING,
 } from './core/field.js';
 export {

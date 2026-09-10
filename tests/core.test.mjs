@@ -23,6 +23,7 @@ import { normalise, profileOf } from '../src/core/normalise.js';
 import { computeLens } from '../src/core/layout.js';
 import {
   hexLattice, spatialIndex, computeField, fieldBaseline, spacingForCount,
+  latticeCoverage, cellRadius, TOUCHING,
 } from '../src/core/field.js';
 import { resolveStyle, resolveLod } from '../src/render/style.js';
 import {
@@ -1310,4 +1311,81 @@ test('a corridor lens is unchanged by how its anchor is later drawn', () => {
   });
   assert.ok(layout.bins.length > 0);
   assert.ok(layout.bins.every((b) => b.t >= 0 && b.t <= 1));
+});
+
+// ------------------------------------------------------- the lattice's cells
+
+test('the lattice really is a lattice: every centre has six at one spacing', () => {
+  // The hexagon drawn as a cell is only the Voronoi cell if this holds.
+  const spacing = 400;
+  const centres = hexLattice({ center: [110.37, -7.79], radius: 2000, spacing });
+  const xy = ([lng, lat]) => [lng * 111320 * Math.cos((-7.79 * Math.PI) / 180), lat * 110540];
+  const pts = centres.map(xy);
+
+  // Take a centre well inside the lattice, so it has all six neighbours.
+  const mid = pts[Math.floor(pts.length / 2)];
+  const distances = pts
+    .map((p) => Math.hypot(p[0] - mid[0], p[1] - mid[1]))
+    .filter((d) => d > 1)
+    .sort((a, b) => a - b);
+  const nearest = distances.slice(0, 6);
+  for (const d of nearest) assert.ok(Math.abs(d - spacing) < spacing * 0.02, `${d}`);
+  // And the seventh is further off, so "six neighbours" is not an accident of
+  // the tolerance.
+  assert.ok(distances[6] > spacing * 1.5, `${distances[6]}`);
+});
+
+test('a lattice cell is inscribed by the touching disc', () => {
+  const spacing = 1000;
+  // Circumradius s/sqrt(3), inradius s/2 — and the inradius is exactly the
+  // radius at which neighbouring discs touch, which is what makes the default
+  // packing the one where disc and hexagon agree at six points and nowhere else.
+  assert.ok(Math.abs(cellRadius(spacing) - spacing / Math.sqrt(3)) < 1e-9);
+  const inradius = cellRadius(spacing) * (Math.sqrt(3) / 2);
+  assert.ok(Math.abs(inradius - spacing * TOUCHING) < 1e-9);
+});
+
+test('coverage says what the lattice does with the ground between its discs', () => {
+  // Touching discs on a hexagonal lattice cover pi/(2*sqrt(3)) of the plane.
+  // The remaining ~9% is in no lens, and nothing standing there is counted.
+  const touching = latticeCoverage(1000 * TOUCHING, 1000);
+  assert.ok(Math.abs(touching - Math.PI / (2 * Math.sqrt(3))) < 1e-9);
+  assert.ok(touching > 0.9 && touching < 0.91);
+
+  // At the circumradius the discs cover everything and then some: the excess
+  // is double counting, not extra ground.
+  assert.ok(latticeCoverage(1000 / Math.sqrt(3), 1000) > 1);
+  // Below touching they pull apart fast — area goes as the square.
+  assert.ok(latticeCoverage(250, 1000) < touching / 3);
+  assert.equal(latticeCoverage(0, 1000), null);
+  assert.equal(latticeCoverage(500, 0), null);
+});
+
+test('a field reports its coverage alongside its counts', () => {
+  const data = Array.from({ length: 300 }, (_, i) => ({
+    lng: 110.37 + Math.cos(i * 2.4) * 0.01,
+    lat: -7.79 + Math.sin(i * 1.1) * 0.01,
+  }));
+  const spacing = spacingForCount(30, 1500);
+  const field = computeField({
+    centres: hexLattice({ center: [110.37, -7.79], radius: 1500, spacing }),
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: spacing * TOUCHING },
+    binning: { mode: 'angular', bins: 8 },
+    spacing,
+    minCount: 1,
+    ring: { radius: 40 },
+  });
+  assert.ok(Math.abs(field.stats.coverage - Math.PI / (2 * Math.sqrt(3))) < 1e-9);
+  // Supplying centres without a spacing leaves it unanswerable rather than
+  // guessed at.
+  const loose = computeField({
+    centres: [[110.37, -7.79]],
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: 400 },
+    ring: { radius: 40 },
+  });
+  assert.equal(loose.stats.coverage, null);
 });

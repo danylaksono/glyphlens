@@ -2624,6 +2624,10 @@ var glyphlens = (function (exports) {
         members,
         spacing: config.spacing ?? null,
         radius,
+        // What the lattice does with the ground between its discs — see
+        // `latticeCoverage`. Null when the caller supplied centres directly and
+        // there is no spacing to reason about.
+        coverage: latticeCoverage(radius, config.spacing),
       },
     };
   }
@@ -2644,7 +2648,9 @@ var glyphlens = (function (exports) {
   }
 
   function emptyStats() {
-    return { centres: 0, drawn: 0, skipped: 0, members: 0, spacing: null, radius: 0 };
+    return {
+      centres: 0, drawn: 0, skipped: 0, members: 0, spacing: null, radius: 0, coverage: null,
+    };
   }
 
   /**
@@ -2662,6 +2668,35 @@ var glyphlens = (function (exports) {
 
   /** Ratio of lens radius to lattice spacing at which discs just touch. */
   const TOUCHING = 0.5;
+
+  /**
+   * Circumradius of a lattice cell — the Voronoi cell of the hexagonal lattice,
+   * which is a regular hexagon with one vertex due north.
+   *
+   * This is what *tessellates*, and it is emphatically **not** the unit. A lens
+   * selects a disc, so the hexagon is a statement about which centre is nearest,
+   * not about what any lens counted. Drawing one while the other decides
+   * membership is the whole hazard the two are worth separating for
+   * (docs/findings.md F-33).
+   */
+  const cellRadius = (spacing) => spacing / Math.sqrt(3);
+
+  /**
+   * How much of the lattice's area actually falls inside a lens.
+   *
+   * A hexagonal lattice of spacing `s` gives each centre `(sqrt(3)/2)·s²` of
+   * ground; a disc of radius `r` covers `pi·r²` of it. At the default packing —
+   * discs that touch their six neighbours — that ratio is `pi/(2·sqrt(3))`, so
+   * about **9% of the map is in no lens at all** and anything standing there is
+   * counted nowhere. Above 1 the discs overlap and members are counted twice.
+   *
+   * Neither is a bug, and both are invisible unless something says so, which is
+   * why this rides on the field's stats rather than in a comment.
+   */
+  function latticeCoverage(radius, spacing) {
+    if (!(radius > 0) || !(spacing > 0)) return null;
+    return (Math.PI * radius * radius) / ((Math.sqrt(3) / 2) * spacing * spacing);
+  }
 
   /**
    * Style tokens and presets.
@@ -2694,6 +2729,12 @@ var glyphlens = (function (exports) {
     // handles that shape it.
     ghostOpacity: 0.5,
     ghostBandOpacity: 0.5,   // the true corridor's width behind a straightened one
+    // Cell outlines for a field. Not shed by level of detail: they are asked for
+    // explicitly, and at high counts the honeycomb is exactly the thing being
+    // asked about.
+    cellStroke: 'rgba(20,20,25,0.4)',
+    cellWidth: 1,
+    cellOpacity: 0.55,
     nodeRadius: 4,
     nodeFill: 'rgba(255,255,255,0.9)',
 
@@ -3000,6 +3041,11 @@ var glyphlens = (function (exports) {
       // read it against is just a chart (docs/findings.md F-28).
       if (frame.ghost?.length > 1) this._drawGhost(ctx, frame.ghost, frame.corridorHalfWidthPx);
 
+      // A field's cell, when the caller wants to see where one lens ends and the
+      // next begins. Under everything else, because it is a frame of reference
+      // rather than a reading.
+      if (frame.cell) this._drawCell(ctx, cx, cy, frame.cell);
+
       if (ringLike) {
         // A polygon selection supplies its own boundary; a disc, annulus or
         // sector is described by its radius.
@@ -3217,6 +3263,50 @@ var glyphlens = (function (exports) {
       ctx.strokeStyle = s.boundaryStroke;
       ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.restore();
+    }
+
+    /**
+     * Where a field's cell begins and ends.
+     *
+     * Two different shapes, and the difference is the point. The **disc** is the
+     * selection: the boundary that actually decided what this lens counted. The
+     * **hexagon** is the lattice cell — the ground closer to this centre than to
+     * any other — which is what tessellates, and which no lens ever selected.
+     *
+     * Drawing only the hexagon would be the comfortable lie: it looks like a
+     * tessellation, so it reads as though every place is in exactly one cell. At
+     * the default packing the discs merely touch, so the corners of the hexagon
+     * are in no lens at all (docs/findings.md F-33).
+     */
+    _drawCell(ctx, cx, cy, cell) {
+      const s = this._s ?? this.style;
+      ctx.save();
+      ctx.strokeStyle = s.cellStroke;
+      ctx.lineWidth = s.cellWidth ?? 1;
+      ctx.globalAlpha = s.cellOpacity ?? 0.55;
+
+      if (cell.hex > 0) {
+        // A regular hexagon with a vertex due north: the Voronoi cell of a
+        // lattice whose six neighbours sit at 0, 60, ... degrees.
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = ((30 + i * 60) / 180) * Math.PI;
+          const x = cx + Math.cos(a) * cell.hex;
+          const y = cy + Math.sin(a) * cell.hex;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      if (cell.disc > 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, cell.disc, 0, TAU);
+        ctx.setLineDash(s.boundaryDash);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -4827,6 +4917,9 @@ var glyphlens = (function (exports) {
         count: 60,
         coverRadius: 4000,
         packing: TOUCHING,
+        // `false` | 'selection' (the disc each lens actually counted) |
+        // 'lattice' (the hexagon of ground nearest this centre) | 'both'.
+        cells: false,
         minCount: 3,
         binning: { mode: 'angular', bins: 12 },
         normalisation: { mode: 'count' },
@@ -4922,6 +5015,9 @@ var glyphlens = (function (exports) {
       });
 
       this._ringRadius = ringRadius;
+      // Both cell shapes in pixels, so the painter needs no geometry of its own.
+      this._cellDiscPx = radius / mpp;
+      this._cellHexPx = cellRadius(spacing) / mpp;
       this.options.onChange?.(this.state());
       this.repaint();
       return this.field;
@@ -4941,11 +5037,28 @@ var glyphlens = (function (exports) {
       return this.update({ count: Math.max(1, Math.round(count)) });
     }
 
+    /**
+     * Show where one cell ends and the next begins: `'selection'` for the disc
+     * each lens actually counted, `'lattice'` for the hexagon of ground nearest
+     * this centre, `'both'`, or `false`.
+     *
+     * A repaint, not a recompute — the cells are a frame of reference, and
+     * nothing about the field depends on whether they are drawn.
+     */
+    setCells(cells) {
+      this.options.cells = cells;
+      this.repaint();
+      return this.field;
+    }
+
     state() {
       return {
         stats: this.field.stats,
         ringRadius: this._ringRadius,
         count: this.options.count,
+        // Both cell shapes in pixels, so a caller can report them without
+        // re-deriving the lattice.
+        cell: { disc: this._cellDiscPx, hex: this._cellHexPx },
       };
     }
 
@@ -4955,7 +5068,14 @@ var glyphlens = (function (exports) {
       ctx.clearRect(0, 0, this._css.w, this._css.h);
 
       const ring = this._ringRadius;
-      const pad = ring * 3;
+      const cells = this.options.cells;
+      const cell = cells ? {
+        disc: cells === 'selection' || cells === 'both' ? this._cellDiscPx : 0,
+        hex: cells === 'lattice' || cells === 'both' ? this._cellHexPx : 0,
+      } : null;
+      // Cull against the cell rather than the ring once one is drawn: a cell is
+      // nearly twice the ring's radius, so the old margin clipped its outline.
+      const pad = Math.max(ring, cell ? Math.max(cell.disc, cell.hex) : 0) * 3;
       for (const layout of this.field.lenses) {
         const p = this.map.project(layout.center);
         // Cheap cull: a field can hold thousands of lenses and most of them are
@@ -4968,6 +5088,7 @@ var glyphlens = (function (exports) {
           cy: p.y,
           ringRadius: ring,
           selectionRadiusPx: 0,
+          cell,
         });
       }
     }
@@ -5001,6 +5122,7 @@ var glyphlens = (function (exports) {
   exports.binCross = binCross;
   exports.binRadial = binRadial;
   exports.binUnits = binUnits;
+  exports.cellRadius = cellRadius;
   exports.circleCurve = circleCurve;
   exports.circularMean = circularMean;
   exports.circularStats = circularStats;
@@ -5025,6 +5147,7 @@ var glyphlens = (function (exports) {
   exports.isotonic = isotonic;
   exports.isotonicBoundedSpan = isotonicBoundedSpan;
   exports.lateralStats = lateralStats;
+  exports.latticeCoverage = latticeCoverage;
   exports.lerpCyclic = lerpCyclic;
   exports.lerpLayout = lerpLayout;
   exports.markAxes = markAxes;

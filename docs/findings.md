@@ -1086,6 +1086,54 @@ The two frames are identical until an anchor is flattened, which is why nothing
 above the renderer has to know about the distinction, and why it can be a style
 token rather than a pipeline stage.
 
+### F-33. A field's cells tessellate and its lenses do not
+
+Recorded 2026-09-10, from a reader's question about the continuum: where is the
+boundary of each circle, does it fill the space, is it a Delaunay triangulation?
+
+None of the above, and the question was better than the implementation. A field
+puts its centres on a **hexagonal lattice** and gives each one a **disc** of
+`spacing × packing`. There is no triangulation and no Voronoi partition of the
+data; the hexagon is only implied, as the set of ground nearer this centre than
+any other.
+
+So there are two shapes per cell and they are not the same shape:
+
+- the **disc** is the selection — the boundary that actually decided what this
+  lens counted;
+- the **hexagon** is the lattice cell — what tessellates, and what no lens ever
+  selected.
+
+At the default packing (`TOUCHING`, 0.5) the disc is exactly *inscribed* in the
+hexagon: they agree at six points and nowhere else, and the corners are outside
+every disc. A hexagonal lattice gives each centre `(√3/2)·s²` of ground and a
+touching disc covers `π·(s/2)²` of it, so **coverage is π/(2√3) ≈ 90.7%** and
+about **9% of the map is in no lens at all**. Anything standing in those curved
+triangles is counted nowhere. Push packing past `1/√3 ≈ 0.577` and it inverts:
+the discs overlap, coverage exceeds 1, and members are counted twice.
+
+Neither is a defect — both are the ordinary consequence of sampling a plane
+with discs — but both were **invisible**, because the field drew no boundary at
+all (`selectionRadiusPx: 0`). A glyph map with no cell edges reads as though it
+partitions the ground, which is the one thing it does not do.
+
+Fixed by making it visible rather than by changing it. `cells` draws the disc,
+the hexagon, or both, and `stats.coverage` reports the number. Drawing only the
+hexagon would be the comfortable lie — it looks like a tessellation, so it reads
+as though every place is in exactly one cell — which is why the two are separate
+values rather than one "show cells" toggle.
+
+Two smaller things fell out. The repaint cull was sized on the ring, which is
+just over half a cell, so cell outlines were clipped near the edge of the
+viewport until it was sized on whichever is larger. And cell outlines are
+deliberately **not** shed by level of detail: they are asked for explicitly, and
+at four hundred cells the honeycomb is exactly the thing being asked about.
+
+The general lesson is the one [F-19](#f-19-a-field-needs-one-baseline-not-one-per-cell)
+started: **a field inherits every one of a lens's choices and makes them harder
+to see.** One lens with a dashed boundary is obviously a disc over a map; four
+hundred of them with no boundary look like a partition of it.
+
 ---
 
 ## Open questions

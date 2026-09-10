@@ -68,6 +68,14 @@ map.on('load', async () => {
       $('stat-drawn').textContent = state.stats.drawn.toLocaleString();
       $('stat-ring').textContent = Math.round(state.ringRadius);
       $('stat-members').textContent = state.stats.members.toLocaleString();
+      // The lattice is hexagonal and the selection is a disc, so the two do not
+      // agree about the ground between them. Below 100% some places are in no
+      // lens; above it, discs overlap and some are counted twice.
+      const cover = state.stats.coverage;
+      $('stat-coverage').textContent = cover ? `${Math.round(cover * 100)}%` : '–';
+      $('stat-coverage').title = cover > 1
+        ? 'Discs overlap: places in the overlap are counted by more than one lens.'
+        : 'The rest falls between the discs and is counted by no lens at all.';
     },
   });
 
@@ -78,6 +86,10 @@ map.on('load', async () => {
 });
 
 function bindControls() {
+  $('cells').addEventListener('change', (e) => {
+    field.setCells(e.target.value || false);
+  });
+
   // No ring control: a field's ring size comes from the lattice spacing, so
   // the slider would do nothing.
   mountDisplay($('display'), { map, lens: field, marks: [], ring: false });

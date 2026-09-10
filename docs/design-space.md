@@ -465,6 +465,15 @@ and a spatial index so a field of *m* lenses over *n* features does not cost
 O(n·m). The three preconditions recorded in
 [F-2](findings.md#f-2-what-the-continuum-needs-from-the-core) all paid off.
 
+**The lattice tessellates and the lenses do not**, which is worth stating
+plainly because a glyph map looks like a partition. Centres sit on a hexagonal
+lattice; each selects a *disc* of `spacing × packing`. At the default packing
+the discs merely touch, so they cover `π/(2√3) ≈ 90.7%` of the ground and the
+hexagon corners belong to no lens; above `1/√3` they overlap and double-count.
+`cells` draws the disc, the implied hexagon or both, and `stats.coverage`
+reports the ratio — because neither the gaps nor the overlaps are visible
+otherwise ([F-33](findings.md#f-33-a-fields-cells-tessellate-and-its-lenses-do-not)).
+
 Two things it settled:
 
 - A field must share **one** baseline. `lq` defaults to "relative to the lens's
@@ -548,7 +557,7 @@ As of v0.1, against the axes above.
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity; `structureFrame` | — |
 | Curves | circle, arc, polyline (open + closed), marks placed on any | — |
 | Routes | GeoJSON import, node editing, simplification to a budget | — |
-| Continuum | hex lattice, spatial index, fields of lenses, level of detail | small-multiples layout (non-geographic) |
+| Continuum | hex lattice, spatial index, fields of lenses, level of detail, cell boundaries + coverage | small-multiples layout (non-geographic) |
 
 `examples/gallery.html` shows seventeen of these combinations side by side on one
 dataset, each captioned with the path it takes through the pipeline. It is the

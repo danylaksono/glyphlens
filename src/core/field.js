@@ -180,6 +180,10 @@ export function computeField(config) {
       members,
       spacing: config.spacing ?? null,
       radius,
+      // What the lattice does with the ground between its discs — see
+      // `latticeCoverage`. Null when the caller supplied centres directly and
+      // there is no spacing to reason about.
+      coverage: latticeCoverage(radius, config.spacing),
     },
   };
 }
@@ -200,7 +204,9 @@ export function fieldBaseline(data, config) {
 }
 
 function emptyStats() {
-  return { centres: 0, drawn: 0, skipped: 0, members: 0, spacing: null, radius: 0 };
+  return {
+    centres: 0, drawn: 0, skipped: 0, members: 0, spacing: null, radius: 0, coverage: null,
+  };
 }
 
 /**
@@ -218,3 +224,32 @@ export function spacingForCount(count, radius) {
 
 /** Ratio of lens radius to lattice spacing at which discs just touch. */
 export const TOUCHING = 0.5;
+
+/**
+ * Circumradius of a lattice cell — the Voronoi cell of the hexagonal lattice,
+ * which is a regular hexagon with one vertex due north.
+ *
+ * This is what *tessellates*, and it is emphatically **not** the unit. A lens
+ * selects a disc, so the hexagon is a statement about which centre is nearest,
+ * not about what any lens counted. Drawing one while the other decides
+ * membership is the whole hazard the two are worth separating for
+ * (docs/findings.md F-33).
+ */
+export const cellRadius = (spacing) => spacing / Math.sqrt(3);
+
+/**
+ * How much of the lattice's area actually falls inside a lens.
+ *
+ * A hexagonal lattice of spacing `s` gives each centre `(sqrt(3)/2)·s²` of
+ * ground; a disc of radius `r` covers `pi·r²` of it. At the default packing —
+ * discs that touch their six neighbours — that ratio is `pi/(2·sqrt(3))`, so
+ * about **9% of the map is in no lens at all** and anything standing there is
+ * counted nowhere. Above 1 the discs overlap and members are counted twice.
+ *
+ * Neither is a bug, and both are invisible unless something says so, which is
+ * why this rides on the field's stats rather than in a comment.
+ */
+export function latticeCoverage(radius, spacing) {
+  if (!(radius > 0) || !(spacing > 0)) return null;
+  return (Math.PI * radius * radius) / ((Math.sqrt(3) / 2) * spacing * spacing);
+}
