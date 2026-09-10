@@ -34,6 +34,9 @@ const TAU = Math.PI * 2;
  * @param {object} [config.normalisation]             `{ mode, baseline }`
  * @param {object} [config.placement]                 `{ mode, morph, gap, groupGap }`
  * @param {object} [config.marks]                     `{ type, maxLength, barWidth, minWidth }`
+ * @param {object} [config.association]               `{ mode, threshold }` — how a mark
+ *   is tied back to what it summarises. Carried through untouched: association
+ *   is drawn, not solved.
  * @param {object} config.ring                        `{ radius }` in pixels
  * @param {(f:any)=>[number,number]} [config.getPosition]
  * @returns {object} layout
@@ -160,6 +163,10 @@ export function computeLens(config) {
     binning: binSpec,
     normalisation: { ...normSpec, mode: normSpec.mode ?? 'count' },
     marks: markSpec,
+    // The association stage computes nothing — a leader is drawn from
+    // quantities the binning and placement stages already produced. It rides
+    // on the layout so the renderer needs no second channel for it.
+    association: config.association,
     bins: laid.bins,
     scale: laid.scale,
     closed,

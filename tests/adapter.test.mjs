@@ -268,3 +268,59 @@ test('a corridor opens about its midpoint, a ring about its anchor', () => {
   const auto = corridorLens(map, { anchor: { unroll: 1, at: 'auto' } });
   assert.equal(auto._anchor(0.5, { seam: false }).at, 0.5);
 });
+
+test('the frame carries what a leader needs to place its target', () => {
+  const { map } = stubEnvironment();
+  const lens = new LensOverlay(map, {
+    center: ORIGIN,
+    selection: { type: 'disc', radius: 800 },
+    data: PLACES,
+    getPosition: (f) => [f.lng, f.lat],
+    binning: { mode: 'angular', bins: 12 },
+    association: { mode: 'leader' },
+    animate: false,
+  });
+
+  const frame = lens.frame();
+  // Pixels per metre, so a leader's target sits at a real distance rather than
+  // a guessed one — and the unroll, so the renderer knows how much association
+  // the anchor has given away.
+  assert.ok(Math.abs(frame.scalePx - SCALE / 111320) < SCALE / 111320 * 0.02, `${frame.scalePx}`);
+  assert.equal(frame.unroll, 0);
+  lens.setUnroll(0.6);
+  assert.equal(lens.frame().unroll, 0.6);
+
+  // And the association config reaches the layout the renderer is handed.
+  assert.deepEqual(lens.target.association, { mode: 'leader' });
+});
+
+test('a corridor frame reports its own scale', () => {
+  const { map } = stubEnvironment();
+  const lens = corridorLens(map);
+  const frame = lens.frame();
+  assert.ok(frame.scalePx > 0);
+  assert.ok(Math.abs(frame.corridorHalfWidthPx / frame.scalePx - 400) < 1);
+});
+
+test('hovering a mark repaints, because something is now drawn from it', () => {
+  const { map } = stubEnvironment();
+  const lens = new LensOverlay(map, {
+    center: ORIGIN,
+    selection: { type: 'disc', radius: 800 },
+    data: PLACES,
+    getPosition: (f) => [f.lng, f.lat],
+    binning: { mode: 'angular', bins: 12 },
+    association: { mode: 'hover' },
+    animate: false,
+  });
+
+  let paints = 0;
+  const repaint = lens.repaint.bind(lens);
+  lens.repaint = () => { paints += 1; repaint(); };
+
+  // Nothing under the pointer, twice: the hover has not changed, so neither
+  // has the drawing.
+  lens._pointerMove(down(20, 20));
+  lens._pointerMove(down(22, 22));
+  assert.equal(paints, 0);
+});

@@ -256,15 +256,39 @@ the selection they are describing.
 
 ### 3.6 Association — `hAssoc`
 
-`adjacency` (default, and strengthened by necklace placement) · `leader` lines ·
+`adjacency` (free, and strengthened by necklace placement) · `leader` lines ·
 `colour` · `brush` (lens as a brush driving linked views).
 
-Adjacency was doing all the work here while every mark sat on a ring around its
-own selection. The anchor axis (§3.4b) is what makes `leader` load-bearing
-rather than decorative: association degrades continuously with `unroll`, and by
-the time the ring is a straight axis there is nothing left of it. The
-displacement tick is already drawn on the curve rather than at an angle, so it
-survives the unroll and is the obvious thing to grow into a leader.
+Adjacency is not an encoding so much as a piece of luck: a mark sitting on a
+ring around its own selection points at what it summarises without anything
+being drawn. Two things spend that luck, and they are the same thing by
+degrees — **placement**, which slides a mark off its bearing to avoid an
+overlap, and **the anchor** (§3.4b), which under `unroll` detaches the whole
+chart from the geography. So one encoding answers both.
+
+| `association.mode` | Draws a leader |
+|---|---|
+| `auto` (default) | where adjacency has gone: a displaced mark, or an opened anchor — fading in with `unroll` |
+| `leader` | always |
+| `hover` | only for the mark under the pointer |
+| `adjacency` | never; the displacement tick stands in |
+
+A leader runs from the mark to **the position placement tried to honour, at its
+members' own mean distance from the anchor**, in the lens's azimuthal frame —
+so its length *is* the association that was given away, and no map projection
+is involved. It refuses to draw where it would have to guess: a bin with no
+bearing (a distance band, a nominal slot) has no direction to point in, and a
+lens with no pixels-per-metre scale has no distance to point at.
+
+The trigger is the gap between where a mark is and where its data is, which is
+**not** the solver's reported displacement: `block` placement asks for a
+nominal slot, so the solver reports no displacement at all while every mark is
+as far from its bearing as it can be
+([F-31](findings.md#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency)).
+Measured properly, the morph of §3.2 gains a second reading: drag the angular
+axis from bearing back to category order and the leaders fade in as the bars
+leave their bearings, so what is being given up and what is compensating for it
+are visible in one gesture.
 
 ### 3.7 Effect scope
 
@@ -508,13 +532,13 @@ As of v0.1, against the axes above.
 | Placement | `necklace`, `block`, `morph`, `stacked`, `strip` (open curves) | — |
 | Anchor | ring, arc, straight axis (`unroll`), straightened corridor, `at: 'auto'` seam | — |
 | Marks | `bar`, `disc`, `rose`; `orient: normal / up / upright` | `wedge`, `spark`, `stream` |
-| Association | `adjacency`, brush hooks, displacement indicator | `leader` |
+| Association | `adjacency`, `leader` (`auto` / always / hover), brush hooks, displacement indicator | `colour` ramps |
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity | — |
 | Curves | circle, arc, polyline (open + closed), marks placed on any | — |
 | Routes | GeoJSON import, node editing, simplification to a budget | — |
 | Continuum | hex lattice, spatial index, fields of lenses, level of detail | small-multiples layout (non-geographic) |
 
-`examples/gallery.html` shows fifteen of these combinations side by side on one
+`examples/gallery.html` shows seventeen of these combinations side by side on one
 dataset, each captioned with the path it takes through the pipeline. It is the
 most direct evidence for the framework's central claim — that these are one
 object with different arguments rather than a set of separate techniques — and

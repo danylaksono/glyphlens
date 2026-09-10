@@ -7,7 +7,7 @@ the first JavaScript implementation of **necklace-map placement**.
 > position means *bearing*, not category order. A bar at 11 o'clock means the
 > data it summarises lies to the northwest.
 
-**Try it:** [gallery](examples/gallery.html) — fifteen points in the design space,
+**Try it:** [gallery](examples/gallery.html) — seventeen points in the design space,
 one dataset · [continuum](examples/continuum.html) — one lens to a gridded
 glyphmap on one slider · [ring lens](examples/) ·
 [corridor lens](examples/corridor.html) — shape a route or drop in a GeoJSON
@@ -44,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (156 tests, no runtime dependencies)
+npm test        # node --test (167 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -112,6 +112,7 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `marks.type` | `bar` · `disc` · `rose` | `disc` sizes by area (classic necklace); `rose` is a directional profile |
 | `marks.orient` | `normal` · `up` · `upright` | which way a mark grows: outward, screen-up, or vertical but never inward |
 | `marks.sizeBy` | `value` · `equal` | which reading owns size; roses default to `equal` |
+| `association.mode` | `auto` · `leader` · `hover` · `adjacency` | leader lines back to what a mark summarises; `auto` draws them where adjacency has gone |
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
 | `style.preset` | `paper` · `night` · `minimal` · `structure` · `forensic` | switchable at runtime |
 | `style` toggles | `showLabels` · `showValues` · `compass` · `dimExterior` · `ringRadius` · `labelGap` · `valueGap` | all live-updatable via `lens.update({ style })` |
@@ -145,6 +146,34 @@ Independently, `marks.orient` says which way a mark grows — `normal` (outward,
 the default), `up` (screen vertical, one shared baseline) or `upright`
 (vertical, but never growing back across the lens). `up` is what a bar chart
 does, and belongs with an open or unrolled anchor.
+
+### Leaders: putting the association back
+
+Adjacency is not really an encoding — it is luck. A mark on a ring around its
+own selection points at what it summarises for free, and two things spend that:
+placement sliding a mark off its bearing, and the anchor unrolling away from
+the map. A leader answers both.
+
+```js
+lens.update({ association: { mode: 'auto' } });   // the default
+```
+
+`auto` draws a leader wherever adjacency has gone — a displaced mark, or an
+opened anchor — and fades them in with `unroll`. `leader` always, `hover` only
+under the pointer, `adjacency` never.
+
+The line runs from the mark to **the position placement tried to honour, at its
+members' own mean distance from the anchor**, so its length is exactly the
+association that was given away. It is drawn in the lens's own azimuthal frame,
+so no projection is involved, and it declines to draw rather than guess: a
+distance-band or nominal-slot bin has no direction to point in, and a lens with
+no pixels-per-metre scale has no distance to point at.
+
+The trigger is the gap between where a mark is and where its data is — not the
+solver's reported displacement, which is zero under `block` placement even
+though every mark is as far from its bearing as it can be. So dragging the
+morph slider from bearing back to category order fades the leaders in as the
+bars leave their bearings.
 
 ### Fields: one lens, or a glyphmap
 

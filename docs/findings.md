@@ -957,17 +957,88 @@ strung along the curve instead of around a centre. They cross-fade with
 `unroll`, which is what makes the transition read as a change of anchor rather
 than a change of encoding.
 
-Building it exposed a real limit in the level-of-detail rule. Chrome is shed
-by ring radius (F-20), which is the right measure for a compass rose because a
-rose needs room *inside* the ring. It is the wrong measure for an axis, which
-needs only length — and length is exactly what the unroll preserves. A lens at
-40px radius unrolls into a 250px strip that reads perfectly well and was
-having its axis suppressed for being small.
+Building it exposed a real limit in the level-of-detail rule, and the first fix
+for that was wrong in an instructive way.
 
-So the axis has its own floor, on the curve's length rather than the ring's
-radius. Generalising: **a level-of-detail rule is about what a piece of chrome
-needs room for, and different chrome needs different room.** One scalar for
-"how big is this lens" was hiding two different questions.
+Chrome is shed by ring radius (F-20). A lens at 40px radius unrolls into a
+250px strip that reads perfectly well and was having its axis suppressed for
+being small, so the axis got its own floor, on the curve's length. That worked,
+and the stated moral was that different chrome needs different room.
+
+Then leader lines ([F-31](#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency))
+hit exactly the same wall, and a second special case would have been a pattern
+rather than a coincidence. The real error was in the measure, not in the rule:
+**level of detail is about how far the drawing reaches, and unrolling makes a
+lens bigger without changing its radius.** A closed ring wraps its whole length
+into a footprint of `2r`; the same length laid flat spans `2*pi*r`. So the
+radius is scaled towards its own half-length as the anchor opens —
+
+```
+effective = r * (1 + unroll * (pi - 1))
+```
+
+— an identity for every closed ring, so fields and default lenses are
+untouched, and the length floor and its token are gone. One measure, one rule,
+and the chrome that a strip has room for comes back on its own.
+
+### F-31. The leader is the residual of both things that break adjacency
+
+Recorded 2026-09-10.
+
+Association (`hAssoc`) had been free up to now, and that was luck rather than
+design: a mark sitting on a ring around its own selection points at what it
+summarises without anything being drawn. Two things spend that, and they turn
+out to be the same thing by degrees —
+
+- **placement**, which slides a mark off its true bearing to avoid an overlap;
+- **the anchor**, which under `unroll` detaches the whole chart from the
+  geography ([F-28](#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so)).
+
+So one encoding answers both, and the `auto` mode fades leaders in exactly as
+adjacency fades out: a mark that is still on its own bearing, on a closed ring,
+gets no line, and every mark gets one by the time the ring is a straight axis.
+
+**Where the leader points is the whole design.** Not at the rim, not at the
+mark's own position, but at *the position placement tried to honour, at the
+members' own mean distance from the anchor* — so the line is precisely the
+association that was given away, and its length is how much. It is drawn in the
+lens's azimuthal frame, so like inclusions it needs no map projection
+([F-12](#f-12-inclusions-are-drawn-in-the-lenss-own-frame-not-the-maps)).
+
+Two things it refuses to do, both for the same reason — a leader is a claim
+about where something is, and a guessed claim is worse than none:
+
+- **No bearing, no leader.** A distance-band or nominal-slot bin has no
+  direction. Its members *do* have a circular mean, and using that as a
+  fallback was the first implementation — but a distance band's members run all
+  the way round, so their mean direction is exactly the arbitrary number
+  [F-6](#f-6-a-categorys-mean-bearing-is-often-not-a-direction) warns about.
+  A confident line to a meaningless bearing is the worst thing on this list.
+- **No scale, no leader.** Without pixels per metre there is no honest distance
+  to place the target at, so a lens that cannot supply one — a field cell —
+  simply gets none.
+
+The find that made it work was that `bin.displacement` is the wrong measure to
+trigger on. That is the *solver's* residual: how far it had to move a mark from
+the position it was asked for. Under `block` placement it is asked for a
+nominal slot, so it reports zero displacement while every mark sits as far from
+its data as it can — 120 degrees away, in the demo — which is the layout where
+association is most missing. The leader therefore measures the gap itself,
+between where a mark is and where its data is, and the two agree exactly
+wherever the solver was the one doing the moving.
+
+That has a pleasing consequence for the morph
+([§3.2](design-space.md#32-binning--how-the-enclosed-set-is-decomposed)): drag
+the angular axis from bearing back to nominal order and the leaders **fade in
+as the bars leave their bearings**, so the encoding being given up and the
+encoding compensating for it are visible in the same gesture.
+
+It also answers [Q-2](#q-2-how-much-angular-displacement-is-acceptable) in
+part. Of the three options recorded there — cap it, encode it, indicate it —
+the answer is encode it, and the displacement tick that stood in for this is
+now drawn only where no leader replaced it. What stays open is the *policy*
+question: at what displacement a symbol should be dropped or merged rather than
+drawn with a longer line.
 
 ---
 
@@ -982,13 +1053,22 @@ geographic-angle rings, on tasks of the form "which direction should I walk for
 X" and "is provision here isotropic". Until then the claim stays framed as a
 design conjecture.
 
-### Q-2. How much angular displacement is acceptable?
+### Q-2. How much angular displacement is acceptable? — encoding answered
 
 Necklace placement moves a symbol off its true bearing to avoid overlap. There
 must be a point at which the position is misleading. Options: cap displacement
 and drop/merge symbols beyond it; encode displacement (e.g. a leader tick back
-to the true bearing); or show a residual indicator. **Currently unresolved** —
-the engine reports per-item displacement so a policy can be chosen later.
+to the true bearing); or show a residual indicator.
+
+The **encoding** half is answered by
+[F-31](#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency):
+a leader back to the position the mark was placed for, drawn wherever the gap
+exceeds a threshold, and generalised so it also covers the association lost by
+unrolling the anchor. The engine still reports per-item displacement.
+
+The **policy** half is still open: a leader makes a badly displaced symbol
+honest, not correct. At some gap the right answer is to merge two symbols or
+drop one, and nothing here says where that is.
 
 ### Q-3. Bearing from what?
 

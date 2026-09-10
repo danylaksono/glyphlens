@@ -57,6 +57,10 @@ export class LensOverlay {
     this.renderer = new LensRenderer(options.style);
     this.layout = null;
     this._drag = null;
+    // Null rather than undefined: a hover change is now a repaint, and an
+    // unset field would make the first pointer move over empty map count as
+    // one.
+    this._hovered = null;
     this._transition = null;
 
     this._mount();
@@ -150,6 +154,7 @@ export class LensOverlay {
       normalisation: o.normalisation,
       placement: curveLength ? { ...o.placement, curveLength } : o.placement,
       marks: o.marks,
+      association: o.association,
       structure: o.structure,
       areal: o.areal,
       ring: { radius: this.renderer.style.ringRadius },
@@ -315,16 +320,22 @@ export class LensOverlay {
       // strip keeps every member's chainage and offset and gives up its
       // position, which is a linear cartogram (docs/findings.md F-28).
       const drawn = straightenPath(pts, unroll, { at });
+      const halfWidthPx = Math.hypot(b.x - a.x, b.y - a.y);
       return {
         cx: pts[0][0],
         cy: pts[0][1],
         curve: polylineCurve(drawn, { closed: false }),
+        unroll,
         ghost: unroll > 0.02 ? pts : null,
         // A vertex on a straightened route is at a cartogram position, so it
         // stops being something you can meaningfully drag.
         nodes: this.options.draggable && unroll <= 0.02 ? pts : null,
-        corridorHalfWidthPx: Math.hypot(b.x - a.x, b.y - a.y),
+        corridorHalfWidthPx: halfWidthPx,
+        // Pixels per metre, which is what puts a leader's target at a real
+        // distance rather than a guessed one.
+        scalePx: halfWidthPx / (selection.width / 2),
         selectionRadiusPx: 0,
+        hovered: this._hovered?.key,
       };
     }
 
@@ -344,12 +355,18 @@ export class LensOverlay {
           const q = this.map.project(c);
           return [q.x, q.y];
         }));
+      // A polygon has no radius to derive a scale from, so it is measured
+      // directly. Without it a leader has no honest length.
+      const east = centre ? this.map.project(destination(centre, 90, 100)) : p;
       return {
         cx: p.x,
         cy: p.y,
         curve: anchorCurve(p.x, p.y),
+        unroll,
         selectionRings: rings,
         selectionRadiusPx: 0,
+        scalePx: Math.hypot(east.x - p.x, east.y - p.y) / 100,
+        hovered: this._hovered?.key,
       };
     }
 
@@ -357,11 +374,15 @@ export class LensOverlay {
     // Radius in pixels, measured along a real geodesic so it stays correct at
     // high latitudes rather than assuming a local metres-per-pixel constant.
     const edge = this.map.project(destination(this.options.center, 90, selection.radius));
+    const radiusPx = Math.hypot(edge.x - p.x, edge.y - p.y);
     return {
       cx: p.x,
       cy: p.y,
       curve: anchorCurve(p.x, p.y),
-      selectionRadiusPx: Math.hypot(edge.x - p.x, edge.y - p.y),
+      unroll,
+      selectionRadiusPx: radiusPx,
+      scalePx: selection.radius > 0 ? radiusPx / selection.radius : 0,
+      hovered: this._hovered?.key,
     };
   }
 
@@ -470,6 +491,9 @@ export class LensOverlay {
         this._hovered = bin;
         this.options.onHover?.(bin, e);
         this.canvas.style.cursor = bin ? 'pointer' : '';
+        // The hovered mark is now something the renderer draws from, so a
+        // change of hover is a repaint — once per change, not per move.
+        this.repaint();
       }
       return;
     }

@@ -50,10 +50,6 @@ export const DEFAULT_STYLE = {
   compass: true,
   compassColor: 'rgba(20,20,25,0.35)',
   tickLength: 5,
-  // Shortest anchor that still gets a bearing axis when the ring is unrolled.
-  // The rose is dropped by level of detail long before this, because it needs
-  // interior room and the axis needs only length.
-  axisFloor: 180,
 
   // Type
   font: '500 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif',
@@ -91,8 +87,23 @@ export const DEFAULT_STYLE = {
 
   // Displacement indicator — see docs/findings.md Q-2. A tick back to the true
   // bearing whenever placement has moved a mark more than this many degrees.
+  // Under the default association mode a leader replaces it, and this is the
+  // threshold that decides when one is drawn.
   displacementThreshold: 6,
   displacementColor: 'rgba(20,20,25,0.3)',
+
+  // Association (docs/design-space.md §3.6). `mode`: 'auto' draws a leader
+  // wherever adjacency has broken down — a displaced mark, or an anchor that
+  // has been opened — and fades them in with the unroll; 'leader' always;
+  // 'hover' only for the mark under the pointer; 'adjacency' never, leaving
+  // the displacement tick.
+  association: { mode: 'auto' },
+  leaders: true,          // level of detail shuts them off; see resolveLod
+  leaderColor: null,      // null = the mark's own colour
+  leaderOpacity: 0.5,
+  leaderWidth: 1,
+  leaderDot: 2,           // marker at the target end, px
+  leaderMinLength: 7,     // below this the leader says nothing adjacency didn't
 
   palette: CATEGORICAL,
   markColor: null, // single hue for bins with no category (bearing / distance)
@@ -147,13 +158,23 @@ export const PRESETS = {
  * The thresholds are deliberately coarse. Chrome either fits or it does not,
  * and interpolating it produces a band of sizes where everything is present and
  * nothing is legible.
+ *
+ * The size that matters is **how far the drawing reaches**, not the ring's
+ * radius, and unrolling the anchor separates the two: a closed ring wraps its
+ * whole length into a footprint of 2r, while the same length laid flat spans
+ * 2*pi*r. So the radius is scaled towards its own half-length as the anchor
+ * opens — an identity at `unroll = 0`, and the reason a small lens stops
+ * shedding chrome once it has been opened into a strip that has room for it
+ * (docs/findings.md F-30).
  */
-export function resolveLod(ringRadius, style) {
+export function resolveLod(ringRadius, style, unroll = 0) {
   if (style.lod === false) return null;
-  const r = ringRadius ?? style.ringRadius;
+  const r = (ringRadius ?? style.ringRadius) * (1 + Math.min(1, Math.max(0, unroll)) * (Math.PI - 1));
   if (r >= (style.lodFull ?? 60)) return null;              // full chrome
   if (r >= (style.lodCompact ?? 26)) {
-    return { showLabels: false, showValues: false, compass: false, centreDot: 1.5 };
+    return {
+      showLabels: false, showValues: false, compass: false, centreDot: 1.5, leaders: false,
+    };
   }
   // Marks only. At this size the field is read as a surface, not as
   // individual charts, and everything else is noise.
@@ -161,6 +182,7 @@ export function resolveLod(ringRadius, style) {
     showLabels: false,
     showValues: false,
     compass: false,
+    leaders: false,
     structure: 'none',
     centreDot: 0,
     ringWidth: 0.6,

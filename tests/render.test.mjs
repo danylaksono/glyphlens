@@ -13,7 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { computeLens } from '../src/core/layout.js';
-import { LensRenderer } from '../src/render/LensRenderer.js';
+import { LensRenderer, leaderAnchors, leaderGap } from '../src/render/LensRenderer.js';
 import { arcCurve, polylineCurve, straightenPath } from '../src/core/curve.js';
 
 /** A CanvasRenderingContext2D that records what it was asked to draw. */
@@ -27,6 +27,15 @@ function recorder() {
     measureText: (t) => ({ width: String(t).length * 6 }),
     setTransform() {},
   };
+  // Colours are recorded too: several things stroke thin lines, and telling a
+  // leader from a displacement tick means knowing which pen was in hand.
+  for (const prop of ['strokeStyle', 'fillStyle', 'globalAlpha', 'lineWidth']) {
+    let value;
+    Object.defineProperty(ctx, prop, {
+      get: () => value,
+      set: (v) => { value = v; calls.push([`set:${prop}`, v]); },
+    });
+  }
   const noop = ['save', 'restore', 'beginPath', 'closePath', 'fill', 'stroke',
     'setLineDash', 'clearRect', 'rect', 'translate', 'rotate', 'fillText',
     'clip', 'arc', 'moveTo', 'lineTo', 'quadraticCurveTo', 'bezierCurveTo'];
@@ -191,4 +200,182 @@ test('the renderer still paints a plain ring exactly as it did', () => {
   new LensRenderer().draw(withCurve, layout, { ...frame, curve: arcCurve(400, 300, 150, { unroll: 0 }) });
   new LensRenderer().draw(withoutCurve, layout, frame);
   assert.deepEqual(withCurve.calls, withoutCurve.calls);
+});
+
+// ------------------------------------------------------------------ leaders
+
+const RING_FRAME = {
+  cx: 400,
+  cy: 300,
+  selectionRadiusPx: 120,
+  scalePx: 120 / 900, // px per metre, matching the 900 m selection
+};
+
+test('a leader points at the mean position of what its mark counts', () => {
+  const layout = ringLens({ binning: { mode: 'angular', bins: 8 } });
+  const curve = arcCurve(400, 300, 150, { unroll: 1 });
+  const bin = layout.bins.find((b) => b.count > 3);
+
+  const [from, to] = leaderAnchors(layout, bin, curve, { ...RING_FRAME, curve });
+  assert.deepEqual(from.map(Math.round), curve.pointAt(bin.t).map(Math.round));
+
+  // The target sits at the bin's own bearing and its members' mean distance,
+  // in the lens's azimuthal frame.
+  const bearing = bin.meanBearing ?? bin.bearing;
+  const expected = ((bearing - 90) / 180) * Math.PI;
+  const actual = Math.atan2(to[1] - RING_FRAME.cy, to[0] - RING_FRAME.cx);
+  assert.ok(Math.abs(Math.atan2(Math.sin(actual - expected), Math.cos(actual - expected))) < 1e-6);
+  const distance = Math.hypot(to[0] - RING_FRAME.cx, to[1] - RING_FRAME.cy) / RING_FRAME.scalePx;
+  assert.ok(Math.abs(distance - bin.structure.radial.mean) < 1e-6);
+});
+
+test('a leader has nothing to point at without a scale or a bearing', () => {
+  const layout = ringLens({ binning: { mode: 'angular', bins: 8 } });
+  const curve = arcCurve(400, 300, 150, { unroll: 1 });
+  const bin = layout.bins.find((b) => b.count > 3);
+
+  // No pixels-per-metre and no selection radius: guessing a distance would be
+  // worse than drawing nothing.
+  assert.equal(leaderAnchors(layout, bin, curve, { cx: 400, cy: 300 }), null);
+
+  // Distance bands carry no direction, so there is no position to point at.
+  const radial = ringLens({ binning: { mode: 'radial', rings: 4 } });
+  const band = radial.bins.find((b) => b.count > 3);
+  assert.equal(leaderAnchors(radial, band, curve, RING_FRAME), null);
+});
+
+test('the selection radius stands in for an explicit scale', () => {
+  const layout = ringLens({ binning: { mode: 'angular', bins: 8 } });
+  const curve = arcCurve(400, 300, 150, { unroll: 1 });
+  const bin = layout.bins.find((b) => b.count > 3);
+  const withScale = leaderAnchors(layout, bin, curve, { ...RING_FRAME, curve });
+  const derived = leaderAnchors(layout, bin, curve, {
+    cx: 400, cy: 300, selectionRadiusPx: 120, curve,
+  });
+  assert.deepEqual(derived[1].map((v) => v.toFixed(6)), withScale[1].map((v) => v.toFixed(6)));
+});
+
+test('on a straightened route the leader reaches back to the true path', () => {
+  const layout = corridorLens();
+  const pts = [[120, 80], [260, 300], [300, 520]];
+  const curve = polylineCurve(straightenPath(pts, 1), { closed: false });
+  const bin = layout.bins.find((b) => b.count > 0);
+  const frame = {
+    cx: pts[0][0], cy: pts[0][1], selectionRadiusPx: 0,
+    corridorHalfWidthPx: 40, ghost: pts, curve,
+  };
+
+  const [, to] = leaderAnchors(layout, bin, curve, frame);
+  const ghost = polylineCurve(pts, { closed: false });
+  const [gx, gy] = ghost.pointAt(bin.preferredT ?? bin.t);
+  // Within the corridor's half-width of the route at its own chainage.
+  assert.ok(Math.hypot(to[0] - gx, to[1] - gy) <= 40 + 1e-6);
+});
+
+test('association modes decide when a leader is drawn', () => {
+  const layout = ringLens({ binning: { mode: 'angular', bins: 8 } });
+  const paint = (association, unroll) => {
+    const ctx = recorder();
+    new LensRenderer({ compass: false, structure: 'none' }).draw(
+      ctx,
+      { ...layout, association },
+      { ...RING_FRAME, unroll, curve: arcCurve(400, 300, 150, { unroll }) },
+    );
+    // Leaders are the only thing that draws a filled dot away from the curve.
+    return ctx.calls.filter(([name, , , r]) => name === 'arc' && r === 2).length;
+  };
+
+  // Closed ring, each mark on its own wedge: adjacency is doing the work.
+  assert.equal(paint({ mode: 'auto' }, 0), 0);
+  // Unrolled, it is not, so they fade in.
+  assert.ok(paint({ mode: 'auto' }, 1) > 4);
+  // Explicitly on, and explicitly off.
+  assert.ok(paint({ mode: 'leader' }, 0) > 4);
+  assert.equal(paint({ mode: 'adjacency' }, 1), 0);
+  // Hover-only, with nothing hovered.
+  assert.equal(paint({ mode: 'hover' }, 1), 0);
+});
+
+test('the leader measures the gap the solver does not report', () => {
+  const categorical = { mode: 'categorical', category: (f) => f.category };
+
+  // Block placement puts every mark in a nominal slot, so the solver was never
+  // asked for a bearing and reports no displacement — while the marks are as
+  // far from their data as they can be. That is the layout leaders exist for.
+  const block = ringLens({ binning: categorical, placement: { mode: 'block' } });
+  assert.ok(block.bins.every((b) => Math.abs(b.displacement ?? 0) < 1e-9));
+  assert.ok(block.bins.filter((b) => leaderGap(b) > 90).length >= 2);
+
+  // Where the solver did the moving, the two agree exactly.
+  const necklace = ringLens({
+    binning: categorical,
+    placement: { mode: 'necklace' },
+    marks: { type: 'bar', barWidth: 40 },
+  });
+  for (const b of necklace.bins) {
+    assert.ok(Math.abs(leaderGap(b) - Math.abs(b.displacement)) < 1e-6);
+  }
+  assert.ok(necklace.bins.some((b) => leaderGap(b) > 6));
+
+  // And a bin that owns its own wedge is not displaced at all.
+  for (const b of ringLens({ binning: { mode: 'angular', bins: 24 } }).bins) {
+    assert.ok(leaderGap(b) < 1e-6);
+  }
+});
+
+test('a leader replaces the displacement tick it supersedes', () => {
+  // Wide bars on three categories collide, so the solver has to slide them off
+  // their bearings — the case the tick was invented for.
+  const layout = ringLens({
+    binning: { mode: 'categorical', category: (f) => f.category },
+    placement: { mode: 'necklace' },
+    marks: { type: 'bar', barWidth: 40 },
+  });
+  const paint = (association) => {
+    const ctx = recorder();
+    new LensRenderer({ compass: false, structure: 'none', displacementColor: '#f00' })
+      .draw(ctx, { ...layout, association }, { ...RING_FRAME, unroll: 0 });
+    // Strokes drawn with the displacement pen, whatever shape they are.
+    let pen = null;
+    let ticks = 0;
+    for (const [name, value] of ctx.calls) {
+      if (name === 'set:strokeStyle') pen = value;
+      if (name === 'stroke' && pen === '#f00') ticks += 1;
+    }
+    const dots = ctx.calls.filter(([name, , , r]) => name === 'arc' && r === 2).length;
+    return { ticks, dots };
+  };
+
+  const adjacency = paint({ mode: 'adjacency' });
+  const leaders = paint({ mode: 'leader' });
+  assert.ok(adjacency.ticks > 0, 'the solver should have displaced a mark');
+  assert.equal(adjacency.dots, 0);
+  // Every displaced mark now carries a leader instead — not both.
+  assert.ok(leaders.dots >= adjacency.ticks, `${leaders.dots} leaders, ${adjacency.ticks} ticks`);
+  assert.equal(leaders.ticks, 0);
+});
+
+test('level of detail measures the drawing, not the ring', () => {
+  // A small ring sheds its chrome; the same ring unrolled into a strip has room
+  // for it again (docs/findings.md F-30).
+  const layout = ringLens({ binning: { mode: 'angular', bins: 8 } });
+  const dots = (unroll) => {
+    const ctx = recorder();
+    new LensRenderer({ structure: 'none' }).draw(
+      ctx,
+      { ...layout, association: { mode: 'leader' } },
+      {
+        cx: 400,
+        cy: 300,
+        ringRadius: 46,
+        selectionRadiusPx: 120,
+        scalePx: 120 / 900,
+        unroll,
+        curve: arcCurve(400, 300, 46, { unroll }),
+      },
+    );
+    return ctx.calls.filter(([name, , , r]) => name === 'arc' && r === 2).length;
+  };
+  assert.equal(dots(0), 0);
+  assert.ok(dots(1) > 4);
 });

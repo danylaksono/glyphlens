@@ -155,6 +155,17 @@ const TILES = [
     style: { showLabels: false },
   },
   {
+    title: 'Leaders, where adjacency ran out',
+    note: 'Block placement throws the geography away, so every mark is displaced by construction. A leader puts it back: each bar is tied to the mean position of what it counts. The same lines fade in as the anchor unrolls.',
+    path: 'categorical · count · block · bar + leader',
+    config: {
+      binning: { mode: 'categorical' },
+      placement: { mode: 'block' },
+      marks: { type: 'bar', barWidth: 22, reserveLabels: true },
+      association: { mode: 'leader' },
+    },
+  },
+  {
     title: 'The ring, unrolled',
     note: 'The same necklace on a straight anchor of the same length. Nothing is re-solved — every mark keeps the position it was given — but bearing is now a horizontal axis and the bars share one baseline.',
     path: 'angular(16) · count · necklace · bar · unroll 1',
@@ -187,6 +198,19 @@ const TILES = [
       binning: { mode: 'chainage', bins: 12 },
       marks: { type: 'bar', barWidth: 8, maxLength: 46 },
     },
+    anchor: { unroll: 1 },
+    style: { showLabels: false },
+  },
+  {
+    title: 'The line back to the geography',
+    note: 'The unrolled ring with its association restored. Each leader runs from a mark to the mean position of the members it counts, in the lens’s own frame — so the strip can be read as a chart without forgetting it is a map.',
+    path: 'angular(12) · count · necklace · bar · unroll 1 + leader',
+    config: {
+      binning: { mode: 'angular', bins: 12 },
+      marks: { type: 'bar', barWidth: 10, maxLength: 40 },
+      association: { mode: 'leader' },
+    },
+    ring: 46,
     anchor: { unroll: 1 },
     style: { showLabels: false },
   },
@@ -267,13 +291,23 @@ function renderTile(tile, data) {
     normalisation: tile.config.normalisation ?? { mode: 'count' },
     placement: tile.config.placement ?? { mode: 'necklace' },
     marks: tile.config.marks,
+    association: tile.config.association ?? { mode: 'adjacency' },
     ring: { radius: ring },
   });
 
   const metresPerPx = RADIUS / SELECTION_PX;
   const project = projector(layout.center ?? CENTRE, metresPerPx, cx, cy);
 
-  const frame = { cx, cy, ringRadius: ring, selectionRadiusPx: SELECTION_PX };
+  const frame = {
+    cx,
+    cy,
+    ringRadius: ring,
+    selectionRadiusPx: SELECTION_PX,
+    // Pixels per metre in the tile's own frame — what a leader needs to put
+    // its target at a real distance.
+    scalePx: 1 / metresPerPx,
+    unroll,
+  };
   if (selection.type === 'polygon') {
     frame.selectionRings = (selection.rings ?? []).map((r) => r.map(project));
   } else if (selection.type === 'corridor') {

@@ -184,7 +184,9 @@ function bindControls() {
     const morphable = mode === 'categorical' || mode === 'cross';
     $('morph').disabled = !morphable;
     $('morph-hint').textContent = morphable
-      ? 'Drag to move each bar from its slot in a sorted legend to the direction that category actually lies in.'
+      ? 'Drag to move each bar from its slot in a sorted legend to the direction'
+        + ' that category actually lies in. Leader lines fade in as the bars'
+        + ' leave their bearings.'
       : 'Not applicable: these bins are already positioned by bearing.';
 
     lens.update({

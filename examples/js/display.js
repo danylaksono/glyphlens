@@ -31,12 +31,15 @@ const TOGGLES = [
  * @param {false|{label?, hint?}} [options.anchor]  show the anchor controls —
  *   how far the curve is unrolled, and which way marks grow. Off by default:
  *   they only mean something for a lens with a single anchor to open.
+ * @param {boolean} [options.leaders]  show the association control. Defaults to
+ *   wherever the anchor controls are, since a field draws no leaders.
  */
 export function mountDisplay(mount, options) {
   const {
     map, lens, restore, marks = [], extras = [], ring = 150, anchor = false,
   } = options;
   const showRing = ring !== false;
+  const showLeaders = options.leaders ?? Boolean(anchor);
 
   const markRow = marks.length
     ? `<label class="sub"><span>Mark</span><select data-role="mark">${
@@ -60,6 +63,17 @@ export function mountDisplay(mount, options) {
     </select></label>
     ${anchor.hint ? `<p class="hint">${anchor.hint}</p>` : ''}` : '';
 
+  // Association is a separate question from the anchor, but it is the anchor
+  // that makes it urgent: unrolling is exactly what leaders compensate for, so
+  // the two controls sit together.
+  const leaderRow = showLeaders ? `
+    <label class="sub"><span>Leader lines</span><select data-role="leaders">
+      <option value="auto" selected>Auto — where adjacency has gone</option>
+      <option value="leader">Always</option>
+      <option value="hover">On hover only</option>
+      <option value="adjacency">Never</option>
+    </select></label>` : '';
+
   mount.innerHTML = `
     <summary>Display</summary>
     <label class="sub"><span>Basemap</span><select data-role="basemap"></select></label>
@@ -69,6 +83,7 @@ export function mountDisplay(mount, options) {
       <input data-role="ring" type="range" min="90" max="230" step="5" value="${ring}" />
     </label>` : ''}
     ${anchorRows}
+    ${leaderRow}
     <div class="toggles">
       ${TOGGLES.map(([id, label]) =>
     `<label><input type="checkbox" data-toggle="${id}" checked /> ${label}</label>`).join('')}
@@ -112,6 +127,12 @@ export function mountDisplay(mount, options) {
     });
     q('[data-role="orient"]').addEventListener('change', (e) => {
       lens.update({ marks: { orient: e.target.value }, animate: false });
+    });
+  }
+
+  if (showLeaders) {
+    q('[data-role="leaders"]').addEventListener('change', (e) => {
+      lens.update({ association: { mode: e.target.value }, animate: false });
     });
   }
 
