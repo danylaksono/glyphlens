@@ -314,13 +314,18 @@ export class LensRenderer {
    *
    * Two different shapes, and the difference is the point. The **disc** is the
    * selection: the boundary that actually decided what this lens counted. The
-   * **hexagon** is the lattice cell — the ground closer to this centre than to
-   * any other — which is what tessellates, and which no lens ever selected.
+   * **polygon** is the cell — the ground closer to this centre than to any
+   * other — which is what tessellates, and which no lens ever selected.
    *
-   * Drawing only the hexagon would be the comfortable lie: it looks like a
-   * tessellation, so it reads as though every place is in exactly one cell. At
-   * the default packing the discs merely touch, so the corners of the hexagon
-   * are in no lens at all (docs/findings.md F-33).
+   * Drawing only the polygon would be the comfortable lie: it looks like a
+   * tessellation, so it reads as though every place is in exactly one cell. On
+   * a regular lattice at the default packing the discs merely touch, so the
+   * corners of the cell are in no lens at all (docs/findings.md F-33).
+   *
+   * The cell arrives either as a regular polygon — `sides` and `rotate`, which
+   * is all a lattice needs — or as an explicit `ring` of screen points, which
+   * is what a relaxed lattice's Voronoi cells are, since those have no regular
+   * shape at all (docs/findings.md F-35).
    */
   _drawCell(ctx, cx, cy, cell) {
     const s = this._s ?? this.style;
@@ -329,14 +334,19 @@ export class LensRenderer {
     ctx.lineWidth = s.cellWidth ?? 1;
     ctx.globalAlpha = s.cellOpacity ?? 0.55;
 
-    if (cell.hex > 0) {
-      // A regular hexagon with a vertex due north: the Voronoi cell of a
-      // lattice whose six neighbours sit at 0, 60, ... degrees.
+    if (cell.ring?.length > 2) {
       ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = ((30 + i * 60) / 180) * Math.PI;
-        const x = cx + Math.cos(a) * cell.hex;
-        const y = cy + Math.sin(a) * cell.hex;
+      ctx.moveTo(cell.ring[0][0], cell.ring[0][1]);
+      for (let i = 1; i < cell.ring.length; i++) ctx.lineTo(cell.ring[i][0], cell.ring[i][1]);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (cell.radius > 0 && cell.sides >= 3) {
+      const step = 360 / cell.sides;
+      ctx.beginPath();
+      for (let i = 0; i < cell.sides; i++) {
+        const a = (((cell.rotate ?? 0) + i * step) / 180) * Math.PI;
+        const x = cx + Math.cos(a) * cell.radius;
+        const y = cy + Math.sin(a) * cell.radius;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }

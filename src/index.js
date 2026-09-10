@@ -35,14 +35,22 @@ export { LensOverlay, addLens, FieldOverlay, addField } from './adapters/maplibr
 export { computeLens, lerpLayout, lerpCyclic } from './core/layout.js';
 export {
   computeField,
-  hexLattice,
   spatialIndex,
   fieldBaseline,
-  spacingForCount,
-  latticeCoverage,
-  cellRadius,
   TOUCHING,
 } from './core/field.js';
+export {
+  lattice,
+  hexLattice,
+  relaxedLattice,
+  voronoiCells,
+  nearestSpacing,
+  latticeCoverage,
+  cellRadius,
+  spacingForCount,
+  touchingRadius,
+  LATTICES,
+} from './core/lattice.js';
 export {
   select,
   selectPolygon,

@@ -12,6 +12,8 @@
  */
 
 import { computeLens } from '../../src/core/layout.js';
+import { computeField } from '../../src/core/field.js';
+import { relaxedLattice, voronoiCells } from '../../src/core/lattice.js';
 import { LensRenderer } from '../../src/render/LensRenderer.js';
 import { arcCurve, polylineCurve, straightenPath } from '../../src/core/curve.js';
 import { destination, distance as geoDistance, bearing as geoBearing } from '../../src/core/geo.js';
@@ -29,6 +31,20 @@ const TRANSECT = [
   destination(CENTRE, 350, 1050),
   destination(CENTRE, 170, 1050),
 ];
+
+/**
+ * A concave study area for the relaxed-lattice tile — concave on purpose, so
+ * that a bounding box is no substitute for the shape and a clipped regular
+ * lattice would slice its edge cells into meaningless slivers.
+ */
+const REGION = [[
+  destination(CENTRE, 315, 1500),
+  destination(CENTRE, 20, 1500),
+  destination(CENTRE, 75, 1250),
+  destination(CENTRE, 135, 1450),
+  destination(CENTRE, 180, 900),
+  destination(CENTRE, 235, 1400),
+]];
 
 /** A rough quadrilateral for the polygon tile. */
 const SHAPE = [[
@@ -215,6 +231,12 @@ const TILES = [
     style: { showLabels: false },
   },
   {
+    title: 'A lattice for a shape, not a plane',
+    note: 'A regular lattice assumes the study area is the whole plane; a real one has a boundary. Lloyd’s algorithm settles the centres into a centroidal Voronoi tessellation instead — evenly spaced, and filling the shape exactly. Proof of concept.',
+    path: 'relaxed lattice · angular(8) · count · necklace · bar',
+    field: { count: 14, boundary: REGION },
+  },
+  {
     title: 'The members themselves',
     note: 'Inclusions draw each place back through the aggregate, fainter where the bin is dense — so sparse structure survives binning.',
     path: 'angular(24) · count · necklace · bar + inclusions',
@@ -259,8 +281,81 @@ async function main() {
     + 'Data © OpenStreetMap contributors.';
 
   for (const tile of TILES) {
-    grid.appendChild(renderTile(tile, data));
+    grid.appendChild(tile.field ? renderField(tile, data) : renderTile(tile, data));
   }
+}
+
+/** A tile canvas and its caption, which every tile needs whatever is on it. */
+function tileShell(tile) {
+  const figure = document.createElement('figure');
+  figure.className = 'tile';
+  const canvas = document.createElement('canvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = TILE * dpr;
+  canvas.height = TILE * dpr;
+  canvas.style.width = `${TILE}px`;
+  canvas.style.height = `${TILE}px`;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const caption = document.createElement('figcaption');
+  caption.innerHTML =
+    `<h2>${tile.title}</h2><p class="note">${tile.note}</p><p class="path">${tile.path}</p>`;
+  figure.append(canvas, caption);
+  return { figure, ctx };
+}
+
+/**
+ * A whole field on one tile, for the lattice that has no regular shape.
+ *
+ * Worth the separate path: the point of a relaxed lattice is what the *set* of
+ * cells does with a boundary, which a single lens cannot show. Everything else
+ * is the same pipeline — `computeField` calls `computeLens` per centre exactly
+ * as it does on a map.
+ */
+function renderField(tile, data) {
+  const { figure, ctx } = tileShell(tile);
+  const cx = TILE / 2;
+  const cy = TILE / 2;
+  const metresPerPx = RADIUS / SELECTION_PX;
+  const project = projector(CENTRE, metresPerPx, cx, cy);
+
+  const { centres, cells, spacing } = relaxedLattice({
+    rings: tile.field.boundary,
+    count: tile.field.count,
+  });
+  const rings = voronoiCells(centres, tile.field.boundary).map((r) => r.map(project));
+  const radius = spacing * 0.5;
+  const ring = Math.max(5, (radius / metresPerPx) * 0.55);
+
+  const field = computeField({
+    centres,
+    cells,
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius },
+    binning: { mode: 'angular', bins: 8, category: (f) => f.category, categories: CATEGORY_ORDER },
+    marks: { type: 'bar', barWidth: 3 },
+    minCount: 1,
+    spacing,
+    ring: { radius: ring },
+  });
+
+  const renderer = new LensRenderer({ ...BASE_STYLE, ringRadius: ring, ...(tile.style ?? {}) });
+  for (const layout of field.lenses) {
+    const [x, y] = project(layout.center);
+    renderer.draw(ctx, layout, {
+      cx: x,
+      cy: y,
+      ringRadius: ring,
+      selectionRadiusPx: 0,
+      cell: {
+        disc: radius / metresPerPx,
+        ring: rings[layout.cell?.ringIndex ?? -1] ?? null,
+      },
+    });
+  }
+  return figure;
 }
 
 function renderTile(tile, data) {

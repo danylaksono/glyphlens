@@ -339,12 +339,13 @@ test('a field can show where one cell ends and the next begins', () => {
   });
 
   const { cell, stats } = field.state();
-  // The disc is the selection; the hexagon is the ground nearest this centre.
-  // At the default packing the disc is inscribed in the hexagon, so it is
+  // The disc is the selection; the cell is the ground nearest this centre.
+  // At the default packing the disc is inscribed in the cell, so it is
   // smaller — by exactly the ratio that leaves the corners uncovered.
-  assert.ok(cell.disc > 0 && cell.hex > cell.disc);
-  assert.ok(Math.abs(cell.disc / cell.hex - Math.sqrt(3) / 2) < 1e-9);
+  assert.ok(cell.disc > 0 && cell.radius > cell.disc);
+  assert.ok(Math.abs(cell.disc / cell.radius - Math.sqrt(3) / 2) < 1e-9);
   assert.ok(stats.coverage > 0.9 && stats.coverage < 0.91);
+  assert.equal(stats.kind, 'hex');
 
   // Drawing them is a repaint, not a recompute: nothing about the field
   // depends on whether its boundaries are visible.

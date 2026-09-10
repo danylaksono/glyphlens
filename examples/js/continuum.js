@@ -90,6 +90,13 @@ function bindControls() {
     field.setCells(e.target.value || false);
   });
 
+  // The only thing that changes is where the centres go. Everything downstream
+  // — binning, the solver, the marks — is the same code on a different tiling,
+  // which is the same claim this page makes about the count slider.
+  $('lattice').addEventListener('change', (e) => {
+    field.update({ lattice: e.target.value });
+  });
+
   // No ring control: a field's ring size comes from the lattice spacing, so
   // the slider would do nothing.
   mountDisplay($('display'), { map, lens: field, marks: [], ring: false });

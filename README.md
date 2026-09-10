@@ -7,7 +7,7 @@ the first JavaScript implementation of **necklace-map placement**.
 > position means *bearing*, not category order. A bar at 11 o'clock means the
 > data it summarises lies to the northwest.
 
-**Try it:** [gallery](examples/gallery.html) — seventeen points in the design space,
+**Try it:** [gallery](examples/gallery.html) — eighteen points in the design space,
 one dataset · [continuum](examples/continuum.html) — one lens to a gridded
 glyphmap on one slider · [ring lens](examples/) ·
 [corridor lens](examples/corridor.html) — shape a route or drop in a GeoJSON
@@ -44,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (174 tests, no runtime dependencies)
+npm test        # node --test (186 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -202,21 +202,54 @@ the renderer sheds chrome as rings shrink; below about ten pixels the glyph
 stops carrying multivariate information and the field reads as a density
 surface, which is the resolution limit of the technique rather than a bug.
 
-**The lattice tessellates; the lenses do not.** Centres sit on a hexagonal
-lattice, and each selects a *disc* of `spacing × packing` — there is no Voronoi
-or Delaunay partition of the data anywhere. At the default packing the discs
-merely touch, so they cover `π/(2√3) ≈ 90.7%` of the ground and the corners of
-each hexagon are in **no** lens; above `1/√3 ≈ 0.577` they overlap and count
-some places twice. Both are invisible unless you ask:
+**The lattice tessellates; the lenses do not.** Centres sit on a lattice, and
+each selects a *disc* of `spacing × packing`. At the default packing the discs
+merely touch, so the corners of each cell are in **no** lens; above
+`1/√3 ≈ 0.577` they overlap and count some places twice. Both are invisible
+unless you ask:
 
 ```js
-field.setCells('both');     // 'selection' (the disc) · 'lattice' (the hexagon)
-field.state().stats.coverage;   // 0.907 at the default packing
+field.setCells('both');     // 'selection' (the disc) · 'lattice' (the cell)
+field.state().stats.coverage;   // 0.907 on a hexagonal lattice, touching
 ```
 
-Drawing only the hexagon would be the comfortable lie — it looks like a
+Drawing only the cell would be the comfortable lie — it looks like a
 tessellation, so it reads as though every place is in exactly one cell — which
 is why the two are separate values rather than one toggle.
+
+**Which lattice is an axis too**, named after the cell rather than the point
+arrangement it is dual to:
+
+| `lattice` | Cell | Points are | Neighbours | Coverage at touching |
+|---|---|---|---|---|
+| `hex` | hexagon | a triangular lattice | 6 | 90.7% |
+| `square` | square | a square lattice | 4 | 78.5% |
+| `triangle` | triangle | a honeycomb | 3 | 60.5% |
+
+`spacing` always means the distance to a nearest neighbour, so the touching
+disc is exactly inscribed in the cell for all three — and the choice sets the
+ceiling on how much ground a field can reach without double counting.
+
+**For a region rather than a plane**, a regular lattice is the wrong tool:
+clipping one to a boundary slices its edge cells into arbitrary fragments.
+Lloyd's algorithm settles the centres into a centroidal Voronoi tessellation
+instead — evenly spaced, filling the shape exactly:
+
+```js
+const field = addField(map, { lattice: 'relaxed', boundary: rings, count: 40 });
+
+// or on its own, with the exact cells:
+import { relaxedLattice, voronoiCells } from 'glyphlens';
+const { centres, spacing } = relaxedLattice({ rings, count: 40 });
+const cells = voronoiCells(centres, rings);   // they tile the polygon exactly
+```
+
+A proof of concept: the assignment step is sampled rather than triangulated
+(the cells themselves are exact), and what it opens — density-weighted cells,
+per-cell radii, and whether an irregular lattice costs the comparability a
+regular one buys — is written up in
+[F-35](docs/findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane)
+and not explored.
 
 ### Areal units: census-style geography
 
@@ -448,6 +481,7 @@ src/core/      pure pipeline — no DOM, no map, no framework
   isotonic.js    weighted PAV, exact
   curve.js       the anchors: ring, arc, polyline — and the unroll between them
   route.js       GeoJSON lines in, simplified corridor paths out
+  lattice.js     where a field's centres go: three regular tilings, and Lloyd
   distribution.js  within-unit structure: circular stats, MAUP elasticity
   field.js       lattices, spatial index — the lens/glyphmap continuum
   layout.js      composes the six stages into a plain geometry object
