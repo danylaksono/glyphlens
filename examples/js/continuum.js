@@ -72,8 +72,15 @@ map.on('load', async () => {
       // agree about the ground between them. Below 100% some places are in no
       // lens; above it, discs overlap and some are counted twice.
       const cover = state.stats.coverage;
-      $('stat-coverage').textContent = cover ? `${Math.round(cover * 100)}%` : '–';
-      $('stat-coverage').title = cover > 1
+      // A relaxed lattice has no single spacing, so the regular-tiling coverage
+      // formula does not describe it — its cells tile the hull exactly, and
+      // what the discs leave is per-cell rather than one ratio.
+      $('stat-coverage').textContent = state.stats.kind === 'relaxed'
+        ? '~'
+        : (cover ? `${Math.round(cover * 100)}%` : '–');
+      $('stat-coverage').title = state.stats.kind === 'relaxed'
+        ? 'A relaxed lattice has no single spacing: its cells tile the hull exactly, but each disc covers its own cell differently.'
+        : cover > 1
         ? 'Discs overlap: places in the overlap are counted by more than one lens.'
         : 'The rest falls between the discs and is counted by no lens at all.';
     },

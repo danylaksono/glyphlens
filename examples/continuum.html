@@ -62,10 +62,14 @@
         <option value="hex" selected>Hexagonal cells (6 neighbours)</option>
         <option value="square">Square cells (4 neighbours)</option>
         <option value="triangle">Triangular cells (3 — a honeycomb)</option>
+        <option value="relaxed">Relaxed — Lloyd, inside the data's hull</option>
       </select>
       <p class="hint">There are three regular tilings and the choice is not free:
          with touching discs they reach 91%, 79% and 60% of the ground. Watch the
-         coverage readout, not the picture.</p>
+         coverage readout, not the picture. <strong>Relaxed</strong> abandons the
+         plane for a shape: Lloyd's algorithm settles the centres into a
+         centroidal Voronoi tessellation inside the convex hull of the data, so
+         the cells tile it exactly and no two are congruent.</p>
     </label>
 
     <label class="field">
@@ -75,6 +79,7 @@
         <option value="selection">The disc each lens counted</option>
         <option value="lattice">The lattice cell (hexagon)</option>
         <option value="both">Both</option>
+        <option value="delaunay">The Delaunay triangulation</option>
       </select>
       <p class="hint">The lattice tessellates, but a lens selects a <em>disc</em>.
          At the default packing the discs only touch, so the cell's corners are

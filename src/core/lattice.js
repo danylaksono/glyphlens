@@ -28,6 +28,7 @@
  */
 
 import { EARTH_RADIUS, toRad, pointInPolygon, polygonCentroid } from './geo.js';
+import { delaunay, voronoiFromDelaunay, nearestSite, convexHull } from './delaunay.js';
 
 /** Metres per degree of longitude and latitude at a given latitude. */
 export function scaleAt(lat) {
@@ -269,10 +270,11 @@ function frameFor(rings) {
 export function relaxedLattice({
   rings,
   count = 24,
-  // Lloyd converges linearly, so forty-odd passes is ordinary and thirty is
-  // not quite enough — it stops early the moment it settles, so the cap only
-  // costs anything when it is genuinely needed.
-  iterations = 64,
+  // Lloyd converges linearly and needs more passes as the count grows — forty
+  // at twenty sites, a hundred at three hundred. It stops the moment it
+  // settles, so a generous cap costs nothing when it is not needed, and the
+  // walk (F-36) is what made a generous cap affordable.
+  iterations = 200,
   seed = 1,
   samplesPerCell = 220,
   tolerance = 0.005,
@@ -332,16 +334,28 @@ export function relaxedLattice({
     sumY.fill(0);
     hits.fill(0);
 
+    // Which site owns each sample. Triangulating first turns this from a scan
+    // over every site into a walk over the six or so that touch the current
+    // guess — and the samples arrive in scanline order, so the previous
+    // answer is nearly always adjacent to the next one
+    // (docs/findings.md F-36). Below three sites there is no triangulation to
+    // walk, and no scan worth avoiding either.
+    const graph = count >= 3 ? delaunay(sites) : null;
+    let from = 0;
     for (const [x, y] of samples) {
-      let best = 0;
-      let bestD = Infinity;
-      for (let i = 0; i < count; i++) {
-        const dx = x - sites[i][0];
-        const dy = y - sites[i][1];
-        const d = dx * dx + dy * dy;
-        if (d < bestD) {
-          bestD = d;
-          best = i;
+      let best;
+      if (graph) {
+        best = nearestSite(graph, [x, y], from);
+        from = best;
+      } else {
+        best = 0;
+        let bestD = Infinity;
+        for (let i = 0; i < count; i++) {
+          const d = (x - sites[i][0]) ** 2 + (y - sites[i][1]) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
         }
       }
       sumX[best] += x;
@@ -445,11 +459,11 @@ const intersect = (a, b, da, db) => {
 /**
  * The exact Voronoi cell of each site, clipped to a polygon.
  *
- * Built by intersecting half-planes rather than by triangulating: a cell is the
- * set of points nearer this site than any other, which is literally one
- * half-plane per rival, so the definition is the algorithm. It is O(n²) in the
- * sites, which is the price of not carrying a Delaunay implementation, and at
- * the counts a field of lenses uses it is not a price worth optimising away.
+ * A cell is the set of points nearer this site than any other, which is one
+ * half-plane per rival — but **only the Delaunay neighbours can contribute
+ * one**, which is the theorem that makes the triangulation worth building. So
+ * this went from O(n²) half-planes to O(n) of them, with the same answer to
+ * floating-point noise (there is a test that asserts exactly that).
  *
  * Unlike a lattice's cells, these **tile the polygon exactly** — that is what
  * relaxation buys, and the reason the boundary case needs it.
@@ -461,23 +475,39 @@ export function voronoiCells(centres, rings) {
   if (!outer || outer.length < 3 || !centres?.length) return [];
 
   const frame = frameFor(rings);
-  const boundary = outer.map(frame.to);
-  const sites = centres.map(frame.to);
+  const graph = delaunay(centres.map(frame.to));
+  const cells = voronoiFromDelaunay(graph, [outer.map(frame.to)]);
+  return cells.map((cell) => cell.map(frame.from));
+}
 
-  return sites.map((site, i) => {
-    let cell = boundary;
-    for (let j = 0; j < sites.length && cell.length > 0; j++) {
-      if (j === i) continue;
-      const other = sites[j];
-      const mx = (site[0] + other[0]) / 2;
-      const my = (site[1] + other[1]) / 2;
-      const dx = other[0] - site[0];
-      const dy = other[1] - site[1];
-      // Positive on the site's own side of the perpendicular bisector.
-      cell = clipHalfPlane(cell, (p) => -((p[0] - mx) * dx + (p[1] - my) * dy));
-    }
-    return cell.map(frame.from);
-  });
+/**
+ * Which cells touch which — the Delaunay edge graph, in lng/lat.
+ *
+ * A field has always had neighbours implicitly (a lattice's are obvious by
+ * construction) and never been able to name them. For a relaxed lattice they
+ * are not obvious at all, and they are the thing that says whether two
+ * readings are adjacent.
+ */
+export function latticeNeighbours(centres) {
+  if (!centres?.length) return { neighbours: [], edges: [], hull: [] };
+  const [kx, ky] = scaleAt(centres[0][1]);
+  const graph = delaunay(centres.map(([lng, lat]) => [lng * kx, lat * ky]));
+  return { neighbours: graph.neighbours, edges: graph.edges, hull: graph.hull };
+}
+
+/**
+ * The convex hull of some points, as a ring — the study area a dataset implies
+ * when nobody has drawn one.
+ *
+ * This is what lets `relaxed` work with no boundary supplied: the shape the
+ * data actually occupies is a better default than a circle around its mean,
+ * and it is the honest one to relax into.
+ */
+export function hullOf(points) {
+  if (!points?.length) return [];
+  const [kx, ky] = scaleAt(points[0][1]);
+  const hull = convexHull(points.map(([lng, lat]) => [lng * kx, lat * ky]));
+  return hull.map((i) => points[i]);
 }
 
 /** Nearest-neighbour distance for every site, in metres. */

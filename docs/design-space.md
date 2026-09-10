@@ -496,12 +496,23 @@ hexagonal default
 study area is unbounded; clipping one to a real boundary slices its edge cells
 into arbitrary fragments. `lattice: 'relaxed'` runs Lloyd's algorithm inside a
 polygon instead, settling the centres into a centroidal Voronoi tessellation —
-evenly spaced, cells filling the shape exactly, and no two congruent. Built as
-a proof of concept; what it opens (density-weighted cells, per-cell radii, and
-whether an irregular lattice costs the comparability a regular one buys) is
+evenly spaced, cells filling the shape exactly, and no two congruent. With no
+`boundary` supplied it relaxes into the **convex hull of the data**, which is
+the study area a dataset implies when nobody has drawn one.
+
+Underneath it is a **Delaunay triangulation**, and it earns its place three
+times over: a Voronoi cell is bounded only by the bisectors against its
+Delaunay neighbours (five or so, not n−1), Lloyd's nearest-site question
+becomes a walk over that graph rather than a scan, and the hull comes free. The
+triangulation is also a reading in its own right — `cells: 'delaunay'` draws
+it, and on a relaxed lattice it is the only way to see which cells are
+adjacent, since nothing about their shapes says so
+([F-36](findings.md#f-36-the-triangulation-was-the-part-worth-having)).
+
+What is still not explored — density-weighted cells, per-cell radii, and
+whether an irregular lattice costs the comparability a regular one buys — is
 recorded in
-[F-35](findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane)
-and not explored.
+[F-35](findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane).
 
 Two things it settled:
 
@@ -586,7 +597,7 @@ As of v0.1, against the axes above.
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity; `structureFrame` | — |
 | Curves | circle, arc, polyline (open + closed), marks placed on any | — |
 | Routes | GeoJSON import, node editing, simplification to a budget | — |
-| Continuum | hex / square / triangular lattices, Lloyd-relaxed lattices in a polygon, spatial index, fields of lenses, level of detail, cell boundaries + coverage | small-multiples layout (non-geographic) |
+| Continuum | hex / square / triangular lattices, Lloyd-relaxed lattices in a polygon or a data hull, Delaunay triangulation + Voronoi dual + neighbour graph, spatial index, fields of lenses, level of detail, cell boundaries + coverage | small-multiples layout (non-geographic) |
 
 `examples/gallery.html` shows eighteen of these combinations side by side on one
 dataset, each captioned with the path it takes through the pipeline. It is the

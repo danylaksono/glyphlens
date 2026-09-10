@@ -44,6 +44,8 @@ export {
   hexLattice,
   relaxedLattice,
   voronoiCells,
+  latticeNeighbours,
+  hullOf,
   nearestSpacing,
   latticeCoverage,
   cellRadius,
@@ -51,6 +53,14 @@ export {
   touchingRadius,
   LATTICES,
 } from './core/lattice.js';
+export {
+  delaunay,
+  voronoiFromDelaunay,
+  nearestSite,
+  convexHull,
+  circumcentre,
+  inCircumcircle,
+} from './core/delaunay.js';
 export {
   select,
   selectPolygon,
