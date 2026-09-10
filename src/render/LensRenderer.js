@@ -82,7 +82,7 @@ export class LensRenderer {
     // Where the anchor has been flattened, the true geography is drawn behind
     // it: an unrolled corridor is a cartogram, and a cartogram with nothing to
     // read it against is just a chart (docs/findings.md F-28).
-    if (frame.ghost?.length > 1) this._drawGhost(ctx, frame.ghost);
+    if (frame.ghost?.length > 1) this._drawGhost(ctx, frame.ghost, frame.corridorHalfWidthPx);
 
     if (ringLike) {
       // A polygon selection supplies its own boundary; a disc, annulus or
@@ -155,12 +155,22 @@ export class LensRenderer {
     // Within-unit structure, under the marks so it never competes with the
     // value reading (docs/findings.md Q-7).
     const structure = layout.marks?.structure ?? s.structure ?? 'none';
+    // Straightening an anchor asks a question the closed ring never had to
+    // answer: are the members part of the *unit*, and so drawn wherever the
+    // unit has been moved to, or part of the *map*, and so left where they
+    // are? Both are honest and they read very differently, so it is a choice
+    // rather than a default (docs/findings.md F-32). The two frames coincide
+    // until an anchor is flattened, which is why nothing else has to know.
+    const structureFrame = layout.marks?.structureFrame ?? s.structureFrame ?? 'unit';
+    const structureCurve = structureFrame === 'geographic' && frame.ghost?.length > 1
+      ? polylineCurve(frame.ghost, { closed: false })
+      : curve;
     // Spread means different things on the two anchors. On a ring it is spread
     // in bearing; on a corridor it is spread *across* the route, which is a
     // reading a disc has no equivalent for (docs/findings.md F-15).
     if (!ringLike && (structure === 'spread' || structure === 'both')) {
       for (const b of layout.bins) {
-        this._drawLateral(ctx, b, layout, curve, frame.corridorHalfWidthPx);
+        this._drawLateral(ctx, b, layout, structureCurve, frame.corridorHalfWidthPx);
       }
     }
     if (ringLike && (structure === 'spread' || structure === 'both')) {
@@ -175,7 +185,8 @@ export class LensRenderer {
     }
     if (structure === 'inclusions' || structure === 'both') {
       this._drawInclusions(
-        ctx, layout, curve, cx, cy, selectionRadiusPx, frame.corridorHalfWidthPx, ringLike,
+        ctx, layout, structureCurve, cx, cy, selectionRadiusPx,
+        frame.corridorHalfWidthPx, ringLike,
       );
     }
     if (ringLike && (structure === 'gradient' || structure === 'both') && layout.structure) {
@@ -262,9 +273,26 @@ export class LensRenderer {
    * Faint and dashed: it is context for the strip, not a second reading, and
    * the strip is the thing carrying the data.
    */
-  _drawGhost(ctx, points) {
+  _drawGhost(ctx, points, halfWidthPx) {
     const s = this._s ?? this.style;
     ctx.save();
+
+    // The corridor's own width, faintly. Without it the strip reads as a chart
+    // with a plot background rather than as the same corridor drawn straight,
+    // and anything inside it — members, lateral spread — reads as noise in an
+    // axis instead of as provision beside a route.
+    if (halfWidthPx > 0) {
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = halfWidthPx * 2;
+      ctx.globalAlpha = s.ghostBandOpacity ?? 0.5;
+      ctx.strokeStyle = s.corridorFill ?? 'rgba(20,20,25,0.07)';
+      ctx.stroke();
+    }
+
     ctx.beginPath();
     ctx.moveTo(points[0][0], points[0][1]);
     for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);

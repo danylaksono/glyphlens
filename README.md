@@ -44,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (167 tests, no runtime dependencies)
+npm test        # node --test (169 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -114,6 +114,7 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `marks.sizeBy` | `value` · `equal` | which reading owns size; roses default to `equal` |
 | `association.mode` | `auto` · `leader` · `hover` · `adjacency` | leader lines back to what a mark summarises; `auto` draws them where adjacency has gone |
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
+| `marks.structureFrame` | `unit` · `geographic` | once an anchor is straightened: do the members follow the unit, or stay on the map? |
 | `style.preset` | `paper` · `night` · `minimal` · `structure` · `forensic` | switchable at runtime |
 | `style` toggles | `showLabels` · `showValues` · `compass` · `dimExterior` · `ringRadius` · `labelGap` · `valueGap` | all live-updatable via `lens.update({ style })` |
 
@@ -357,6 +358,17 @@ Four ways to show it:
 
 On a corridor, `spread` becomes lateral rather than angular, and `inclusions`
 place members from their own chainage and offset.
+
+Straightening the anchor moves the unit, so it splits this layer in two.
+`structureFrame: 'unit'` (the default) draws the members wherever the unit
+went — they keep their true chainage and offset, and sit back *through* their
+own aggregate, which is the only frame in which an inclusion does its job.
+`'geographic'` leaves them on the true path, so the strip carries the
+aggregates alone and the leaders tie the two together. The default is not the
+intuitive answer and is the better one: on a bent route "left of travel"
+rotates with every bend, while on a straight band left is always up — so
+one-sidedness, the reading this axis exists for, is easiest to see exactly
+where the members look most out of place.
 
 Roses are oriented to true north rather than to their own mean, so they stay
 comparable with each other and with the compass. They default to `sizeBy:

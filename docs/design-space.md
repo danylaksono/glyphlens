@@ -390,6 +390,18 @@ These disagree in the case that matters. Provision balanced by *count* but not b
 other — has `sidedness = 0` and a clearly non-zero `bias`. Reporting either
 alone would hide it.
 
+Straightening the anchor (§3.4b) splits this layer in two, because it moves the
+unit. `marks.structureFrame` says which the members belong to: `unit` (default)
+draws them wherever the unit went, keeping every member's true chainage and
+offset and putting them back *through* their own aggregate; `geographic` leaves
+them on the true path, so the strip carries only the aggregates and the leaders
+tie the two together. The frames are identical until something is unrolled.
+
+The default is not the intuitive answer and is the better one: on a bent route
+"left of travel" rotates with every bend, and one-sidedness — the reading this
+axis exists for — is far easier to see on a straight band where left is always
+up ([F-32](findings.md#f-32-a-straightened-anchor-splits-the-within-unit-layer-in-two)).
+
 One-sided provision along a river, a railway or a single-sided main road is
 common and analytically important, and a count for that stretch erases it
 entirely. See [F-15](findings.md#f-15-a-corridor-has-a-second-axis-a-disc-does-not).
@@ -533,7 +545,7 @@ As of v0.1, against the axes above.
 | Anchor | ring, arc, straight axis (`unroll`), straightened corridor, `at: 'auto'` seam | — |
 | Marks | `bar`, `disc`, `rose`; `orient: normal / up / upright` | `wedge`, `spark`, `stream` |
 | Association | `adjacency`, `leader` (`auto` / always / hover), brush hooks, displacement indicator | `colour` ramps |
-| Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity | — |
+| Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity; `structureFrame` | — |
 | Curves | circle, arc, polyline (open + closed), marks placed on any | — |
 | Routes | GeoJSON import, node editing, simplification to a budget | — |
 | Continuum | hex lattice, spatial index, fields of lenses, level of detail | small-multiples layout (non-geographic) |

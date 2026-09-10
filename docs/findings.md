@@ -1040,6 +1040,52 @@ now drawn only where no leader replaced it. What stays open is the *policy*
 question: at what displacement a symbol should be dropped or merged rather than
 drawn with a longer line.
 
+### F-32. A straightened anchor splits the within-unit layer in two
+
+Recorded 2026-09-10, from a reader's question about the corridor demo: are the
+members drawn inside the corridor, or inside the baseline? It looked like the
+baseline, and that looked wrong.
+
+They were right about the behaviour and it is worth stating exactly why it is
+not wrong, because the question turns out to name a real fork.
+
+Straightening a corridor moves the *unit*. So when the within-unit layer is
+drawn — the members as inclusions, the lateral spread — there are two honest
+answers to where they go, and until now the renderer had silently taken one:
+
+- **`unit`** — the members belong to the unit and go wherever the unit went.
+  Every member keeps its true chainage and offset, which are the only two
+  quantities a corridor lens reads, so nothing about the reading is lost. It is
+  also the only frame in which inclusions do their job at all: their whole point
+  (Honeycomb's amber inclusions,
+  [F-12](#f-12-inclusions-are-drawn-in-the-lenss-own-frame-not-the-maps)) is to
+  show the distribution *through* the aggregate, and members two hundred pixels
+  from their own bar are a scatterplot, not an inclusion.
+- **`geographic`** — the members belong to the map and stay on the true path.
+  The strip then carries only the aggregates, and the leaders tie the two
+  together. This is the classic strip-map layout: a profile beside a map.
+
+`unit` stays the default, and on the reading a corridor lens exists for it is
+not merely defensible but better. One-sidedness
+([F-15](#f-15-a-corridor-has-a-second-axis-a-disc-does-not)) is the thing a
+count erases, and on a bent route "left of travel" rotates with every bend and
+is genuinely hard to see. Straightened, left is always up. **The cartogram is
+the better frame for the reading the encoding was built for**, which is not the
+answer intuition gives.
+
+The confusion itself was a legitimate finding, though, and it was not about the
+members. A straightened corridor was being drawn as a grey band with a thin
+dashed line somewhere else on the map, so the band read as a *chart's plot
+background* rather than as the corridor, and anything inside it read as noise
+in an axis. The fix was to the ghost, not the members: the true path now carries
+the corridor's own width, faintly, so the strip is visibly the same shape drawn
+straight. **A cartogram has to show what it is a cartogram of** — F-28 said
+that about the path, and the path alone was not enough.
+
+The two frames are identical until an anchor is flattened, which is why nothing
+above the renderer has to know about the distinction, and why it can be a style
+token rather than a pipeline stage.
+
 ---
 
 ## Open questions
