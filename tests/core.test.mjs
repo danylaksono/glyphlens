@@ -25,9 +25,12 @@ import {
   spatialIndex, computeField, fieldBaseline, TOUCHING,
 } from '../src/core/field.js';
 import {
-  lattice, hexLattice, relaxedLattice, voronoiCells, nearestSpacing,
-  latticeCoverage, cellRadius, spacingForCount, touchingRadius, LATTICES,
+  lattice, hexLattice, relaxedLattice, voronoiCells, nearestSpacing, hullOf,
+  latticeCoverage, cellRadius, spacingForCount, touchingRadius, LATTICES, scaleAt,
 } from '../src/core/lattice.js';
+import {
+  delaunay, inCircumcircle, circumcentre, nearestSite,
+} from '../src/core/delaunay.js';
 import { resolveStyle, resolveLod } from '../src/render/style.js';
 import {
   circularStats,
@@ -1558,4 +1561,205 @@ test('relaxation degrades gracefully on nothing in particular', () => {
   assert.deepEqual(relaxedLattice({ rings: [], count: 10 }).centres, []);
   assert.deepEqual(relaxedLattice({ rings: BOUNDARY, count: 0 }).centres, []);
   assert.deepEqual(voronoiCells([], BOUNDARY), []);
+});
+
+// ------------------------------------------------------- Delaunay and its dual
+
+/** Deterministic scatter, so a failure is reproducible. */
+function scatter(n, seed = 12345, w = 1000, h = 800) {
+  let s = seed;
+  const rnd = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  return Array.from({ length: n }, () => [rnd() * w, rnd() * h]);
+}
+
+test('no point lies inside any triangle’s circumcircle — which is what Delaunay means', () => {
+  for (const n of [4, 25, 120]) {
+    const points = scatter(n);
+    const { triangles } = delaunay(points);
+    for (const [a, b, c] of triangles) {
+      for (let p = 0; p < n; p++) {
+        if (p === a || p === b || p === c) continue;
+        assert.ok(
+          !inCircumcircle(points[p], points[a], points[b], points[c]),
+          `n=${n}: point ${p} is inside triangle ${a},${b},${c}`,
+        );
+      }
+    }
+  }
+});
+
+test('the triangle count is the one Euler forces', () => {
+  // t = 2n - h - 2 for a triangulation of n points with h on the hull. Getting
+  // this right means no triangle was dropped or double-counted when the
+  // super-triangle was removed.
+  for (const n of [5, 30, 120]) {
+    const points = scatter(n, 777);
+    const { triangles, hull } = delaunay(points);
+    assert.equal(triangles.length, 2 * n - hull.length - 2, `n=${n}`);
+  }
+});
+
+test('triangles come out counter-clockwise, and the hull is convex', () => {
+  const points = scatter(40, 99);
+  const { triangles, hull } = delaunay(points);
+  const cross = (o, a, b) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  for (const [a, b, c] of triangles) {
+    assert.ok(cross(points[a], points[b], points[c]) > 0);
+  }
+  for (let i = 0; i < hull.length; i++) {
+    const o = points[hull[i]];
+    const a = points[hull[(i + 1) % hull.length]];
+    const b = points[hull[(i + 2) % hull.length]];
+    assert.ok(cross(o, a, b) > -1e-9, 'hull turned the wrong way');
+  }
+  // Every point is inside the hull or on it.
+  const ring = hull.map((i) => points[i]);
+  for (const p of points) assert.ok(pointInPolygon(p, [ring]) || ring.some((q) => q === p));
+});
+
+test('walking the neighbour graph finds the same site a full scan would', () => {
+  // The walk is what makes Lloyd affordable; if it can get stuck, the
+  // relaxation quietly assigns samples to the wrong cell.
+  const points = scatter(80, 4242);
+  const graph = delaunay(points);
+  const queries = scatter(300, 555);
+  for (const q of queries) {
+    const walked = nearestSite(graph, q, 0);
+    let brute = 0;
+    let best = Infinity;
+    points.forEach((p, i) => {
+      const d = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2;
+      if (d < best) {
+        best = d;
+        brute = i;
+      }
+    });
+    assert.equal(walked, brute, `walk stalled at ${q}`);
+  }
+});
+
+test('a site has few neighbours, however many sites there are', () => {
+  // The reason the dual is O(n): a planar triangulation averages under six
+  // edges per vertex no matter how large it gets, so a Voronoi cell is bounded
+  // by a handful of bisectors rather than by every rival.
+  for (const n of [30, 200]) {
+    const { neighbours } = delaunay(scatter(n, 31337));
+    const mean = neighbours.reduce((s, x) => s + x.length, 0) / n;
+    assert.ok(mean < 6, `n=${n}: mean ${mean}`);
+  }
+});
+
+const ringArea = (ring) => {
+  let s = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    s += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return Math.abs(s) / 2;
+};
+
+/** Clip a ring to the half-plane nearer `site` than `other`. */
+const bisect = (ring, site, other) => {
+  const mx = (site[0] + other[0]) / 2;
+  const my = (site[1] + other[1]) / 2;
+  const dx = other[0] - site[0];
+  const dy = other[1] - site[1];
+  const side = (p) => -((p[0] - mx) * dx + (p[1] - my) * dy);
+  const out = [];
+  for (let k = 0; k < ring.length; k++) {
+    const a = ring[(k + ring.length - 1) % ring.length];
+    const b = ring[k];
+    const da = side(a);
+    const db = side(b);
+    const mix = () => {
+      const t = da / (da - db);
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    };
+    if (db >= 0) {
+      if (da < 0) out.push(mix());
+      out.push(b);
+    } else if (da >= 0) out.push(mix());
+  }
+  return out;
+};
+
+test('the dual agrees with clipping against every rival', () => {
+  // The O(n) construction and the O(n²) one have to be the same answer, or the
+  // theorem being relied on is not the one being used.
+  //
+  // Both sides work in the *projected* frame. Delaunay is not invariant under
+  // anisotropic scaling, and a degree of longitude is shorter than a degree of
+  // latitude everywhere but the equator — so a triangulation of raw lng/lat is
+  // a triangulation of the wrong metric, and would disagree for a real reason
+  // rather than a floating-point one.
+  const boundary = [[
+    [110.350, -7.800], [110.370, -7.812], [110.390, -7.800],
+    [110.386, -7.775], [110.372, -7.786], [110.358, -7.774],
+  ]];
+  const { centres } = relaxedLattice({ rings: boundary, count: 24, seed: 5 });
+  const cells = voronoiCells(centres, boundary);
+
+  // The library's own scale, not an approximation of it: the *ratio* kx/ky is
+  // the anisotropy, and a different ratio is a different tessellation rather
+  // than a rounding difference.
+  const [kx, ky] = scaleAt(polygonCentroid(boundary)[1]);
+  const flat = ([lng, lat]) => [lng * kx, lat * ky];
+  const sites = centres.map(flat);
+  const total = ringArea(boundary[0].map(flat));
+
+  cells.forEach((cell, i) => {
+    let brute = boundary[0].map(flat);
+    for (let j = 0; j < sites.length && brute.length; j++) {
+      if (j !== i) brute = bisect(brute, sites[i], sites[j]);
+    }
+    const mine = ringArea(cell.map(flat));
+    assert.ok(
+      Math.abs(mine - ringArea(brute)) < total * 1e-9,
+      `cell ${i}: ${mine} vs ${ringArea(brute)}`,
+    );
+  });
+});
+
+test('a triangulation of raw degrees is a triangulation of the wrong metric', () => {
+  // Worth pinning down, because it is the kind of thing that looks like it
+  // cannot matter. Away from the equator a degree of longitude is much shorter
+  // than one of latitude — at 60° it is half — so "nearest site" in degrees is
+  // not "nearest on the ground", and the diagonal of a quad flips between the
+  // two. Which is why every lattice here projects before it triangulates.
+  const quad = [[-1, 60], [1, 60], [0, 59.5], [0, 60.5]];
+  const [kx, ky] = scaleAt(60);
+  const key = (t) => t.map((x) => [...x].sort((a, b) => a - b).join()).sort().join('|');
+  const inDegrees = key(delaunay(quad).triangles);
+  const inMetres = key(delaunay(quad.map(([lng, lat]) => [lng * kx, lat * ky])).triangles);
+  assert.notEqual(inDegrees, inMetres, 'the diagonal should flip with the metric');
+});
+
+test('a hull is the study area a dataset implies when nobody drew one', () => {
+  const points = [
+    [110.36, -7.80], [110.38, -7.80], [110.38, -7.78], [110.36, -7.78],
+    [110.37, -7.79], // strictly interior: must not appear on the hull
+  ];
+  const ring = hullOf(points);
+  assert.equal(ring.length, 4);
+  assert.ok(!ring.some((p) => p[0] === 110.37 && p[1] === -7.79));
+  for (const p of points) assert.ok(pointInPolygon(p, [ring]) || ring.includes(p));
+});
+
+test('degenerate input does not produce a fake triangulation', () => {
+  assert.deepEqual(delaunay([]).triangles, []);
+  assert.deepEqual(delaunay([[0, 0], [1, 1]]).triangles, []);
+  // Exactly collinear: there is no triangle, and inventing one would be worse
+  // than returning none.
+  assert.deepEqual(delaunay([[0, 0], [1, 0], [2, 0], [3, 0]]).triangles, []);
+  assert.equal(circumcentre([0, 0], [1, 0], [2, 0]), null);
+});
+
+test('the neighbour graph is symmetric, as an adjacency has to be', () => {
+  const { neighbours } = delaunay(scatter(50, 2024));
+  neighbours.forEach((adj, i) => {
+    for (const j of adj) assert.ok(neighbours[j].includes(i), `${i}->${j} is one-way`);
+  });
 });

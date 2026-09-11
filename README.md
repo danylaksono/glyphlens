@@ -44,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (186 tests, no runtime dependencies)
+npm test        # node --test (196 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -244,12 +244,30 @@ const { centres, spacing } = relaxedLattice({ rings, count: 40 });
 const cells = voronoiCells(centres, rings);   // they tile the polygon exactly
 ```
 
-A proof of concept: the assignment step is sampled rather than triangulated
-(the cells themselves are exact), and what it opens — density-weighted cells,
-per-cell radii, and whether an irregular lattice costs the comparability a
-regular one buys — is written up in
-[F-35](docs/findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane)
-and not explored.
+With no `boundary`, it relaxes into the **convex hull of the data** — the study
+area a dataset implies when nobody has drawn one.
+
+Underneath is a **Delaunay triangulation**, and it earns its place three times:
+
+```js
+import { delaunay, voronoiFromDelaunay, latticeNeighbours } from 'glyphlens';
+
+const { neighbours, edges, hull, triangles } = delaunay(points);
+```
+
+- a Voronoi cell is bounded **only** by the bisectors against its Delaunay
+  neighbours — about five, not `n−1` — so the cells are O(n) to build, not O(n²);
+- Lloyd's "which site is nearest" becomes a **walk** over that graph instead of
+  a scan, which is what makes relaxing a few hundred cells affordable;
+- the **hull** comes free.
+
+It is also a reading: `cells: 'delaunay'` draws the triangulation, and on a
+relaxed lattice that is the only way to see which cells are adjacent, since
+nothing about their shapes says so.
+
+What is still unexplored — density-weighted cells, per-cell radii, and whether
+an irregular lattice costs the comparability a regular one buys — is written up
+in [F-35](docs/findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane).
 
 ### Areal units: census-style geography
 
@@ -482,6 +500,7 @@ src/core/      pure pipeline — no DOM, no map, no framework
   curve.js       the anchors: ring, arc, polyline — and the unroll between them
   route.js       GeoJSON lines in, simplified corridor paths out
   lattice.js     where a field's centres go: three regular tilings, and Lloyd
+  delaunay.js    Bowyer-Watson triangulation, its Voronoi dual, hull, neighbours
   distribution.js  within-unit structure: circular stats, MAUP elasticity
   field.js       lattices, spatial index — the lens/glyphmap continuum
   layout.js      composes the six stages into a plain geometry object

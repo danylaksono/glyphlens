@@ -1240,6 +1240,59 @@ costs the reader the very thing a regular one buys, which is that every glyph
 is comparable because every cell is identical. That last is the question that
 matters and none of this settles it.
 
+### F-36. The triangulation was the part worth having
+
+Recorded 2026-09-11, after the reader pointed out that the Delaunay they had
+asked for twice had not been built.
+
+They were right, and the substitution was recorded in a code comment rather
+than raised. [F-35](#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane)
+built Lloyd's assignment by **sampling** and the cells by clipping against
+**every rival**, and argued that a triangulation was a few thousand lines not
+worth carrying. Both parts of that were wrong: Bowyer–Watson is about a hundred
+and fifty lines, and what a triangulation buys is not accuracy — the old cells
+were already exact — but **structure**.
+
+Three things fall out of it, and each replaces something clumsier:
+
+- **The neighbour graph.** A Voronoi cell is bounded *only* by the bisectors
+  against its Delaunay neighbours; every other site is provably irrelevant to
+  it. Measured on the demo lattice that is 4.8 bisectors per cell instead of
+  19, so the cell construction went from O(n²) to O(n) with the same answer to
+  five parts in 10¹⁴. **The theorem is the optimisation.**
+- **The walk.** Lloyd's inner loop asked "which site is nearest" for every
+  sample and answered it by scanning every site. Over a triangulation it is a
+  walk to whichever neighbour is closer, which cannot stall anywhere but the
+  answer. Relaxing sixty cells went from ~400ms to 122ms, and the cap on passes
+  could then be raised to where it actually converges — three hundred cells now
+  settle in 112 passes where before they silently stopped short.
+- **The hull, free.** Which is what finally made `relaxed` usable: with no
+  boundary supplied, the study area is the convex hull of the data itself. A
+  field can now relax into the shape its own data occupies with nothing else
+  provided, which is why it can sit in the continuum demo at all — the reason
+  it had been missing there.
+
+Two mistakes worth keeping:
+
+- The first dual built each cell from the **circumcentres** around its site and
+  clipped that to the boundary. It lost 28% of the polygon. Sutherland–Hodgman
+  is only correct when the *clip region* is convex — a half-plane always is, a
+  study area very often is not. Clipping the boundary **by** the cell rather
+  than the cell **by** the boundary is not a matter of taste.
+- The cross-check against the old O(n²) construction failed at first for a real
+  reason, not a rounding one: the test compared in raw lng/lat while the
+  library triangulates in projected metres. **Delaunay is not invariant under
+  anisotropic scaling** — at 60° latitude a degree of longitude is half a
+  degree of latitude, and the diagonal of a quad flips between the two metrics.
+  There is now a test that asserts exactly that, because it is the kind of
+  thing that looks like it cannot matter.
+
+The general lesson is about the substitution rather than the algorithm. Writing
+"a real implementation would use a Delaunay triangulation" in a docstring
+recorded the gap honestly and buried it: a comment is where a decision goes to
+be agreed with, not where it goes to be reviewed. **When a request is answered
+by something adjacent to it, that belongs in the reply, not in the source.**
+
 ---
 
 ## Open questions

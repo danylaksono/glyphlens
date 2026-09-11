@@ -25,7 +25,7 @@
 import { computeLens, lerpLayout } from '../core/layout.js';
 import { computeField, TOUCHING } from '../core/field.js';
 import {
-  lattice, relaxedLattice, voronoiCells, spacingForCount, LATTICES,
+  lattice, relaxedLattice, voronoiCells, latticeNeighbours, hullOf, spacingForCount,
 } from '../core/lattice.js';
 import { LensRenderer } from '../render/LensRenderer.js';
 import { destination, distance, pathLength } from '../core/geo.js';
@@ -589,7 +589,8 @@ export class FieldOverlay {
       // `boundary`. See docs/findings.md F-34 and F-35.
       lattice: 'hex',
       // `false` | 'selection' (the disc each lens actually counted) |
-      // 'lattice' (the cell of ground nearest this centre) | 'both'.
+      // 'lattice' (the cell of ground nearest this centre) | 'both' |
+      // 'delaunay' (the triangulation: which cells are neighbours).
       cells: false,
       minCount: 3,
       binning: { mode: 'angular', bins: 12 },
@@ -664,7 +665,7 @@ export class FieldOverlay {
     // A relaxed lattice fills a shape rather than covering a radius, so it is
     // the one kind that needs a boundary — and it derives its own spacing from
     // that shape's area rather than being told one.
-    const built = kind === 'relaxed' && o.boundary
+    const built = kind === 'relaxed'
       ? this._relaxed(o)
       : lattice({
         kind,
@@ -708,9 +709,14 @@ export class FieldOverlay {
     // A relaxed lattice has no regular cell, so its boundaries are the real
     // Voronoi polygons, clipped to the shape. Computed once per recompute
     // rather than per paint: it is O(n²) and the centres do not move.
-    this._cellRings = kind === 'relaxed' && o.boundary
-      ? voronoiCells(centres, normaliseRings({ rings: o.boundary }))
+    this._cellRings = kind === 'relaxed' && this._relaxedCache
+      ? voronoiCells(centres, this._relaxedCache.rings)
       : null;
+    // The triangulation is a field-level reading rather than a lens's chrome —
+    // it is about which cells are adjacent — so it is kept here and drawn
+    // once, under everything.
+    this._edges = kind === 'relaxed' ? latticeNeighbours(centres).edges : null;
+    this._centres = centres;
     this.options.onChange?.(this.state());
     this.repaint();
     return this.field;
@@ -768,19 +774,55 @@ export class FieldOverlay {
    * unstable: a different seed path would settle somewhere slightly different.
    */
   _relaxed(o) {
-    const key = `${o.count}|${o.seed ?? 1}|${o.iterations ?? ''}|${JSON.stringify(o.boundary)}`;
+    // With no boundary supplied, the study area is the shape the data itself
+    // occupies. A convex hull is a better default than a circle around the
+    // mean, and it is free from the same triangulation the relaxation uses —
+    // which is what makes `relaxed` usable with nothing but data.
+    const rings = o.boundary
+      ? normaliseRings({ rings: o.boundary })
+      : [hullOf((o.data ?? []).map(o.getPosition ?? ((f) => [f.lng ?? f.lon, f.lat])))];
+
+    const key = `${o.count}|${o.seed ?? 1}|${o.iterations ?? ''}|${rings[0]?.length}|`
+      + `${JSON.stringify(rings[0]?.slice(0, 4))}`;
     if (this._relaxedCache?.key !== key) {
-      this._relaxedCache = {
-        key,
-        value: relaxedLattice({
-          rings: normaliseRings({ rings: o.boundary }),
-          count: o.count,
-          ...(o.iterations ? { iterations: o.iterations } : {}),
-          seed: o.seed ?? 1,
-        }),
-      };
+      const value = relaxedLattice({
+        rings,
+        count: o.count,
+        ...(o.iterations ? { iterations: o.iterations } : {}),
+        seed: o.seed ?? 1,
+      });
+      this._relaxedCache = { key, value, rings };
     }
     return this._relaxedCache.value;
+  }
+
+  /**
+   * The triangulation over the field's centres.
+   *
+   * On a regular lattice this would be redundant — every centre has the same
+   * six neighbours by construction. On a relaxed one it is the only way to see
+   * which readings are next to which, and it is the graph the relaxation
+   * itself walks (docs/findings.md F-36).
+   */
+  _drawEdges(ctx) {
+    const s = this.renderer.style;
+    const at = (c) => {
+      const p = this.map.project(c);
+      return [p.x, p.y];
+    };
+    ctx.save();
+    ctx.strokeStyle = s.cellStroke;
+    ctx.globalAlpha = (s.cellOpacity ?? 0.55) * 0.7;
+    ctx.lineWidth = s.cellWidth ?? 1;
+    ctx.beginPath();
+    for (const [i, j] of this._edges) {
+      const a = at(this._centres[i]);
+      const b = at(this._centres[j]);
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** One cell's screen geometry: the disc it counted, and the ground it owns. */
@@ -810,6 +852,10 @@ export class FieldOverlay {
     const cells = this.options.cells;
     const wantDisc = cells === 'selection' || cells === 'both';
     const wantCell = cells === 'lattice' || cells === 'both';
+
+    // The Delaunay edges, under everything: a field-level statement about
+    // which cells are adjacent, not a per-lens one.
+    if (cells === 'delaunay' && this._edges?.length) this._drawEdges(ctx);
     // Cull against the cell rather than the ring once one is drawn: a cell is
     // nearly twice the ring's radius, so the old margin clipped its outline.
     const pad = Math.max(ring, cells ? this._cellDiscPx * 2 : 0) * 3;
