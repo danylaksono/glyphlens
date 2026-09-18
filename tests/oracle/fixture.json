@@ -1,0 +1,1238 @@
+{
+  "generated": "2026-09-18",
+  "source": {
+    "repo": "https://github.com/tue-alga/cartocrow",
+    "commit": "93a37036a6fd6376cad31c26c1149417cd3ffa56",
+    "note": "necklace_map module; removed from CartoCrow master in de6b90c (2026-04-13)"
+  },
+  "aversion": 0.01,
+  "scenarios": {
+    "equal-quartet": {
+      "note": "4 equal beads, evenly spread, 1 rad arcs — the necklace capacity binds",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 20,
+          "from": 5.783185307179586,
+          "to": 0.5
+        },
+        {
+          "r": 20,
+          "from": 1.0707963267948966,
+          "to": 2.0707963267948966
+        },
+        {
+          "r": 20,
+          "from": 2.641592653589793,
+          "to": 3.641592653589793
+        },
+        {
+          "r": 20,
+          "from": 4.21238898038469,
+          "to": 5.21238898038469
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 3.778841968434681,
+        "cartocrowAnyOrder": 3.531383308605223,
+        "ours": 3.5355300903320312,
+        "oursCentreSemantics": 3.5355300903320312
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 3.778841968434681,
+          "angles": [
+            0.11822806143134379,
+            1.6925910079360096,
+            3.262186865094815,
+            4.831794354927298
+          ],
+          "chordOverlap": 9.817233992781638,
+          "wedgeOverlap": 0.14405761249323357,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 3.531383308605223,
+          "angles": [
+            5.783351307560603,
+            1.0709582036397691,
+            2.641755904950497,
+            4.212553606257437
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 3.4607556424331185,
+        "cartocrow": {
+          "angles": [
+            6.272835459009788,
+            1.559102777011807,
+            3.130364943951709,
+            4.70160894531923
+          ],
+          "cost": 0.00048612908339718545,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0,
+            1.5707963267948966,
+            3.141592653589793,
+            4.71238898038469
+          ],
+          "cost": 0,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.011693549783089452
+      }
+    },
+    "unequal-spread": {
+      "note": "6 beads, values spanning 25x, evenly spread",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 30,
+          "from": 5.683185307179587,
+          "to": 0.5999999999999996
+        },
+        {
+          "r": 12,
+          "from": 0.3599310885968814,
+          "to": 1.5599310885968816
+        },
+        {
+          "r": 22,
+          "from": 1.4943951023931952,
+          "to": 2.6943951023931945
+        },
+        {
+          "r": 8,
+          "from": 2.3670597283903607,
+          "to": 3.56705972839036
+        },
+        {
+          "r": 26,
+          "from": 3.5015237421866736,
+          "to": 4.701523742186673
+        },
+        {
+          "r": 15,
+          "from": 4.635987755982988,
+          "to": 5.835987755982988
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 2.6818380260700074,
+        "cartocrowAnyOrder": 2.5751561866137225,
+        "ours": 2.5783157348632812,
+        "oursCentreSemantics": 2.5783157348632812
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 2.6818380260700074,
+          "angles": [
+            6.034075747292767,
+            0.9313819804071688,
+            1.8624776266879794,
+            2.674814604077946,
+            3.605947150154278,
+            4.754380818349393
+          ],
+          "chordOverlap": 1.4366504026674676,
+          "wedgeOverlap": 0.08207990489095707,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 2.5751561866137225,
+          "angles": [
+            5.935421299353716,
+            0.8251375216449883,
+            1.7627784664522017,
+            2.587447706222499,
+            3.5251945215563216,
+            4.668598582835511
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.024102059855435787,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 2.523653062881448,
+        "cartocrow": {
+          "angles": [
+            0.021516977649778113,
+            1.1650451593810407,
+            2.118027348948138,
+            2.973923395584703,
+            3.946229510504566,
+            5.072002395975551
+          ],
+          "cost": 0.09414785205592277,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.022997655369956238,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.07077940513564496,
+            1.2373052422368644,
+            2.133582542164868,
+            2.9670597283903604,
+            4.002949066816891,
+            5.10688133951577
+          ],
+          "cost": 0.1098672341319757,
+          "chordOverlap": 0,
+          "wedgeOverlap": 8.881784197001252e-16,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.07226008285582353
+      }
+    },
+    "clustered": {
+      "note": "8 beads whose arcs crowd one half of the circle — interval endpoints bind",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 10,
+          "from": 6.107718232379019,
+          "to": 0.5245329251994333
+        },
+        {
+          "r": 14,
+          "from": 0.08633231299858224,
+          "to": 0.7863323129985824
+        },
+        {
+          "r": 18,
+          "from": 0.34813170079773137,
+          "to": 1.0481317007977315
+        },
+        {
+          "r": 22,
+          "from": 0.6099310885968814,
+          "to": 1.3099310885968816
+        },
+        {
+          "r": 10,
+          "from": 0.8717304763960305,
+          "to": 1.5717304763960307
+        },
+        {
+          "r": 14,
+          "from": 1.3080627893946133,
+          "to": 2.0080627893946126
+        },
+        {
+          "r": 18,
+          "from": 1.7443951023931952,
+          "to": 2.4443951023931945
+        },
+        {
+          "r": 22,
+          "from": 2.2679938779914934,
+          "to": 2.9679938779914945
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 1.348320407280751,
+        "cartocrowAnyOrder": 1.3501634032897267,
+        "ours": 1.3070831298828125,
+        "oursCentreSemantics": 1.3526687622070312
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 1.348320407280751,
+          "angles": [
+            6.107718232379019,
+            0.15113995017661797,
+            0.5876011980793551,
+            1.1352689048448927,
+            1.5717304763960307,
+            1.9263451001090572,
+            2.391292715263068,
+            2.9679938779914945
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 1.3501634032897267,
+          "angles": [
+            6.107718232379019,
+            0.15098202752920997,
+            0.5874420031190544,
+            1.1352703779489142,
+            1.5717304763960307,
+            1.9262075251931297,
+            2.3911542339560032,
+            2.9679938779914945
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.0005568509725066839,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 1.2809414672851562,
+        "cartocrow": {
+          "angles": [
+            6.107718232379019,
+            0.15035340501202743,
+            0.574480187847619,
+            1.1023131480170476,
+            1.526124900806723,
+            1.8510409629826614,
+            2.2873556961726758,
+            2.8482809397367657
+          ],
+          "cost": 0.4600087459654566,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            6.135628742546309,
+            0.16119769498882341,
+            0.574167773735403,
+            1.0925076957099566,
+            1.5066317985600328,
+            1.815386058182133,
+            2.2283561369287117,
+            2.7466960589032663
+          ],
+          "cost": 0.35281349387245853,
+          "chordOverlap": 0,
+          "wedgeOverlap": 1.2212453270876722e-15,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.10158488083349937
+      }
+    },
+    "wide-wedges": {
+      "note": "7 beads with arcs of very different widths — the two orderings diverge",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 18,
+          "from": 5.4322511575784524,
+          "to": 1.5490658503988657
+        },
+        {
+          "r": 9,
+          "from": 1.1339969389957467,
+          "to": 1.4839969389957473
+        },
+        {
+          "r": 24,
+          "from": 1.4689280275926286,
+          "to": 3.0689280275926283
+        },
+        {
+          "r": 11,
+          "from": 3.066125578789226,
+          "to": 3.566125578789226
+        },
+        {
+          "r": 16,
+          "from": 2.6887902047863896,
+          "to": 5.68879020478639
+        },
+        {
+          "r": 20,
+          "from": 4.785987755982989,
+          "to": 5.685987755982989
+        },
+        {
+          "r": 7,
+          "from": 5.809119456780721,
+          "to": 6.059119456780721
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 1.9505056994338823,
+        "cartocrowAnyOrder": 2.832710439341951,
+        "ours": 2.8423919677734375,
+        "oursCentreSemantics": 2.8423919677734375
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 1.9505056994338823,
+          "angles": [
+            5.55602988927313,
+            1.1339969389957467,
+            1.962757582807966,
+            3.566125578789226,
+            2.921020663592821,
+            4.785987755982989,
+            6.059119456780721
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 2.832710439341951,
+          "angles": [
+            0.33745704276223343,
+            1.140158992361458,
+            2.130701276976893,
+            3.1858826371178193,
+            3.9885412996075886,
+            5.07644132114603,
+            5.879029161511674
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.014806205925971483,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 2.776056230555112,
+        "cartocrow": {
+          "angles": [
+            0.44579468703978886,
+            1.2629162016319386,
+            2.254960874496107,
+            3.3084228005213125,
+            4.115091457193418,
+            5.192109402170174,
+            5.987921433635588
+          ],
+          "cost": 0.02198578439615179,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.4143427759136866,
+            1.3017706751051703,
+            2.2834643790199767,
+            3.322960804198601,
+            4.144277776510105,
+            5.1931412409669555,
+            5.97732637709947
+          ],
+          "cost": 0.010255339797201425,
+          "chordOverlap": 0,
+          "wedgeOverlap": 4.440892098500626e-16,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.0388544734732319
+      }
+    },
+    "sparse": {
+      "note": "12 small beads, wide arcs — several arcs straddle the seam at t = 0",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 4,
+          "from": 5.283185307179586,
+          "to": 1
+        },
+        {
+          "r": 5,
+          "from": 5.8242373752978285,
+          "to": 1.5410520681182422
+        },
+        {
+          "r": 6,
+          "from": 0.08210413623648449,
+          "to": 2.0821041362364845
+        },
+        {
+          "r": 4,
+          "from": 0.6231562043547267,
+          "to": 2.6231562043547267
+        },
+        {
+          "r": 5,
+          "from": 1.164208272472969,
+          "to": 3.164208272472969
+        },
+        {
+          "r": 6,
+          "from": 1.6179938779914949,
+          "to": 3.617993877991495
+        },
+        {
+          "r": 4,
+          "from": 2.1590459461097353,
+          "to": 4.159045946109735
+        },
+        {
+          "r": 5,
+          "from": 2.7000980142279793,
+          "to": 4.700098014227979
+        },
+        {
+          "r": 6,
+          "from": 3.24115008234622,
+          "to": 5.24115008234622
+        },
+        {
+          "r": 4,
+          "from": 3.782202150464464,
+          "to": 5.782202150464464
+        },
+        {
+          "r": 5,
+          "from": 4.23598775598299,
+          "to": 6.23598775598299
+        },
+        {
+          "r": 6,
+          "from": 4.77703982410123,
+          "to": 0.49385451692164484
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 5.2336294963125365,
+        "cartocrowAnyOrder": 5.105207768325752,
+        "ours": 5.171424865722656,
+        "oursCentreSemantics": 5.171424865722656
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 5.2336294963125365,
+          "angles": [
+            5.508895909719154,
+            5.978337684571851,
+            0.2729994438056558,
+            0.7964829575669976,
+            1.2659318428700708,
+            1.8438403294004095,
+            2.367314320060106,
+            2.8367508052071195,
+            3.41464770259126,
+            3.938108453082186,
+            4.407533202124959,
+            4.985427967467392
+          ],
+          "chordOverlap": 0.590014270408119,
+          "wedgeOverlap": 0.006866418108181449,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 5.105207768325752,
+          "angles": [
+            5.40180993229566,
+            5.873627637792783,
+            0.16775126701796061,
+            0.6923562739923463,
+            1.164208272472969,
+            1.7389632513487172,
+            2.2609715044136864,
+            2.730701489911606,
+            3.3064524627630205,
+            3.8296389872054792,
+            4.3006112683002815,
+            4.87756267121497
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 5.0031036129592374,
+        "cartocrow": {
+          "angles": [
+            5.720884598086371,
+            6.195630285897271,
+            0.4789506441924338,
+            1.0028460132035883,
+            1.4737120358481306,
+            2.0463235692315758,
+            2.5667927610410906,
+            3.035683103238743,
+            3.6095778473208666,
+            4.135602801291457,
+            4.6125924461006536,
+            5.193151176081338
+          ],
+          "cost": 4.602232704457452,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.00864331069897073,
+            0.5327139038892383,
+            1.0904423004654893,
+            1.6231562043547267,
+            2.106472936096935,
+            2.6642013326731853,
+            3.1705738278040805,
+            3.6917598499989737,
+            4.2494882465752255,
+            4.7734025709306405,
+            5.227727726171409,
+            5.785456122747661
+          ],
+          "cost": 0.006170691517017633,
+          "chordOverlap": 0,
+          "wedgeOverlap": 1.9984014443252818e-15,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.6560767467602311
+      }
+    },
+    "near-full": {
+      "note": "beads that nearly fill the necklace",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 45,
+          "from": 5.533185307179586,
+          "to": 0.75
+        },
+        {
+          "r": 45,
+          "from": 0.2971975511965974,
+          "to": 1.7971975511965983
+        },
+        {
+          "r": 45,
+          "from": 1.3443951023931948,
+          "to": 2.844395102393195
+        },
+        {
+          "r": 45,
+          "from": 2.391592653589793,
+          "to": 3.891592653589793
+        },
+        {
+          "r": 45,
+          "from": 3.4387902047863896,
+          "to": 4.93879020478639
+        },
+        {
+          "r": 45,
+          "from": 4.48598775598299,
+          "to": 5.98598775598299
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 1.1217601903924654,
+        "cartocrowAnyOrder": 1.1031543351837771,
+        "ours": 1.1111068725585938,
+        "oursCentreSemantics": 1.1111068725585938
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 1.1217601903924654,
+          "angles": [
+            5.641745148436746,
+            0.4056247817442449,
+            1.4528488573011127,
+            2.50007293174673,
+            3.5472970050820334,
+            4.594521077311227
+          ],
+          "chordOverlap": 0.9699017794586382,
+          "wedgeOverlap": 0.011217249878992863,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 1.1031543351837771,
+          "angles": [
+            5.536251594679484,
+            0.3001796152526275,
+            1.347394011891481,
+            2.394608408153598,
+            3.4418228040389747,
+            4.4890371995475995
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 1.0810912484801016,
+        "cartocrow": {
+          "angles": [
+            6.118889907266422,
+            0.8732321977362432,
+            1.9224244483022415,
+            2.971566086281473,
+            4.02066964940063,
+            5.069772703775621
+          ],
+          "cost": 0.17163182681984823,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0,
+            1.0471975511965983,
+            2.094395102393195,
+            3.141592653589793,
+            4.18879020478639,
+            5.23598775598299
+          ],
+          "cost": 0,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.17396535346035513
+      }
+    },
+    "seam-pair": {
+      "note": "two beads that both want the same bearing, one on a narrow arc across the seam",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 19.23,
+          "from": 6.171449319423605,
+          "to": 0.10126401224401693
+        },
+        {
+          "r": 12.5,
+          "from": 5.087647941195541,
+          "to": 1.223462634015955
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 3.6831753442583,
+        "cartocrowAnyOrder": 3.846179468949651,
+        "ours": 3.1179733276367188,
+        "oursCentreSemantics": 3.8535385131835938
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 3.6831753442583,
+          "angles": [
+            0.10126401224401693,
+            5.087647941195541
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 3.846179468949651,
+          "angles": [
+            6.171449319423605,
+            1.2234626340159558
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 8.881784197001252e-16,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 3.0556138610839843,
+        "cartocrow": {
+          "angles": [
+            6.171449319423605,
+            0.9115829824091426
+          ],
+          "cost": 0.8170645398495079,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            6.186349992749282,
+            0.9231547352910887
+          ],
+          "cost": 0.8350207136682827,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.014900673325676905
+      }
+    },
+    "pair": {
+      "note": "2 beads, far apart",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 30,
+          "from": 0.1981317007977319,
+          "to": 1.198131700797732
+        },
+        {
+          "r": 18,
+          "from": 2.9906585039886586,
+          "to": 3.9906585039886586
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 2.8654935637154284,
+        "cartocrowAnyOrder": 3.3195372718067517,
+        "ours": 3.3333282470703125,
+        "oursCentreSemantics": 3.3333282470703125
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 2.8654935637154284,
+          "angles": [
+            0.6222706764140309,
+            3.5665195283723525
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 3.3195372718067517,
+          "angles": [
+            0.6027517459162626,
+            3.5860384588701177
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 3.2531465263706165,
+        "cartocrow": {
+          "angles": [
+            0.6941326788389608,
+            3.4946575259474133
+          ],
+          "cost": 0.000031984353253339175,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.6981317007977319,
+            3.4906585039886586
+          ],
+          "cost": 0,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.0039990219587711096
+      }
+    },
+    "single": {
+      "note": "1 bead",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 30,
+          "from": 0.1981317007977319,
+          "to": 1.198131700797732
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 0,
+        "cartocrowAnyOrder": 3.3195372718067517,
+        "ours": 3.3333282470703125,
+        "oursCentreSemantics": 3.3333282470703125
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 0,
+          "angles": [
+            0.19813170079773187
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 3.3195372718067517,
+          "angles": [
+            0.1981317007977319
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 3.2531465263706165,
+        "cartocrow": {
+          "angles": [
+            0.1981317007977319
+          ],
+          "cost": 0.25,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.6981317007977319
+          ],
+          "cost": 0,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.5
+      }
+    },
+    "buffered": {
+      "note": "5 beads with a 0.05 rad buffer required between them",
+      "R": 100,
+      "buffer": 0.05,
+      "beads": [
+        {
+          "r": 12,
+          "from": 5.733185307179586,
+          "to": 0.5499999999999998
+        },
+        {
+          "r": 15,
+          "from": 0.6717304763960303,
+          "to": 1.77173047639603
+        },
+        {
+          "r": 18,
+          "from": 1.8934609527920614,
+          "to": 2.993460952792061
+        },
+        {
+          "r": 21,
+          "from": 3.1151914291880924,
+          "to": 4.215191429188092
+        },
+        {
+          "r": 24,
+          "from": 4.3369219055841235,
+          "to": 5.436921905584121
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 3.1665018211868787,
+        "cartocrowAnyOrder": 3.098545102166021,
+        "ours": 3.1103057861328125,
+        "oursCentreSemantics": 3.1103057861328125
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 3.1665018211868787,
+          "angles": [
+            6.237364404643385,
+            0.8716749052214441,
+            2.005298369125285,
+            3.3703445446539866,
+            4.990307772470774
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.05597052267789615,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 3.098545102166021,
+          "angles": [
+            6.11410719265087,
+            0.7586532325370312,
+            1.8966054796190286,
+            3.258726230516683,
+            4.866140946139593
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.02152296192164216,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 3.0365742001227005,
+        "cartocrow": {
+          "angles": [
+            0.09831177108273081,
+            1.0741006522914636,
+            2.213648765585665,
+            3.554463176512678,
+            5.129842038628764
+          ],
+          "cost": 0.1555443476661333,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.10132676411216579,
+            1.1660222367752544,
+            2.267219179207274,
+            3.586981363694097,
+            5.145000186661985
+          ],
+          "cost": 0.1171528973520792,
+          "chordOverlap": 0,
+          "wedgeOverlap": 1.6135981439902025e-12,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.09192158448379129
+      }
+    },
+    "coincident-targets": {
+      "note": "4 beads with whole-circle arcs — every one wants the same spot",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 15,
+          "from": 0,
+          "to": 6.283185307179586
+        },
+        {
+          "r": 15,
+          "from": 0,
+          "to": 6.283185307179586
+        },
+        {
+          "r": 15,
+          "from": 0,
+          "to": 6.283185307179586
+        },
+        {
+          "r": 15,
+          "from": 0,
+          "to": 6.283185307179586
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 5.212209883120198,
+        "cartocrowAnyOrder": 0,
+        "ours": 4.714042663574219,
+        "oursCentreSemantics": 4.714042663574219
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 5.212209883120198,
+          "angles": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "chordOverlap": 156.36629649360594,
+          "wedgeOverlap": 1.7951958020513101,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 0,
+          "angles": [
+            5.551115123125783e-17,
+            5.551115123125783e-17,
+            5.551115123125783e-17,
+            5.551115123125783e-17
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 4.619761810302735,
+        "cartocrow": {
+          "angles": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "cost": 39.47841760435743,
+          "chordOverlap": 138.59285430908204,
+          "wedgeOverlap": 1.5311849320915378,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.8448152554524864,
+            2.3760001875440224,
+            3.907185119635564,
+            5.4383700517271
+          ],
+          "cost": 11.722636481320842,
+          "chordOverlap": 1.4210854715202004e-13,
+          "wedgeOverlap": 1.7763568394002505e-15,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 2.3760001875440224
+      }
+    },
+    "wide-arcs": {
+      "note": "6 beads with 6.0 rad arcs — nearly unconstrained",
+      "R": 100,
+      "buffer": 0,
+      "beads": [
+        {
+          "r": 10,
+          "from": 3.2831853071795862,
+          "to": 3
+        },
+        {
+          "r": 12,
+          "from": 4.330382858376184,
+          "to": 4.0471975511965965
+        },
+        {
+          "r": 14,
+          "from": 5.377580409572781,
+          "to": 5.094395102393195
+        },
+        {
+          "r": 16,
+          "from": 0.14159265358979312,
+          "to": 6.141592653589793
+        },
+        {
+          "r": 18,
+          "from": 1.1887902047863905,
+          "to": 0.9056048976068043
+        },
+        {
+          "r": 20,
+          "from": 2.2359877559829897,
+          "to": 1.9528024488034035
+        }
+      ],
+      "scale": {
+        "cartocrowFixedOrder": 3.47539094453818,
+        "cartocrowAnyOrder": 3.28783963214969,
+        "ours": 3.3044662475585938,
+        "oursCentreSemantics": 3.3044662475585938
+      },
+      "cartocrowSelfValidity": {
+        "fixedOrder": {
+          "scale": 3.47539094453818,
+          "angles": [
+            4.768944737690839,
+            5.500532605311046,
+            0.1022331412245654,
+            1.1323260663362742,
+            2.3411489456830363,
+            3.727185419376155
+          ],
+          "chordOverlap": 5.746671430409606,
+          "wedgeOverlap": 0.08171465373566011,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "anyOrder": {
+          "scale": 3.28783963214969,
+          "angles": [
+            0.49474592751431423,
+            1.2450904057612584,
+            2.1385971754322046,
+            3.180263697217586,
+            4.376610066042974,
+            5.736215789830435
+          ],
+          "chordOverlap": 0,
+          "wedgeOverlap": 0.01088626304862883,
+          "outsideInterval": 0,
+          "saturated": false
+        }
+      },
+      "headToHead": {
+        "scale": 3.222082839506696,
+        "cartocrow": {
+          "angles": [
+            0.30427496750238614,
+            1.0803057384815316,
+            2.001659284606359,
+            3.04237022510536,
+            4.220370635537177,
+            5.557851915746072
+          ],
+          "cost": 0.2167182910752145,
+          "chordOverlap": 0,
+          "wedgeOverlap": 0,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "ours": {
+          "angles": [
+            0.1856914032272039,
+            1.0471975511965965,
+            1.9516517651559813,
+            2.9612696970449868,
+            4.121597450935074,
+            5.4405554003891226
+          ],
+          "cost": 0.13373611352316256,
+          "chordOverlap": 0,
+          "wedgeOverlap": 1.7763568394002505e-15,
+          "outsideInterval": 0,
+          "saturated": false
+        },
+        "maxAngleDiff": 0.11858356427518224
+      }
+    }
+  }
+}

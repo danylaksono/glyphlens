@@ -27,6 +27,11 @@ Grouped by the role they play in the design, not alphabetically.
   implementation alongside flow maps, chorematic maps and isoline
   simplification. Source: <https://github.com/tue-alga>
   Useful as a correctness oracle. No JS port exists, which is why we wrote one.
+  Used as one in `tests/oracle/`: see
+  [F-37](findings.md#f-37-the-reference-implementation-found-two-bugs-in-ours-and-one-in-itself)
+  for what that comparison found on both sides. Note that the `necklace_map`
+  module was **removed from CartoCrow's master** in `de6b90c` (2026-04-13); the
+  last commit that has it is `93a3703`.
 
 ## Interactive lenses
 

@@ -146,6 +146,59 @@ test('necklace keeps symbols inside their feasible interval', () => {
   assert.ok(c.position >= 0.5 && c.position <= 0.75);
 });
 
+test('necklace respects a feasible interval that straddles the seam', () => {
+  // The arc [0.90, 0.10] wraps past t = 0 and the symbol wants its midpoint.
+  // Lifting the arc into the wrong turn used to shove the symbol to 0.91 —
+  // the far edge of its own interval — with 94% of the curve empty.
+  const items = [
+    { id: 'wraps', position: 0.00, halfWidth: 0.01, interval: [0.90, 0.10] },
+    { id: 'b', position: 0.35, halfWidth: 0.01, interval: [0.25, 0.45] },
+    { id: 'c', position: 0.70, halfWidth: 0.01, interval: [0.60, 0.80] },
+  ];
+  const { placements, cost, violation } = placeNecklace(items);
+  assertNoOverlap(placements);
+  assert.ok(cost < 1e-12, `nothing forces a displacement here, but cost is ${cost}`);
+  assert.ok(violation < 1e-9);
+  assert.equal(placements.find((p) => p.id === 'wraps').position, 0);
+});
+
+test('necklace keeps the wrap-around gap when an interval clamp fires', () => {
+  // Two symbols that both want t = 0.5, one on a narrow arc. Clamping the
+  // narrow one used to drop the span cap, closing the gap across the seam.
+  const items = [
+    { id: 'narrow', position: 0.4991, halfWidth: 0.0467, interval: [0.4355, 0.5625] },
+    { id: 'roomy', position: 0.5022, halfWidth: 0.03, interval: [0.2797, 0.7247] },
+  ];
+  const { placements, violation } = placeNecklace(items);
+  assertNoOverlap(placements);
+  assert.ok(violation < 1e-6, `violation ${violation}`);
+});
+
+test('necklace places a lone symbol inside its feasible interval', () => {
+  const { placements, violation } = placeNecklace([
+    { id: 'only', position: 0.10, halfWidth: 0.02, interval: [0.30, 0.60] },
+  ]);
+  const [p] = placements;
+  assert.ok(p.position >= 0.32 - 1e-9 && p.position <= 0.58 + 1e-9, `placed at ${p.position}`);
+  assert.equal(p.clamped, true);
+  assert.equal(violation, 0);
+});
+
+test('necklace reports a violation when arcs cannot hold their symbols', () => {
+  // Fill is only 40% of the curve, so `overflow` stays false: the room is there,
+  // the arcs are not. Without `violation` this returns a silent best effort.
+  const items = Array.from({ length: 4 }, (_, i) => ({
+    id: i,
+    position: 0.5 + i * 0.01,
+    halfWidth: 0.05,
+    interval: [0.5 + i * 0.01 - 0.01, 0.5 + i * 0.01 + 0.01], // narrower than the symbol
+  }));
+  const { overflow, violation, fill } = placeNecklace(items);
+  assert.ok(fill < 1);
+  assert.equal(overflow, false);
+  assert.ok(violation > 0.03, `expected the shortfall to be reported, got ${violation}`);
+});
+
 test('necklace is stable: same input, same output', () => {
   const items = Array.from({ length: 12 }, (_, i) => ({
     id: i,

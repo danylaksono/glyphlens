@@ -479,10 +479,10 @@ library:
 ```js
 import { placeNecklace } from 'glyphlens/necklace';
 
-const { placements, overflow } = placeNecklace([
+const { placements, overflow, violation } = placeNecklace([
   { id: 'a', position: 0.30, halfWidth: 0.05 },  // cyclic parameter in [0,1)
   { id: 'b', position: 0.31, halfWidth: 0.05 },
-  { id: 'c', position: 0.32, halfWidth: 0.05, interval: [0.25, 0.5] },
+  { id: 'c', position: 0.32, halfWidth: 0.05, interval: [0.25, 0.5] },  // arcs may cross 0
 ]);
 ```
 
@@ -490,6 +490,13 @@ Each result carries the `displacement` from its preferred position, so you can
 decide what to do when placement has had to move a symbol far off its true
 bearing — an open question, not a solved one
 ([Q-2](docs/findings.md#q-2-how-much-angular-displacement-is-acceptable)).
+
+`overflow` says the curve ran out of room overall; `violation` says the result
+misses the constraints, which is the case `overflow` cannot see — arcs too narrow
+for their symbols, or too crowded to satisfy together. Zero means every symbol is
+separated and inside its arc. The engine is checked against CartoCrow, the C++
+reference implementation, in `tests/oracle/`
+([F-37](docs/findings.md#f-37-the-reference-implementation-found-two-bugs-in-ours-and-one-in-itself)).
 
 ## Layout
 

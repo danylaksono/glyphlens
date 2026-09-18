@@ -1515,14 +1515,59 @@ var glyphlens = (function (exports) {
    *
    * ## Feasible intervals
    *
-   * `interval: [lo, hi]` confines an item to an arc. For point data the interval
-   * is the whole circle and only `position` matters; for an area it is the
-   * angular projection of the geometry seen from the lens centre, which is
-   * Speckmann & Verbeek's original primitive. Interval handling is by projection
-   * onto the box between isotonic passes — approximate, unlike the unconstrained
-   * case. Recorded in docs/findings.md F-1.
+   * `interval: [lo, hi]` confines an item to an arc, which may straddle `t = 0`.
+   * For point data the interval is the whole circle and only `position` matters;
+   * for an area it is the angular projection of the geometry seen from the lens
+   * centre, which is Speckmann & Verbeek's original primitive. An item's whole
+   * symbol is kept inside its arc, which is stricter than Speckmann & Verbeek,
+   * who ask only that the symbol's centre is.
+   *
+   * Interval handling is by projection onto the box between isotonic passes —
+   * approximate, unlike the unconstrained case. Recorded in docs/findings.md F-1
+   * and measured against CartoCrow in F-37; `violation` in the result says how
+   * far the answer misses the constraints.
    */
 
+
+  /** Constraint violations below this are numerical noise, in parameter units. */
+  const TOL = 1e-9;
+
+  /**
+   * Length of a feasible arc `[lo, hi]`, in parameter units.
+   *
+   * `[0.9, 0.1]` straddles the seam and is 0.2 long. `[0, 1]` — and any arc whose
+   * endpoints coincide after a full turn — is the whole curve, i.e. no constraint;
+   * `[0.3, 0.3]` is a pin.
+   */
+  function arcLength([lo, hi]) {
+    const span = hi - lo;
+    if (span === 0) return 0;
+    return wrap01(span) === 0 ? 1 : wrap01(span);
+  }
+
+  /**
+   * Projects `x` onto the feasible arc `iv`, for a symbol of half-width `w`.
+   *
+   * The arc repeats every turn, so it is lifted into the turn `x` sits in and the
+   * neighbouring turns are tried too: an arc that straddles `t = 0` is nearest in
+   * the turn below, and picking the lift by `floor(x)` alone sends such a symbol
+   * to the far edge of its own interval.
+   *
+   * Returns `x` unchanged when it already fits. A symbol wider than its arc
+   * cannot fit inside it at all, so it is centred on the arc instead.
+   */
+  function projectOntoArc(x, iv, w) {
+    const len = arcLength(iv);
+    if (len >= 1) return x; // whole curve: no constraint
+    const seed = iv[0] + Math.floor(x - iv[0]);
+    let best = null;
+    for (let turn = -1; turn <= 1; turn++) {
+      const lo = seed + turn;
+      const candidate = len <= 2 * w ? lo + len / 2 : Math.min(Math.max(x, lo + w), lo + len - w);
+      if (best === null || Math.abs(candidate - x) < Math.abs(best - x)) best = candidate;
+    }
+    return best;
+  }
 
   /**
    * @typedef {object} NecklaceItem
@@ -1537,38 +1582,58 @@ var glyphlens = (function (exports) {
    * @param {NecklaceItem[]} items
    * @param {object} [options]
    * @param {boolean} [options.cyclic=true]
-   * @param {number} [options.intervalPasses=8] projection passes for feasible intervals
+   * @param {number} [options.intervalPasses=32] projection passes for feasible
+   *   intervals. The loop stops as soon as a pass changes nothing, so an
+   *   unconstrained or already-converged layout never pays for the budget; only
+   *   the tight cases iterate, and those are the ones that need it. At 8 the
+   *   residual on a tight instance is around 1e-4 of the curve; by 32 it is at
+   *   the floor of double precision.
    * @returns {{
    *   placements: Array<{ id, position, preferred, displacement, halfWidth, clamped }>,
+   *                        `clamped` is true when the item's feasible interval
+   *                        actually bound it during the solve,
    *   fill: number,        fraction of the curve consumed by symbols
-   *   overflow: boolean,   true if the symbols cannot fit at all
-   *   cost: number
+   *   overflow: boolean,   true if the symbols cannot fit on the curve at all
+   *   cost: number,
+   *   violation: number    how far the result misses the constraints, in
+   *                        parameter units: 0 is a placement that separates every
+   *                        symbol and keeps each inside its arc. Non-zero means
+   *                        the request was infeasible (arcs too narrow, or too
+   *                        crowded to satisfy together) or that interval
+   *                        projection did not converge. `overflow` only reports
+   *                        the curve running out of room overall, so it stays
+   *                        false in cases where `violation` is the only warning.
    * }}
    */
   function placeNecklace(items, options = {}) {
-    const { cyclic = true, intervalPasses = 8 } = options;
+    const { cyclic = true, intervalPasses = 32 } = options;
     const n = items.length;
-    if (n === 0) return { placements: [], fill: 0, overflow: false, cost: 0 };
+    if (n === 0) return { placements: [], fill: 0, overflow: false, cost: 0, violation: 0 };
 
     const totalWidth = items.reduce((s, it) => s + 2 * it.halfWidth, 0);
     const fill = totalWidth;
 
     if (n === 1) {
       const it = items[0];
+      const preferred = wrap01(it.position);
+      const placed = it.interval ? wrap01(projectOntoArc(preferred, it.interval, it.halfWidth)) : preferred;
+      const displacement = cyclicDelta(preferred, placed);
+      const len = it.interval ? arcLength(it.interval) : 1;
       return {
         placements: [
           {
             id: it.id,
-            position: wrap01(it.position),
-            preferred: wrap01(it.position),
-            displacement: 0,
+            position: placed,
+            preferred,
+            displacement,
             halfWidth: it.halfWidth,
-            clamped: false,
+            clamped: Math.abs(displacement) > TOL,
           },
         ],
         fill,
         overflow: totalWidth > 1,
-        cost: 0,
+        cost: (it.weight ?? 1) * displacement * displacement,
+        violation: len < 1 && len < 2 * it.halfWidth ? it.halfWidth - len / 2 : 0,
       };
     }
 
@@ -1610,36 +1675,35 @@ var glyphlens = (function (exports) {
       // Wrap-around leaves this much slack for the chain to spread into.
       const maxSpan = cyclic ? 1 - seq[0].w - seq[n - 1].w - c[n - 1] : Infinity;
 
-      let y =
+      const solve = (targets) =>
         cyclic && Number.isFinite(maxSpan)
-          ? isotonicBoundedSpan(q, v, Math.max(maxSpan, 0))
-          : isotonic(q, v);
+          ? isotonicBoundedSpan(targets, v, Math.max(maxSpan, 0))
+          : isotonic(targets, v);
 
+      let y = solve(q);
       let x = y.map((yi, k) => yi + c[k]);
 
-      // Feasible intervals, by projection. Clamp then restore ordering; repeat.
+      // Feasible intervals, by projection. Clamp then restore spacing; repeat.
       const hasIntervals = seq.some((s) => s.it.interval);
+      const clamped = new Array(n).fill(false);
       if (hasIntervals) {
         for (let pass = 0; pass < intervalPasses; pass++) {
           let moved = false;
           for (let k = 0; k < n; k++) {
             const iv = seq[k].it.interval;
             if (!iv) continue;
-            // Bring the interval into the same unwrapped frame as x[k].
-            const base = Math.floor(x[k]);
-            const lo = base + wrap01(iv[0] - (p[k] - wrap01(p[k])));
-            const hi = lo + wrap01(iv[1] - iv[0]);
-            const clampedX = Math.min(Math.max(x[k], lo + seq[k].w), hi - seq[k].w);
-            if (Math.abs(clampedX - x[k]) > 1e-9) {
-              x[k] = clampedX;
+            const projected = projectOntoArc(x[k], iv, seq[k].w);
+            if (Math.abs(projected - x[k]) > TOL) {
+              x[k] = projected;
+              clamped[k] = true;
               moved = true;
             }
           }
           if (!moved) break;
-          y = isotonic(
-            x.map((xi, k) => xi - c[k]),
-            v,
-          );
+          // Restore spacing under the same constraints as the first solve. The
+          // span cap is what keeps the wrap-around gap honest, so dropping it
+          // here would let a clamped chain close up across the seam.
+          y = solve(x.map((xi, k) => xi - c[k]));
           x = y.map((yi, k) => yi + c[k]);
         }
       }
@@ -1650,7 +1714,30 @@ var glyphlens = (function (exports) {
         cost += seq[k].v * d * d;
       }
 
-      if (!best || cost < best.cost) best = { cost, seq, x };
+      // Projection is approximate, so a cut can end up infeasible. Measure what
+      // it leaves violated — otherwise a cheap infeasible cut beats a sound one.
+      let violation = 0;
+      for (let k = 1; k < n; k++) {
+        violation = Math.max(violation, seq[k - 1].w + seq[k].w - (x[k] - x[k - 1]));
+      }
+      if (cyclic && n > 1) {
+        violation = Math.max(violation, seq[n - 1].w + seq[0].w - (x[0] + 1 - x[n - 1]));
+      }
+      for (let k = 0; k < n; k++) {
+        const iv = seq[k].it.interval;
+        if (!iv) continue;
+        const len = arcLength(iv);
+        if (len >= 1) continue;
+        violation = Math.max(violation, Math.abs(projectOntoArc(x[k], iv, seq[k].w) - x[k]));
+        // An arc narrower than its own symbol cannot hold it wherever it goes.
+        if (len < 2 * seq[k].w) violation = Math.max(violation, seq[k].w - len / 2);
+      }
+
+      const better =
+        !best ||
+        violation < best.violation - TOL ||
+        (violation <= best.violation + TOL && cost < best.cost);
+      if (better) best = { cost, violation, seq, x, clamped };
     }
 
     const placements = new Array(n);
@@ -1662,11 +1749,11 @@ var glyphlens = (function (exports) {
         preferred: s.p,
         displacement: cyclicDelta(s.p, pos),
         halfWidth: s.it.halfWidth,
-        clamped: Boolean(s.it.interval),
+        clamped: best.clamped[k],
       };
     });
 
-    return { placements, fill, overflow, cost: best.cost };
+    return { placements, fill, overflow, cost: best.cost, violation: Math.max(best.violation, 0) };
   }
 
   /**

@@ -1293,6 +1293,106 @@ recorded the gap honestly and buried it: a comment is where a decision goes to
 be agreed with, not where it goes to be reviewed. **When a request is answered
 by something adjacent to it, that belongs in the reply, not in the source.**
 
+### F-37. The reference implementation found two bugs in ours and one in itself
+
+Recorded 2026-09-18.
+
+[D-1](#d-1-necklace-first-continuum-later) justified this library on the grounds
+that the only reference implementation of necklace maps is C++ (CartoCrow, TU
+Eindhoven). That cuts both ways: it is also the only thing we can check
+ourselves against, and until now we never had. So CartoCrow's `necklace_map`
+module was built as an oracle and both engines were run over the same problems —
+twelve hand-picked scenarios and 200 random instances. The harness is in
+`tests/oracle/`; `tests/necklace-oracle.test.mjs` replays the captured output in
+CI, which needs no CGAL.
+
+CartoCrow removed `necklace_map` from master in `de6b90c` (2026-04-13), so the
+oracle is built from its parent, `93a3703`. Worth knowing before the reference
+disappears from a shallow clone.
+
+**The comparison is not like for like, and saying how is most of the work.**
+CartoCrow maximises symbol size and then relaxes an attraction/repulsion force;
+we minimise displacement at a size the caller picks. Its non-overlap test is the
+exact chord distance between centres, ours the sum of covering angles — the same
+conservative measure CartoCrow itself uses when computing scale, and identical to
+the chord test when two symbols are the same size. It asks that a bead's
+*centre* lie in its arc, we keep the *whole symbol* inside. Three comparable
+quantities survive all that: how large the symbols can get, whether the result
+obeys the constraints, and how far each symbol lands from its target.
+
+**Two bugs in ours, both in interval handling, both invisible without arcs that
+straddle the seam:**
+
+1. A feasible arc was lifted into the turn given by `floor(x)`, which is the
+   wrong turn for an arc crossing `t = 0`. A symbol sitting dead centre in its
+   own arc, with 94% of the curve empty, was shoved to the arc's clockwise edge.
+   In the oracle's `sparse` scenario two of twelve symbols were displaced by more
+   than 50°. The fix projects onto whichever lift of the arc is nearest.
+2. Worse, and only reachable through the first: the re-solve inside the
+   projection loop used plain isotonic regression, dropping the wrap-around span
+   cap that the first solve applies. So the moment any interval clamp fired, the
+   cyclic non-overlap constraint was quietly abandoned and symbols could
+   intersect across the seam. The overlapping answer also *scored better* — cuts
+   were ranked by displacement cost alone — so it was actively preferred. The fix
+   re-solves under the same constraints and ranks cuts by feasibility first.
+
+The second is the one worth remembering. The first bug was a wrong answer; the
+second was a wrong answer that the objective function rewarded, which no amount
+of looking at the cost would have revealed.
+
+Two smaller things fell out: a single item ignored its interval entirely, and
+`intervalPasses` defaulted to 8, which leaves about `1e-4` of the curve of
+residual on a tight instance. It is now 32 — free, because the loop stops as
+soon as a pass changes nothing, so only the instances that need the budget pay
+for it, and by 32 the residual is at the floor of double precision.
+
+**One thing the engine could not say.** `overflow` reports the curve running out
+of room overall, and nothing reported arcs too narrow to hold their symbols. On
+an instance where six of nine symbols were wider than their own arcs, the result
+was a best-effort placement with symbols up to 92° outside their arcs and no
+signal at all — `overflow` was false, because total fill was 96%. The solver
+already computed the constraint violation internally for cut selection; it is now
+returned as `violation`, in parameter units. Zero means every symbol is
+separated and inside its arc. The property tested is one-directional:
+feasibility is joint, not per symbol, so a non-zero `violation` is not
+diagnosable back to one item — but zero has to mean a placement that survives an
+independent geometric check.
+
+**And one in CartoCrow.** Its fixed-order scale factor can exceed the largest
+overlap-free size, at which point its own placement has its own beads
+intersecting. Four equal beads on a circle of radius 100: it returns 3.7788,
+where the exact limit is 3.5355 and its output overlaps by 9.7 world units. The
+cause is visible in `ComputeScaleFactorFixedOrder::Optimize`, which returns
+`min(CorrectScaleFactor(rho), rho_full_necklace)`: `rho_full_necklace` is the
+necklace's total capacity expressed as a multiplier on *angles*, compared
+against a value already converted to a multiplier on *radii*. Applying the same
+`sin(rho * c) / sin(c)` correction to the capacity bound gives 3.535534 —
+exactly the analytic limit, and exactly what we return. Over the random
+instances the fixed-order scale overlaps in 1.5% of cases (median depth 0.58
+world units on radius 100). Two degenerate returns as well: fixed order returns
+a scale of 0 for a single bead, and any order returns 0 when every arc is the
+whole circle. Its **any-order** mode is otherwise solid — 1 overlap in 200 — and
+is the right thing to compare against.
+
+**Where that leaves us.** Under CartoCrow's own containment rule we match or
+beat its any-order scale factor in all twelve scenarios (1.001–1.013x). Under
+our stricter rule, across 200 random instances, our largest valid scale is a
+median 0.902 of its any-order optimum, p10 0.709 — we still leave room on the
+table when arcs bind. On displacement, at a scale both engines accept, ours is a
+median 0.869 of CartoCrow's and lower in 69.5% of instances; where it is higher
+the cause is the same one.
+
+That remaining gap is the approximation [F-1](#f-1-the-interval-api-is-load-bearing)
+flagged on day one and never quantified: interval handling is alternating
+projection, not a solve. It now has a number, and a route. For a fixed order the
+constrained problem is isotonic regression with box constraints, and those bounds
+can be made monotone by running maximum and minimum — after which clipping the
+unconstrained fit is exact, in O(n). That would leave only the cyclic span cap
+and the choice of lift approximate. Not done here: this was a comparison, and
+rewriting the solver on the way through would have made it impossible to say
+which change moved which number.
+
+
 ---
 
 ## Open questions
