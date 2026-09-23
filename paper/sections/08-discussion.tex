@@ -4,13 +4,17 @@
 
 \paragraph{A mean bearing is not always a direction.} Positioning a
 category's mark at the circular mean of its members is only honest when they
-are concentrated. On the demonstration data all four categories' means fell
-within about twenty degrees of each other, because the whole dataset is denser
-to the north-west \todo{re-measure and report the actual spread from the
-bundled data rather than the development log}: the bearing-faithful ring
-collapsed into a bundle and lost the composition reading the categorical ring
-gave for free. The morph from category order to bearing is therefore strongest
-for spatially segregated categories. Two responses are built: marks are faded
+are concentrated. On the bundled demonstration data (315 places within
+1.2\,km of the centre) the two large categories point the same way as the data
+as a whole: retail at $302^\circ$ ($R=0.51$, $n=135$) and food at $329^\circ$
+($R=0.28$, $n=153$), against $313^\circ$ ($R=0.34$) for all places. Health
+points north-east ($42^\circ$, $n=11$) and civic south ($182^\circ$, $n=16$), but
+civic's resultant length is $0.12$, so its mean bearing is close to arbitrary.
+A bearing-faithful ring therefore separates the large categories by
+concentration rather than by direction, and gives up the composition reading
+the categorical ring gave for free. (An earlier extract recorded in the development log showed all four means within
+about twenty degrees; which data it was is not recorded.) The morph from category
+order to bearing is strongest for spatially segregated categories. Two responses are built: marks are faded
 by their resultant length $R$, and the \emph{cross} binning (bearing
 $\times$ category) gives each category one mark per sector, so that a diffuse
 category shows as a spread of marks rather than one misplaced one. We regard
@@ -29,9 +33,12 @@ deprivation domains) or narrow the claim in the title and abstract.}
 
 \paragraph{Relation to geographically weighted statistics.} A field of
 disc-shaped lenses on a lattice computes, at each centre, local summaries with
-a uniform (hard cut-off) kernel---which is geographically weighted summary
-statistics with the simplest kernel~\cite{brunsdon2002gwss}, and a field drawn
-as glyphs is close to a tilemap of such summaries~\cite{slingsby2018tilemaps}.
+a uniform (hard cut-off) kernel---geographically weighted summary
+statistics~\cite{brunsdon2002gwss} with the simplest kernel. Dykes and Brunsdon
+call the GW mean ``simply a moving spatial window mean smoother'' and note that
+the statistics could be centred on the points of a regular
+grid~\cite{dykes2007gwvis}, and a field drawn as glyphs is what tilemaps of GW
+outputs were proposed to be~\cite{slingsby2018tilemaps}.
 We do not claim the statistics. What the lens adds is (i) keeping the
 within-lens decomposition by bearing and distance, drawn at its true bearing,
 where a GW summary is one scalar per location, and (ii) one model in which the
@@ -39,8 +46,9 @@ single lens and the field are the same object at different settings.
 \todo{Implement bi-square and Gaussian kernels so that the field reproduces GW
 summary statistics exactly, and show it; this turns the obvious reviewer
 objection into a validity check.}
-\doubt{Readings of Brunsdon et al.\ (kernel choice) and of Slingsby's tilemaps
-are pending the citation audit.}
+\doubt{Brunsdon et al.\ 2002 was read at abstract level; whether it discusses a
+uniform kernel explicitly is unverified. Dykes \& Brunsdon and Slingsby 2018 were
+read in full.}
 
 \paragraph{The continuum has a usable range.} As the lattice densifies each
 ring shrinks, and below roughly ten pixels of ring radius a glyph stops
@@ -68,8 +76,9 @@ for elongated or concave units, where the population-weighted centroid, the
 geometric centroid and the unit's full angular extent disagree. The baseline
 for the location quotient (complement, region, nation) changes the reading and
 should be visible, not a configuration default. Placement is exact only in the
-common case (\cref{sec:placement}). Web Mercator distorts area, so densities are
-computed geodesically rather than from screen space.
+common case (\cref{sec:placement}). Density denominators come from metric radii
+and, for polygons, a local equirectangular frame, never from Web Mercator screen
+space, which inflates area by $1/\cos^2\phi$ at latitude $\phi$.
 
 \paragraph{Name.} The library's working name collides with an unrelated
 occlusion-management technique for 3D glyph fields~\cite{tong2017glyphlens};

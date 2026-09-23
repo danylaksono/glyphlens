@@ -23,6 +23,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{tabularx}
 \usepackage{multirow}
 \usepackage{array}
@@ -34,8 +35,8 @@
 \pgfplotsset{compat=1.18}
 \usepackage{subcaption}
 \usepackage[numbers,sort&compress]{natbib}
-\usepackage{doi}
 \usepackage[hidelinks]{hyperref}
+\usepackage{doi}
 \usepackage{cleveref}
 
 % --- annotations -----------------------------------------------------------
@@ -48,6 +49,9 @@
   \newcommand{\doubt}[1]{}
   \newcommand{\todo}[1]{}
 \fi
+
+% Audit table: author, year and number of a source.
+\newcommand{\src}[1]{\citeauthor{#1}~\citeyear{#1}~\cite{#1}}
 
 % --- names -----------------------------------------------------------------
 % One place to change the system's name: "GlyphLens" is already the title of

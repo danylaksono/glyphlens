@@ -170,12 +170,22 @@ VisQuill is a reactive-geometry kit (a constraint solver over points, shapes and
 values); the lens gallery is a *demo* of it. So "don't duplicate VisQuill" is
 not really about lenses. The two projects differ in what they are *about*:
 reactive geometry vs. composable cartographic strategy. Confirmed from
-<https://visquill.com/product/> — self-described as "not a charting library",
+<https://visquill.com/products> (the `/product/` URL recorded earlier no longer loads; checked 2026-09-23) — self-described as "not a charting library",
 Lab examples MIT.
 
 Practical consequence: no reason to reimplement constraint solving. Placement
 here is a small number of purpose-built cartographic algorithms, not a general
 solver.
+
+**Addendum, 2026-09-23 — VisQuill also ships the lens as a product.** VisQuill
+Lens (<https://visquill.com/visuals/lens>, a browser app and a Power BI visual)
+is described as "Drag interactive lens overlays across a map; each lens
+aggregates the data beneath it into a live bar chart", with up to three lenses
+at once. So for the *aggregating ring lens* VisQuill is a direct precedent, not
+only a toolkit demo, and the paper must position against it by name. What its
+pages do not say is what angle means; the open-source Lab blueprint spaces one
+bar per category evenly along the arc, which is category order. See
+[positioning.md](positioning.md) §3.3.
 
 ### F-6. A category's mean bearing is often not a direction
 
@@ -219,6 +229,16 @@ Consequences for the design space:
   bearing" at all for diffuse distributions. A directional *distribution* per
   category — a small rose per category, or a concentration-weighted arc rather
   than a bar — may be the better mark.
+
+**Addendum, 2026-09-23 — re-measured on the bundled extract.** Within 1.2 km of
+the demo centre in `examples/data/yogyakarta.json` (315 places), the means are
+retail 302° (R 0.51, n 135), food 329° (R 0.28, n 153), health 42° (R 0.36,
+n 11) and civic 182° (R 0.12, n 16); all places together 313° (R 0.34). So the
+two large categories do bundle to the north-west with the data as a whole, but
+the four are *not* within twenty degrees on this extract. The original
+observation was probably on a different pull (the first builds read Overpass
+live — see F-3); which data it was is not recorded. The conclusion stands; the paper
+reports the bundled numbers because they are reproducible.
 
 ### F-7. Placement must reserve room for labels, not just marks
 

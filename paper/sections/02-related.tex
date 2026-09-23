@@ -10,7 +10,62 @@ local statistics.
 
 \subsection{Interactive lenses and their design spaces}
 
-%%RELATED-LENSES%%
+Magic lenses were introduced as movable see-through filters that modify the
+presentation of the objects beneath them~\cite{bier1993toolglass}; a taxonomy of
+see-through tools followed~\cite{bier1994taxonomy}, and composing overlapping
+lenses was addressed as a programming-model problem~\cite{fox1998composing}.
+Tominski et al.'s surveys model a visualization lens as a pipeline attached to
+the visualization pipeline through a selection $\Sel$ and a join $\Jn$, with a
+lens function $\lambda$ between them (the symbol is introduced in the extended
+version), classify lenses by data type and task, and add an \emph{effect
+extent}---lens interior, side effects, separate view---to earlier
+axes~\cite{tominski2014star,tominski2017survey}. Among their future directions
+are flexibly combining lenses and a unified lens toolkit~\cite{tominski2014star,
+tominski2017survey}; both are directions this work speaks to. Mota et al.\ derive
+a seven-dimension design space for spatially embedded lenses from 45 papers
+(2006--2020): position, orientation and scale; shape; dimensionality; effect
+scope (interior, exterior, separate view); effect imagery; effect encoding
+(thematic or spatially based); and viewpoint dependency~\cite{mota2025design}.
+Two of these dimensions have no value for a necklace ring: its effect sits
+neither inside, outside nor apart from the lens but \emph{on its boundary},
+and its encoding is thematic marks under a spatial layout.
+
+Lenses on maps have mostly magnified, filtered or re-rendered: JellyLens adapts
+its shape to the features under it~\cite{pindat2012jellylens}; MoleView pushes
+elements outside an attribute range towards the lens
+border~\cite{hurter2011moleview}; ClusterLens re-aggregates points inside the lens
+at a finer resolution~\cite{zhang2020clusterlens}; route detail lenses place
+magnified views around the map border in route order, with leader lines only to
+the first and last~\cite{karnick2010route}; and the Sampling Lens samples points
+inside a region to reduce clutter, listing aggregate statistics as future
+work~\cite{ellis2005sampling}. VectorLens selects curves by position, diameter,
+direction and angular tolerance, and draws the selected angular ranges on a ring
+around the lens---a ring whose angle means direction, used for selection rather
+than display~\cite{dumas2015vectorlens}. The name GlyphLens already belongs to a
+view-dependent lens that pulls occluding 3D glyphs aside~\cite{tong2017glyphlens}.
+
+Closer to our subject are lenses and probes that \emph{summarise}. Probes pair a
+user-defined region with a pane of local charts, linked to it by a line or a
+shared colour and placed by the user~\cite{butkiewicz2008probes}; a follow-up
+alerts analysts when regions being compared differ unfairly on some dimension, and
+offers semi-automatic boundary edits, while explicitly setting the scale
+component of the modifiable areal unit problem aside~\cite{butkiewicz2010maup}.
+TrajectoryLenses combine map lenses with set operations and show aggregated
+attributes in the vicinity of the lens or in colour-matched
+panels~\cite{kruger2013trajectorylenses}; a traffic-flow selection widget filters
+by area and direction and shows the selection in annotation
+windows~\cite{scheepens2016traffic}; GTMapLens browses geo-tagged text with movable
+lenses~\cite{ma2020gtmaplens}. The closest academic precedent we found is the
+\emph{time lens} of Tominski et al.: a circular query area on a trajectory map,
+with a ring segmented into cyclic time bins whose fill shows the trajectories
+inside the circle~\cite{tominski2012stacking}. There, angle means time.
+Outside the literature, VisQuill ships map lenses that aggregate the data beneath them into a
+bar chart around the rim~\cite{visquill}; its documentation does not say what
+angle encodes, and its open-source lens blueprint spaces one bar per category
+evenly along the arc.
+\doubt{Several of these readings are from abstracts only (TrajectoryLenses,
+GTMapLens, the traffic-flow widget); the time lens's placement around the query
+circle is strongly implied but not stated in the text we read; see the audit.}
 
 \subsection{Marks around a focus region}
 
@@ -36,7 +91,9 @@ focus region's position can itself be optimised~\cite{fink2012focus}. Haunert an
 Hermes require every leader to point at the centre, allow one position per
 label, and solve the resulting maximum-weight independent set in real time in a
 browser~\cite{haunert2014labeling}. Boundary labelling has been extended to
-moving focus regions~\cite{heinsohn2014boundary}, to fisheye displacement of labels
+moving focus regions~\cite{heinsohn2014boundary}, to dense point sets explored
+at a fixed map scale with labels placed along the map's lower
+edge~\cite{gedicke2021zoomless}, to fisheye displacement of labels
 out of a focus with optimisation once it stops~\cite{niedermann2019focus}, and to
 labels drawn as arcs in an annular orbit around a circle with minimum total
 leader length~\cite{bonerath2024orbital}, where a study with 54 participants found
@@ -94,4 +151,38 @@ encoding. Polar histograms of street bearings summarise a city's orientation
 order~\cite{boeing2019urban}; they bin the bearing \emph{of} edges rather than
 bearing \emph{from} a chosen centre, which is the quantity a lens bins.
 
-%%RELATED-STATS%%
+\paragraph{Local statistics and scale.} A disc-shaped lens evaluated at many
+centres is a moving-window statistic. Geographically weighted summary
+statistics compute local summaries with a spatial kernel around each
+location~\cite{brunsdon2002gwss}, in the family that began with geographically
+weighted regression~\cite{brunsdon1996gwr}. Geographically weighted
+visualization makes them interactive, calls the GW mean ``simply a moving
+spatial window mean smoother'', plots summary statistics across bandwidths as a
+\emph{scalogram}, notes that the statistics ``could \ldots be centred on any
+points, such as those comprising a regular grid'', and adds \emph{directed}
+weighting, in which a kernel is sharpened towards a principal direction at
+thirty-degree clock points~\cite{dykes2007gwvis}. Local correlation has been shown
+varying with scale and geography~\cite{goodwin2016multiple}, and local indicators of
+spatial association decompose global statistics into per-observation
+contributions~\cite{anselin1995lisa}. The modifiable areal unit problem---results
+that change with the scale and the zoning of units---is reviewed by
+Openshaw~\cite{openshaw1984maup} and shown to be unpredictable in multivariate
+analysis by Fotheringham and Wong~\cite{fotheringham1991maup}. For point patterns,
+Ripley's $K$ counts events within growing distances of an arbitrary event, with
+$K(t)=\pi t^2$ under a Poisson process and simulation envelopes for
+inference~\cite{ripley1977modelling}; second-order neighbourhood analysis takes the
+same view from each individual point~\cite{getis1987second}; and ring (O-ring)
+statistics complement the cumulative circle~\cite{wiegand2004rings}. The
+log--log slope of mass within distance of a chosen centre is also the mass--radius
+dimension of fractal urban analysis~\cite{yamu2016fractal}.
+\doubt{Getis \& Franklin and Wiegand \& Moloney were read at abstract level only;
+a more canonical citation for radial (mass--radius) analysis should replace or
+join Yamu et al., whose main subject is planning theory. The box-car kernel
+reading of Brunsdon et al.\ 2002 is still being checked.}
+
+These are the statistics a summarising lens computes, and we claim none of
+them. Directed GW weighting in particular is a statistical precedent for
+decomposing a neighbourhood by direction. What the lens contributes is a
+\emph{placement} of that decomposition: each direction's summary is drawn at its
+bearing on the lens boundary, and the radius control shows how the reading
+depends on the radius before the analyst drags it.

@@ -1,0 +1,74 @@
+% ---------------------------------------------------------------------------
+\section{Existing techniques as paths through the stages}
+\label{sec:descriptive}
+
+A model of this kind is useful to the extent that it describes existing work
+without distortion, discriminates between techniques that differ, and suggests
+ones that do not yet exist~\cite{beaudouinlafon2004designing}. \Cref{tab:coding}
+codes techniques from the literatures of \cref{sec:related} into the seven
+stages. Three observations follow from it.
+
+\emph{Placement and anchor discriminate where the other stages do not.} Excentric
+labelling, focus-region labelling, orbital labelling, the time lens and a
+category ring all select a disc; they differ in what they put around it and
+where. Without $\Plc$ and $\Anc$ as separate stages they would collapse into
+``a lens with labels (or charts) around it''.
+
+\emph{Almost nothing places aggregates by bearing.} Labelling techniques tie
+individual labels to bearing and resolve conflicts by dropping them; rings that
+aggregate order their marks by category or time. The cells in which binning is
+by bearing \emph{and} placement honours that bearing \emph{and} marks are
+aggregates are, among the techniques coded, occupied only by this work and, for
+whole-map necklaces, by necklace maps themselves.
+
+\emph{The tessellated techniques leave the join empty.} GW maps, gridded
+glyphmaps, Honeycomb Plots and HexTiles draw each summary \emph{in place}; they
+have no placement problem because they have no boundary to place on. That is
+what makes the continuum possible: a field of lenses whose rings shrink towards
+their centres converges on the in-place case.
+
+\todo{This table is a single-coder, provisional coding for discussion among the
+authors. Before submission: fix the corpus by a recorded search protocol,
+double-code it (two coders, disagreements resolved and reported), and extend it
+to a corpus large enough to carry the claims (the lens design space we build on
+coded 45 papers~\cite{mota2025design}). A recent analysis of visualization
+design-space papers proposes a five-phase construction process---exploration,
+data collection, creation, evaluation, communication---that the final version
+should follow~\cite{dai2026mapping} (only its abstract has been read). Cells marked $^{?}$ rest on abstracts or are
+inferred rather than stated in the source; see the citation audit.}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.12}
+  \caption{Provisional coding of existing techniques into the seven stages.
+  ``---'' means the stage is absent or trivial; $^{?}$ marks a code that is
+  inferred or rests on an abstract only.}
+  \label{tab:coding}
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright}p{2.55cm}
+      >{\raggedright}X >{\raggedright}X >{\raggedright}p{1.35cm}
+      >{\raggedright}X >{\raggedright}X >{\raggedright}X >{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Technique & $\Sel$ selection & $\Bin$ binning & $\Nrm$ normal. & $\Plc$ placement & $\Anc$ anchor & $\Mrk$ marks & $\Asc$ association \\
+    \midrule
+    Magic lens \cite{bier1993toolglass} & screen region & --- & --- & in place & interior & restyled objects & co-location \\
+    Excentric labelling \cite{fekete1999excentric} & disc at cursor & one per object; count when too many & --- & ordered stacks (radial variant: by bearing) & two columns beside the disc & labels & lines \\
+    Focus-region labelling, radial model \cite{fink2012focus} & disc & one per site (or per cluster) & --- & port at site's bearing; conflicts \emph{dropped} & the circle & labels & radial leaders, always \\
+    Orbital boundary labelling \cite{bonerath2024orbital} & disc & one per feature & --- & minimise total leader length & annulus around the circle & arc labels & straight or orbital-radial leaders \\
+    Probes \cite{butkiewicz2008probes} & disc or units & per chart & per chart & placed by user & separate pane & charts & line or shared colour \\
+    Time lens \cite{tominski2012stacking} & disc (query circle) & cyclic time bins & count, duration & time order & ring around the query$^{?}$ & filled ring segments & adjacency \\
+    VisQuill lens \cite{visquill} & disc & categorical & count$^{?}$ & evenly spaced, category order$^{?}$ & ring & radial bars & adjacency \\
+    Route detail lenses \cite{karnick2010route} & route neighbourhoods & one per point of interest & --- & border slots, route order, direction-coherence cost & map frame & magnified views & first/last leaders, arrows \\
+    ClusterLens \cite{zhang2020clusterlens} & lens & clusters or grid at finer resolution & count & in place & interior & heatmap, circles, grid & co-location \\
+    VectorLens \cite{dumas2015vectorlens} & disc + direction range & (selection only) & --- & --- & ring as control & selected angular ranges & --- \\
+    GW summary statistics \cite{brunsdon2002gwss,dykes2007gwvis} & kernel at each location; directed kernel at clock points & --- (or by direction) & weighted mean, SD, quantiles & in place & --- & colour & co-location \\
+    Gridded glyphmap \cite{slingsby2023gridded,laksono2024gridded} & screen-space grid cell & variables & per variable & cell centre & --- & glyph & position \\
+    Honeycomb plot \cite{trautner2022honeycomb} & hexagon & one, plus within-tile gradient & density & in place & --- & height, diamond cut & position \\
+    HexTiles \cite{kawakami2024hextiles} & hexagon & variables & + variance-based confidence & in place & --- & colour, icons, ring & position \\
+    \midrule
+    This work: bearing ring & disc, annulus, sector, corridor, polygon & bearing sector (or cross, unit, chainage) & count, density, share, LQ, $z$, delta & necklace (minimal displacement) & ring $\to$ axis ($u\in[0,1]$) & bar, disc, rose & adjacency; leader where the gap misleads \\
+    This work: field & disc per lattice centre & as above & shared baseline & per lens & per lens & as above & as above \\
+    \bottomrule
+  \end{tabularx}
+\end{table*}

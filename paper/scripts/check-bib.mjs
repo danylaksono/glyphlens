@@ -79,7 +79,7 @@ function citedKeys() {
     const re = /\\(?:cite|citep|citet|citeauthor|citeyear|nocite)\*?(?:\[[^\]]*\])*\{([^}]+)\}/g;
     let m;
     while ((m = re.exec(text))) {
-      for (const k of m[1].split(',').map((s) => s.trim()).filter(Boolean)) {
+      for (const k of m[1].split(',').map((s) => s.trim()).filter((k) => k && !k.startsWith('#'))) {
         if (!keys.has(k)) keys.set(k, path.relative(paper, file));
       }
     }

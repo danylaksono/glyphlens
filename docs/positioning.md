@@ -13,6 +13,7 @@ carries the level of evidence behind it:
 | **F** | read in the full text (version of record, or an author copy — noted) |
 | **A** | abstract only |
 | **M** | bibliographic record only; nothing about the content is verified |
+| **W** | web pages (no paper), with the access date |
 | ⚠︎ | a claim we make that is not yet fully supported — says what would settle it |
 
 The per-paper verification notes, with quotes and page references, are in
@@ -43,9 +44,19 @@ mature algorithmic literature).
 ## 2. Where it sits in the lens design spaces
 
 **Tominski et al.** (EuroVis 2014 STAR; CGF 2017 extended survey) — the σ/λ/⋈
-model. glyphlens is a *refinement* of it, not a rival: σ is kept; λ and ⋈ each
-split into three. ⚠︎ Their list of open challenges and their "effect extent"
-categories are pending group A of the audit.
+model. **F** (both). glyphlens is a *refinement* of it, not a rival: σ is kept;
+λ and ⋈ each split into three. Details that matter when citing it:
+
+- the 2014 STAR has σ and ⋈ but writes "a lens function" — the symbol **λ first
+  appears in the 2017 version**, so cite 2017 for the notation;
+- 2017 adds a five-axis conceptual schema with **effect extent: lens interior,
+  side effects, separate view** (Mota et al.'s *effect scope* refines it);
+- both list the same four future directions — Lenses and Interaction (incl.
+  "flexibly combine lenses … on the fly"), Novel Environments, Exploration and
+  Manipulation, **Lenses as Universal Tools** ("lack of a unified toolkit").
+  glyphlens speaks to combination and toolkits. Neither survey lists
+  data-driven/adaptive lenses or evaluation as a future direction, so do not
+  claim they call for either.
 
 **Mota, Sharlin & Alim** (arXiv 2503.23441, 2025) — seven dimensions over 45
 papers (2006–2020). **F** (read in full, 2026-09-22). Two of their dimensions do
@@ -104,11 +115,20 @@ not ignored), CompaRing (Tominski 2016), AR ring maps (Danyluk et al. 2026).
 
 ### 3.3 Map lenses and probes that aggregate
 
-Pending group B: Butkiewicz et al. 2008 (probes with embedded local charts) and
-**2010 (MAUP-aware probes — the closest precedent for the radius-control
-diagnostic)**, TrajectoryLenses (Krüger et al. 2013, set-operation lenses),
-GTMapLens (2020), ClusterLens (2020), route detail lenses (Karnick et al. 2010),
-Sampling Lens (2005), traffic-flow lenses (Scheepens et al. 2016), VisQuill.
+| Work | What it already does | What is left for glyphlens | Ev. |
+| --- | --- | --- | --- |
+| **Tominski, Schumann, Andrienko & Andrienko 2012**, *Stacking-Based Visualization of Trajectory Attribute Data* (TVCG) — the **time lens** | a movable, resizable **query circle on a map wrapped in a ring of aggregates**; the ring is segmented into **cyclic time bins** (months, weekdays, hours) filled by count or duration | **the closest academic precedent.** There, angle means time; here it means bearing | F (author copy; ring placement around the circle strongly implied, not stated) |
+| **VisQuill Lens** (product; browser app and Power BI visual) | "each lens aggregates the data beneath it into a live bar chart" around the rim; up to three lenses on a map | **a shipped version of the aggregating ring lens.** Its pages do not say what angle encodes; the open-source Lab blueprint spaces one bar per category evenly along the arc — category order | W (pages 2026-09-23; demos not run) |
+| Butkiewicz et al. 2008, *Probes* (TVCG) | region + a **separate, user-placed pane** of local charts, linked by a line or shared colour; union/comparison panes | nothing attached to the boundary; nothing encodes direction | F |
+| Butkiewicz et al. 2010, *Alleviating the MAUP within Probe-Based Analyses* (CGF) | alerts when regions being compared differ unfairly (> 2 SD on a dimension); overview/adjustment panels; semi-automatic boundary edits | **explicitly does not address the scale component** ("We do not address this component in our system"). Nothing shows how an aggregate varies with probe size, and nothing sits at a resize control — so the elasticity-on-the-slider idea is *not* anticipated here | F (anonymised EuroVis submission, not the published version) |
+| Krüger et al. 2013, *TrajectoryLenses* (CGF) | map lenses combined by set operations; aggregated attributes "in the vicinity of the lens or adjacent colour-matching panels" | — | A (+ verbatim excerpts; open copy withdrawn) |
+| Karnick et al. 2010, *Route Visualization Using Detail Lenses* (TVCG) | detail views on the **map border in route order**; cost includes direction coherence between consecutive lenses; leaders only to the first and last lens | a loose precedent for direction-preserving placement around a frame | F (preprint) |
+| Dumas, McGuffin & Chassé 2015, *VectorLens* (TVCG) | a ring around the lens **whose angle means direction** — as a *selection control* for curves, not a chart; no maps | — | F |
+| Zhang et al. 2020, *ClusterLens* (CHI EA) | re-aggregation inside the lens at a finer resolution; no ring, no charts | — | F |
+| Ellis, Bertini & Dix 2005, *Sampling Lens* (CHI EA) | random sampling inside a region; aggregates listed as future work; scatterplots, not maps | — | F |
+| Scheepens et al. 2016 (TVCG) | selection widget by area and direction range; set expressions; annotation windows | — | A |
+| Ma et al. 2020, *GTMapLens* (CGF) | movable lenses over geo-text | what is shown, and where, unverified | A |
+| Tong, Li & Shen 2017, *GlyphLens* (TVCG) | view-dependent lens that pulls occluding 3D glyphs aside | name collision only | A |
 
 ### 3.4 Radial and necklace maps
 
@@ -134,13 +154,20 @@ Battersby et al. 2011); ringmaps (Zhao, Forer & Harvey 2008); radial survey
 
 ### 3.6 Scale, MAUP and point-pattern statistics
 
-Pending group E1: Brunsdon, Fotheringham & Charlton 1996/2002 (GW summary
-statistics — **field mode is this with a uniform kernel**), Dykes & Brunsdon 2007
-(GW visualisation, scalograms, "directional geographies"), Goodwin et al. 2016,
-Ripley 1977, Getis & Franklin 1987 (point-centred local K/L), Wiegand & Moloney
-2004 (O-ring vs K, envelopes), Fotheringham & Wong 1991, Openshaw 1984, Willett,
-Heer & Agrawala 2007 (scented widgets), Yamu et al. 2016 (radial mass–radius
-analysis).
+| Work | What it already does | What it means for glyphlens | Ev. |
+| --- | --- | --- | --- |
+| Brunsdon, Fotheringham & Charlton 2002, *GW summary statistics* (CEUS) | local summary statistics by geographical kernel weighting | **field mode is this** (with a uniform kernel) — concede it | A (whether it names a uniform kernel: unverified) |
+| Brunsdon, Fotheringham & Charlton 1996, *GWR* (Geog. Analysis) | origin of GW methods | background only | A |
+| **Dykes & Brunsdon 2007**, *Geographically Weighted Visualization* (TVCG) | GW mean is "simply a moving spatial window mean smoother"; **scalograms** across bandwidth; statistics "could … be centred on any points, such as those comprising a regular grid"; **directed GW weighting** sharpened towards a principal direction at 30° clock points | the **bearing decomposition has a statistical precedent** here — concede it. What is left is *placing* each direction's summary at its bearing on the lens boundary. Note: Gaussian kernel; bandwidth precomputed, not a slider | F (City eprint author version) |
+| Goodwin, Dykes, Slingsby & Turkay 2016 (TVCG) | local correlation varying with scale and geography; links scale to MAUP | — | F |
+| Openshaw 1984, CATMOG 38 | defines the scale and aggregation problems | cite as *reviewing/defining*, not introducing, MAUP | F (scan) |
+| Fotheringham & Wong 1991 (EPA) | MAUP unpredictable in multivariate analysis | — | A |
+| Ripley 1977 (JRSS-B) | K(t) = πt² under Poisson; simulation envelopes | the uniform reference for elasticity; the L-function is *not* in the paper body | F |
+| Getis & Franklin 1987 (Ecology) | second-order analysis "from the perspective of each individual point" | the local version; formula unverified | A |
+| Wiegand & Moloney 2004 (Oikos) | Ripley's K and the O-ring statistic as complementary; null models | ring vs circle; envelopes | A |
+| Yamu, de Roo & Frankhauser 2016 (EPB) | radial analysis: N(ε) = a ε^D around a freely chosen centre | elasticity is this log–log slope; a methods paper by Frankhauser would be a better citation | F |
+| **Willett, Heer & Agrawala 2007**, *Scented Widgets* (TVCG) | visualizations embedded in controls such as sliders | the elasticity-on-the-slider idea is an instance; cite it | F |
+| Anselin 1995, LISA | local decomposition of global statistics | background | A |
 
 ## 4. What we claim, what we concede
 
@@ -148,12 +175,12 @@ analysis).
 | --- | --- | --- | --- |
 | 1 | The σ/λ/⋈ refinement into seven stages, with the lens ↔ glyphmap continuum as one object | **novel as a model** — needs descriptive evidence (coding a corpus) and generative evidence (the gallery) | Tominski; Mota |
 | 2 | "Boundary" as an effect scope, and thematic-marks-under-spatial-layout as an encoding | **novel as a design-space value** | Mota |
-| 3 | Aggregates on the lens boundary at their true bearing, displaced minimally | **novel in combination** — the geometry exists in labelling (radial model), the placement exists in necklace maps; neither aggregates on a movable lens | Fink; Haunert & Hermes; Speckmann & Verbeek |
+| 3 | Aggregates on the lens boundary at their true bearing, displaced minimally | **novel in combination** — the geometry exists in labelling (radial model), the placement exists in necklace maps, and **aggregating rings around a movable map lens exist** (the time lens; VisQuill Lens) but order their marks by time or category | Fink; Haunert & Hermes; Speckmann & Verbeek; Tominski 2012; VisQuill |
 | 4 | Leader drawn where the mark–data gap exceeds a threshold, so its length is the lost association; one mechanism for both placement and unrolling | **appears novel** — no verified labelling paper draws leaders conditionally | group C |
 | 5 | Ring ↔ axis unroll with no re-solve (placement in curve parameter, length held) | **no prior art found** (search not exhaustive) | — |
 | 6 | Within-unit structure from the lens's polar frame (spread, gradient, rose, inclusions; bias/sidedness on corridors) | **novel as a lens feature**; the idea of encoding within-cell structure is Honeycomb's and HexTiles' | Trautner; Kawakami |
-| 7 | Elasticity on the radius control | **concede the statistic** (local K slope / mass–radius); claim the *interface use*, with a shape-aware reference and envelopes | Getis & Franklin; Butkiewicz 2010 (pending); scented widgets |
-| 8 | Field mode | **concede** GW summary statistics with a box-car kernel, shown as a tilemap; claim the bearing decomposition that survives tiling | Brunsdon; Slingsby 2018 |
+| 7 | Elasticity on the radius control | **concede the statistic** (Ripley's K under CSR; point-centred analysis; mass–radius slope); claim the *interface use*, with a shape-aware reference and envelopes. Butkiewicz 2010 explicitly leaves the scale component aside, so it is not a precedent for this | Ripley; Getis & Franklin; Yamu et al.; scented widgets |
+| 8 | Field mode | **concede** GW summary statistics with a box-car kernel (Dykes & Brunsdon already note GW statistics can be centred on a regular grid), shown as a tilemap; **concede** direction-dependent statistics (directed GW weighting). Claim the placement of each direction's summary at its bearing, and one model across the continuum | Brunsdon 2002; Dykes & Brunsdon 2007; Slingsby 2018 |
 | 9 | First JavaScript necklace-map implementation | a search claim — record where and when we searched; the solver is exact only in the common case | CartoCrow |
 
 ## 5. Objections a reviewer will raise, and the answer
@@ -162,19 +189,25 @@ analysis).
    are dropped; our marks are aggregates, displaced not dropped, with a residual
    leader. Cite Fink 2012 and Haunert & Hermes 2014 as the geometric precedent,
    explicitly.
-2. **"Field mode is GW summary statistics."** — Yes, with a uniform kernel.
-   Implement bi-square and Gaussian kernels and show the field reproduces GW
-   summary statistics exactly; what remains is the bearing decomposition and the
-   continuum.
-3. **"Elasticity is the local L-function."** — Yes: E = d ln N / d ln r, and
-   E = 2 under complete spatial randomness is L(r) = r. Claim the interface use.
+1b. **"This is the time lens / VisQuill Lens."** — Both put aggregates on a ring
+   around a movable map lens; in both, angle carries order (time; category). The
+   contribution is making angle carry *bearing*, and everything that follows from
+   that (displacement, residual leaders, unrolling, within-unit spread). Name both.
+2. **"Field mode is GW summary statistics — and directed GW statistics already
+   decompose by direction."** — Yes to both (Brunsdon 2002; Dykes & Brunsdon
+   2007). Implement bi-square and Gaussian kernels and show the field reproduces
+   GW summary statistics exactly; what remains is where each direction's summary
+   is *drawn* (at its bearing, on the lens boundary) and the one-object continuum.
+3. **"Elasticity is the local K slope."** — Yes: E = d ln N / d ln r, and under
+   complete spatial randomness N ∝ r², so E = 2 (Ripley's K(t) = πt²). Claim the
+   interface use.
    Fix two things first: the implemented estimator's uniform value is **2 − b =
    1.9**, not 2 (backward difference over a band b = 0.1), and the reference is
    shape-dependent (report E / (d ln A / d ln r), which is 1 under uniformity for
    every shape).
 4. **"Does bearing on the ring help anyone?"** — Unknown; that is the study
-   (§6). Off-screen evidence (Jäckle 2017, pending audit) suggests it may not,
-   which is a reason to run it, not to avoid it.
+   (§6). Off-screen evidence (Jäckle 2017, pending group D) may suggest it does
+   not, which is a reason to run it, not to avoid it.
 5. **"Multivariate?"** — Most demos summarise one categorical variable by count.
    Either show a genuinely multivariate census case or narrow the title.
 6. **"Why these seven stages?"** — Because they are a factorisation of an
@@ -209,6 +242,13 @@ extracts; N from a pilot-based power analysis; pre-registered.
 
 - [ ] Rename the library (GlyphLens is taken).
 - [x] Fix misattributions in references.md (Mota et al.; McNabb & Laramee).
+- [x] VisQuill's product URL (`/product/` → `/products`) and a dated addendum to
+      F-5: VisQuill *ships* an aggregating map lens, so it is a direct precedent.
+- [x] Re-measure F-6 on the bundled extract (the four category means are *not*
+      within 20° there; retail 302°, food 329°, health 42°, civic 182°) —
+      addendum added; the paper reports the bundled numbers.
+- [x] MoleView's author order is Hurter, Ersoy, Telea (several surveys have it
+      wrong; the paper's bib has it right).
 - [x] Fix the packing thresholds in README / design-space / findings: overlap
       begins above 0.5, gaps close at 1/√3; in between, a field does both.
 - [ ] Report elasticity against its true uniform value (2 − b) or switch to a

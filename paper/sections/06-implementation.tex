@@ -38,6 +38,13 @@ Voronoi tessellation inside a boundary, built on a Delaunay triangulation) and a
 uniform grid index so that $m$ lenses over $n$ members do not cost $O(nm)$
 distance tests.
 
+Of the evaluation strategies used for toolkit research---demonstration,
+usage, technical benchmarks and heuristics~\cite{ledo2018toolkits}---this paper
+uses the first and third: the gallery and the coding of
+\cref{sec:descriptive,sec:generative} are demonstrations, and
+\cref{tab:timing} is a benchmark. A usage study with developers is not part of
+this work.
+
 \paragraph{Tests and performance.} The repository has 196 unit tests (Node's
 built-in runner, no runtime dependencies), covering among other things
 non-overlap, stability and overflow of the solver. \Cref{tab:timing} reports

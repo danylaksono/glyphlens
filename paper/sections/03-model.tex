@@ -134,7 +134,9 @@ confounds them, which is why normalisation is a stage and not a formatting
 option. \emph{Share} is $n_k/n$. The \emph{location quotient}
 $\mathrm{LQ}_k=(n_k/n)/(b_k/b)$ and a $z$-score compare the lens against a
 baseline profile $b$; \emph{delta} is a signed difference from a reference
-(another lens, time or region). The baseline is itself a choice---the
+(another lens, time or region)---in the terms of visual comparison, an explicit
+encoding of the difference rather than juxtaposition or
+superposition~\cite{gleicher2011comparison}. The baseline is itself a choice---the
 complement of the lens, the study area, or a fixed reference---and changes the
 reading materially. One lens defaults to its complement (``what is this place
 unusually full of, compared with its surroundings''); a field of lenses must
@@ -252,12 +254,11 @@ to point along, and a lens without a metric scale has no distance to point at.
 Every stage above yields one number per bin, and that number hides whether the
 bin's members are spread evenly or piled in one corner---which is what makes an
 aggregate fragile to how its unit was drawn. Hexagon-based techniques have
-begun to encode this: Honeycomb Plots fit a density gradient inside each tile
-and draw it as a ``diamond cut''~\cite{trautner2022honeycomb}, and HexTiles
-encode within-tile variability as a per-tile confidence, argued explicitly as
-mitigation of the modifiable areal unit problem~\cite{kawakami2024hextiles}.
-\doubt{Both characterisations to be checked against the full texts; see the
-citation audit.}
+begun to encode this: Honeycomb Plots cut each tile along the regression plane
+of its within-tile density, a ``diamond cut''~\cite{trautner2022honeycomb}, and
+HexTiles derive a per-tile confidence from weighted within-tile variance, argued
+explicitly as mitigation of the modifiable areal unit
+problem~\cite{kawakami2024hextiles}.
 
 A lens gets this more cheaply than a tile, for a structural reason. A hexagon
 has no privileged origin or orientation, so the within-tile distribution must be
@@ -308,13 +309,14 @@ are before dragging onto one (\cref{fig:elasticity}). This is an instance of
 embedding a visualization in the control that it informs, in the manner of
 scented widgets~\cite{willett2007scented}.
 
-We do not claim the statistic. Counting within growing discs around a point is
-the idea behind point-centred second-order analysis~\cite{getis1987second}
-and the $K$ function it localises~\cite{ripley1977modelling}; under complete
-spatial randomness $N\propto r^2$ and $E=2$, which is the local
-$L$-function's $L(r)=r$ expressed as a log-log slope. The same slope around a
-chosen centre is the mass--radius dimension used in fractal urban
-analysis~\cite{yamu2016fractal}. Three things distinguish the lens's use of it:
+We do not claim the statistic. Counting within growing distances of a point is
+the idea behind Ripley's $K$ function, for which $K(t)=\pi t^2$ under a Poisson
+process~\cite{ripley1977modelling}, and behind second-order neighbourhood
+analysis, which takes that view from each individual
+point~\cite{getis1987second}; under complete spatial randomness $N\propto r^2$
+and so $E=2$. The same log--log slope around a freely chosen centre is the
+mass--radius (fractal) dimension of radial analysis in urban
+morphology~\cite{yamu2016fractal}. Three things distinguish the lens's use of it:
 the centre is an arbitrary location rather than an event, so this is a
 point-to-event rather than an event-to-event count; the uniform reference
 depends on the lens shape (it is 2 for a disc or sector, but not for an annulus
@@ -324,9 +326,11 @@ it is shown as a property of the control rather than of the result.
 $E/(d\ln A/d\ln r)=\lambda_{\mathrm{edge}}/\bar\lambda$, which is 1 under uniform
 density for every shape; and add a Monte-Carlo envelope under a null model
 \cite{wiegand2004rings} instead of the bare reference value.}
-\doubt{The equivalences in this paragraph are derived here; the specific
-readings of Getis \& Franklin, Ripley and Yamu et al.\ are pending the citation
-audit.}
+\doubt{The equivalences are derived here. Ripley and Yamu et al.\ were read in
+full; Getis \& Franklin at abstract level only. Yamu et al.\ is mainly a
+planning-theory paper that uses radial analysis; a methods paper by Frankhauser
+would be the more canonical citation for mass--radius dimension (not yet
+identified and checked).}
 
 \begin{figure}[t]
   \centering
