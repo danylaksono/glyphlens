@@ -468,8 +468,9 @@ O(n·m). The three preconditions recorded in
 **The lattice tessellates and the lenses do not**, which is worth stating
 plainly because a glyph map looks like a partition. Centres sit on a lattice;
 each selects a *disc* of `spacing × packing`. At the default packing the discs
-merely touch, so the cell's corners belong to no lens; above `1/√3` they
-overlap and double-count. `cells` draws the disc, the implied cell or both, and
+merely touch, so the cell's corners belong to no lens; above `1/2` neighbours
+overlap and double-count, and only at `1/√3` do the gaps close, so no packing
+is both gap-free and overlap-free. `cells` draws the disc, the implied cell or both, and
 `stats.coverage` reports the ratio — because neither the gaps nor the overlaps
 are visible otherwise
 ([F-33](findings.md#f-33-a-fields-cells-tessellate-and-its-lenses-do-not)).

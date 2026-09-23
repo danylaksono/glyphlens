@@ -204,9 +204,10 @@ surface, which is the resolution limit of the technique rather than a bug.
 
 **The lattice tessellates; the lenses do not.** Centres sit on a lattice, and
 each selects a *disc* of `spacing × packing`. At the default packing the discs
-merely touch, so the corners of each cell are in **no** lens; above
-`1/√3 ≈ 0.577` they overlap and count some places twice. Both are invisible
-unless you ask:
+merely touch, so the corners of each cell are in **no** lens; any larger
+packing makes neighbours overlap and count some places twice, and the gaps do
+not close until `1/√3 ≈ 0.577` — so in between, a field does both. Both are
+invisible unless you ask:
 
 ```js
 field.setCells('both');     // 'selection' (the disc) · 'lattice' (the cell)

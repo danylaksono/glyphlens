@@ -30,8 +30,12 @@ Grouped by the role they play in the design, not alphabetically.
 
 ## Interactive lenses
 
-- **Chen, Z. et al. (2025). Spatially-Embedded Lens Visualization: A Design
-  Space.** arXiv:2503.23441. <https://arxiv.org/abs/2503.23441>
+- **Mota, R., Sharlin, E. & Alim, U. (2025). Spatially-Embedded Lens
+  Visualization: A Design Space.** arXiv:2503.23441.
+  <https://arxiv.org/abs/2503.23441>
+  (Earlier drafts of this file credited it to "Chen, Z. et al."; that was
+  wrong — Chen et al. 2017 is an immersive-urban-analytics paper in its
+  reference list. Corrected 2026-09-23; see [positioning.md](positioning.md).)
   45 papers over 15 years, seven dimensions: *position/orientation/scale*,
   *shape*, *dimensionality*, *effect scope*, *effect imagery*, *effect
   encoding*, *viewpoint dependency*. Two cells we deliberately target:
@@ -163,9 +167,11 @@ the summary *of* it, and between them they are the reason that section exists.
   ring vs. open profile curve. Angular position is nominal throughout — which is
   the gap this library targets.
 
-- **Jankowski, P. et al. / Multivariate Maps — A Glyph-Placement Algorithm to
-  Support Multivariate Geospatial Visualization.** *Information* 10(10), 302.
-  <https://doi.org/10.3390/info10100302>
+- **McNabb, L. & Laramee, R. S. (2019). Multivariate Maps — A Glyph-Placement
+  Algorithm to Support Multivariate Geospatial Visualization.** *Information*
+  10(10), 302. <https://doi.org/10.3390/info10100302>
+  (Previously credited to "Jankowski, P. et al." in error; corrected
+  2026-09-23.)
   Guided glyph placement with level-of-detail, dynamic zooming and smooth
   transitions. Closest prior art for the tessellated end of the continuum.
 

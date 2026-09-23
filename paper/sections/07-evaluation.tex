@@ -1,0 +1,69 @@
+% ---------------------------------------------------------------------------
+\section{Evaluation plan}
+\label{sec:evaluation}
+
+\todo{This section describes a study that has \emph{not} been run. No result
+in this draft comes from participants. Replace with the study once it is
+pre-registered and run; until then the core claim of \cref{sec:model}---that
+bearing-faithful placement helps---is a design conjecture and must be worded as
+one everywhere.}
+
+The model's descriptive and generative power is argued in
+\cref{sec:descriptive,sec:generative}; its central design claim is empirical and
+untested. Two of its axes make testable predictions, and they interact, so we
+plan one controlled, within-subjects study crossing them.
+
+\paragraph{Factors.} \emph{Angle}: categorical (block placement, angle
+carries category order) versus bearing (necklace placement, angle carries
+bearing). \emph{Anchor}: closed ring versus unrolled axis with leaders. A third,
+between-trials factor manipulates \emph{displacement}---the gap between a
+mark and its true bearing, at four levels from 0 to 45\,degrees
+\todo{levels to be fixed by pilot}---to locate the point at which a displaced
+mark misleads (the open policy question of \cref{sec:association}).
+
+\paragraph{Tasks.} Five tasks, each with a ground truth computable from the
+stimulus:
+\begin{enumerate}[leftmargin=*, itemsep=1pt]
+  \item \textbf{Direction}: ``In which direction from the centre is category
+    $X$ most concentrated?'' Response: a bearing; error in degrees.
+  \item \textbf{Isotropy}: ``Is $X$ spread evenly around the centre?''
+    Ground truth from the resultant length $R$.
+  \item \textbf{Comparison}: ``Which of two highlighted directions has more
+    $X$?'' Accuracy.
+  \item \textbf{Composition}: ``Which category is most common inside the
+    lens?'' Accuracy. The categorical ring should do at least as well here;
+    the task is included so that a win on direction is not bought silently.
+  \item \textbf{Association}: ``Click the part of the map that the highlighted
+    mark summarises.'' Distance error.
+\end{enumerate}
+
+\paragraph{Hypotheses.}
+H1: bearing-faithful placement reduces direction error (task~1) relative to
+categorical placement.
+H2: categorical placement is no worse than bearing placement for composition
+(task~4).
+H3: the unrolled axis improves comparison accuracy (task~3) relative to the
+ring.
+H4: the ring beats the unrolled axis on association (task~5) without leaders,
+and leaders close the gap.
+H5: direction error grows with displacement, and leaders flatten that growth.
+
+\paragraph{Stimuli, participants, analysis.} Synthetic point patterns with
+controlled anisotropy (so ground truth is exact) plus a held-out set from real
+OpenStreetMap extracts, rendered by the library. Participants recruited online
+\todo{platform, $N$ from a power analysis on pilot data, compensation, ethics
+approval}. Mixed-effects models with participant and stimulus as random
+effects \todo{specify before data collection; pre-register (e.g.\ OSF)}.
+
+\paragraph{Known risk.} A study of off-screen indicators reports that
+participants located off-screen objects better, and overwhelmingly preferred,
+orthographic rather than radial projection onto the viewport border
+\cite{jackle2017topology}. That is evidence \emph{against} direction-preserving
+placement on a boundary, in a closely related setting; our hypotheses H1 and
+H5 should be read as the direct test of whether it transfers to a lens.
+\doubt{Exact result, $N$ and task of Jäckle et al.\ to be confirmed from the
+full text before this paragraph is kept.}
+Relatedly, a study of orbital boundary labels around a circle reports straight
+leaders faster than orbital-radial ones at similar accuracy
+\cite{wallinger2026clarity}; our leaders are straight.
+\doubt{Pending the citation audit.}

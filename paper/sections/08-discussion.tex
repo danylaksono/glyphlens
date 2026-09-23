@@ -1,0 +1,91 @@
+% ---------------------------------------------------------------------------
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+\paragraph{A mean bearing is not always a direction.} Positioning a
+category's mark at the circular mean of its members is only honest when they
+are concentrated. On the demonstration data all four categories' means fell
+within about twenty degrees of each other, because the whole dataset is denser
+to the north-west \todo{re-measure and report the actual spread from the
+bundled data rather than the development log}: the bearing-faithful ring
+collapsed into a bundle and lost the composition reading the categorical ring
+gave for free. The morph from category order to bearing is therefore strongest
+for spatially segregated categories. Two responses are built: marks are faded
+by their resultant length $R$, and the \emph{cross} binning (bearing
+$\times$ category) gives each category one mark per sector, so that a diffuse
+category shows as a spread of marks rather than one misplaced one. We regard
+the second as the honest multivariate view and the first as a limitation to be
+stated, not a fix.
+
+\paragraph{How multivariate is this?} Most configurations in this paper
+summarise one categorical variable by count. Several variables are supported
+through cross binning, stacked necklaces (one per variable, exact angular
+fidelity at the cost of radial space), and areal measures with declared
+extensive or intensive semantics; but we have not shown that these scale beyond
+a handful of variables, and the glyph literature suggests they will not
+without careful design~\cite{borgo2013glyph,fuchs2017glyph}.
+\todo{Either demonstrate a genuinely multivariate census case (e.g.\ several
+deprivation domains) or narrow the claim in the title and abstract.}
+
+\paragraph{Relation to geographically weighted statistics.} A field of
+disc-shaped lenses on a lattice computes, at each centre, local summaries with
+a uniform (hard cut-off) kernel---which is geographically weighted summary
+statistics with the simplest kernel~\cite{brunsdon2002gwss}, and a field drawn
+as glyphs is close to a tilemap of such summaries~\cite{slingsby2018tilemaps}.
+We do not claim the statistics. What the lens adds is (i) keeping the
+within-lens decomposition by bearing and distance, drawn at its true bearing,
+where a GW summary is one scalar per location, and (ii) one model in which the
+single lens and the field are the same object at different settings.
+\todo{Implement bi-square and Gaussian kernels so that the field reproduces GW
+summary statistics exactly, and show it; this turns the obvious reviewer
+objection into a validity check.}
+\doubt{Readings of Brunsdon et al.\ (kernel choice) and of Slingsby's tilemaps
+are pending the citation audit.}
+
+\paragraph{The continuum has a usable range.} As the lattice densifies each
+ring shrinks, and below roughly ten pixels of ring radius a glyph stops
+carrying multivariate information and the field reads as a density surface with
+texture \doubt{an observation from building the demonstrations, not a measured
+threshold}. This is the trade between spatial and multivariate resolution that
+any glyph map makes; the renderer sheds labels and compass as rings shrink, but
+the threshold itself is a candidate for the study.
+
+\paragraph{Lenses do not tessellate.} Centres on a lattice tessellate the
+plane; the discs they select do not. At touching packing (disc radius half the
+nearest-neighbour spacing) a hexagonal lattice covers
+$\pi/(2\sqrt3)\approx90.7\%$ of the ground, a square lattice
+$\pi/4\approx78.5\%$ and a triangular (honeycomb) lattice
+$\pi/(3\sqrt3)\approx60.5\%$. Any larger disc makes neighbours overlap and
+count some members twice, while on a hexagonal lattice the gaps do not close
+until the disc radius reaches the cell's circumradius, $s/\sqrt3$: between
+$s/2$ and $s/\sqrt3$ a field both misses ground and double-counts it, so no
+disc radius is both gap-free and overlap-free. Drawing only the cell would be
+the comfortable lie, so the field reports coverage and can draw the disc, the
+cell, or both.
+
+\paragraph{Other limitations.} Bearing from a polygon's centroid is ambiguous
+for elongated or concave units, where the population-weighted centroid, the
+geometric centroid and the unit's full angular extent disagree. The baseline
+for the location quotient (complement, region, nation) changes the reading and
+should be visible, not a configuration default. Placement is exact only in the
+common case (\cref{sec:placement}). Web Mercator distorts area, so densities are
+computed geodesically rather than from screen space.
+
+\paragraph{Name.} The library's working name collides with an unrelated
+occlusion-management technique for 3D glyph fields~\cite{tong2017glyphlens};
+it will be renamed before publication.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+A lens that summarises the data under it has to answer two questions that a
+magnifying lens does not: what to summarise, and where to put the summary. We
+split Tominski et al.'s lens function and join into three stages each, and
+showed that in the resulting seven-stage space a category ring, a
+bearing-faithful necklace, a route profile and a gridded glyphmap are points
+reached by changing arguments rather than by writing new techniques. The part
+of the space we find most interesting is where the lens boundary itself carries
+data: a ring whose angle means bearing, whose marks are tied back to the ground
+by leaders when placement or unrolling gives adjacency away, and whose radius
+control shows how fragile the reading is. Whether that helps anyone is the
+question the planned study exists to answer.

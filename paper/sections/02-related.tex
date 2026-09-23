@@ -1,0 +1,97 @@
+% ---------------------------------------------------------------------------
+\section{Related work}
+\label{sec:related}
+
+The closest precedents to a bearing-faithful summarising lens are mostly not
+called lenses. They sit in five literatures: interactive lenses and their design
+spaces; labelling around a focus region; off-screen indicators on the viewport
+border; radial and necklace cartography; and glyph maps with their underlying
+local statistics.
+
+\subsection{Interactive lenses and their design spaces}
+
+%%RELATED-LENSES%%
+
+\subsection{Marks around a focus region}
+
+\emph{Excentric labelling} shows the labels of objects inside a cursor-centred
+circle, connected to them by lines and updated as the cursor
+moves~\cite{fekete1999excentric}. Labels are laid out in left and right stacks;
+in its radial variant bearing is used only to order them. When there are too
+many objects it shows a count and a sample of labels, and a glyph ``summarizing
+the contents of the area'' is proposed as future work~\cite{fekete1999excentric}.
+\emph{Extended excentric labelling} adds support for high and uneven density and
+for summary statistics~\cite{bertini2009extended}
+\doubt{what those statistics are and how they are drawn is unverified: full text
+not accessed}.
+
+The algorithmic literature on \emph{focus-region} and \emph{contour} labelling
+places labels on the boundary of a circular focus
+itself~\cite{fink2012focus,bekos2019external}. Fink et al.\ connect each label
+to its site by a straight or Bézier leader; in their radial model a label's port
+is the radial projection of its site onto the circle, and sites too close in
+angle are resolved by keeping a maximum conflict-free subset; a facility-location
+variant clusters the sites and labels one representative per cluster; and the
+focus region's position can itself be optimised~\cite{fink2012focus}. Haunert and
+Hermes require every leader to point at the centre, allow one position per
+label, and solve the resulting maximum-weight independent set in real time in a
+browser~\cite{haunert2014labeling}. Boundary labelling has been extended to
+moving focus regions~\cite{heinsohn2014boundary}, to fisheye displacement of labels
+out of a focus with optimisation once it stops~\cite{niedermann2019focus}, and to
+labels drawn as arcs in an annular orbit around a circle with minimum total
+leader length~\cite{bonerath2024orbital}, where a study with 54 participants found
+straight leaders faster than orbital-radial ones at similar
+accuracy~\cite{wallinger2026clarity}.
+\doubt{Wallinger et al.'s numbers were read from arXiv v1, not the PacificVis
+version of record.}
+
+This is the geometric twin of what we do, and we build on it rather than around
+it. The difference is in what the marks are and how conflicts are resolved. In
+every one of these techniques a label stands for one object, a leader is always
+drawn, and a conflict with the bearing is resolved either by \emph{selection}
+(dropping a label) or by freeing the label's position. A summarising lens
+places \emph{aggregates}, keeps every one of them, displaces them
+\emph{minimally} from their bearing, and draws a leader only where the
+resulting gap is large enough to mislead---so the leader's length is the
+residual. We did not find a labelling technique that draws leaders conditionally
+on displacement.
+
+%%RELATED-OFFSCREEN%%
+
+\subsection{Radial and necklace cartography}
+
+%%RELATED-RADIAL%%
+
+\subsection{Glyph maps, within-cell structure and local statistics}
+
+Glyph placement strategies divide into data-driven and
+structure-driven~\cite{ward2002taxonomy}; necklace placement is structure-driven
+layout with a data-driven preferred position. Glyph design guidance is well
+surveyed~\cite{borgo2013glyph}, but controlled evidence on glyph layout and on
+glyphs over maps is thin~\cite{fuchs2017glyph}. Glyph-maps place small temporal
+glyphs at the data's own grid locations~\cite{wickham2012glyphmaps};
+\emph{tilemaps} and \emph{gridded glyphmaps} aggregate into a regular grid and
+draw a multivariate glyph per cell~\cite{slingsby2018tilemaps,slingsby2023gridded,
+laksono2024gridded}, and multivariate glyph placement with level of detail uses
+hierarchical centroids~\cite{mcnabb2019multivariate}. Tilemaps were proposed as a
+way to summarise the outputs of geographically weighted statistics, with the
+grid interactively resized and panned to expose the modifiable areal unit
+problem and a distance-decay kernel larger than the tiles as an
+option~\cite{slingsby2018tilemaps}. Gridded glyphmaps keep the grid fixed in screen
+space and re-aggregate on zoom, and name glyphs that convey within-cell
+heterogeneity as future work~\cite{slingsby2023gridded}.
+
+That heterogeneity is what two hexagon techniques encode. Honeycomb Plots
+observe that colour-coded hexbins cannot distinguish ``uniform distributions
+within tiles \ldots from clusters or trends if their numbers of points match'',
+and cut each tile along the regression plane of its within-tile density; a
+between-subjects study with 42 participants found strong evidence for slope
+tasks~\cite{trautner2022honeycomb}. HexTiles derive a per-tile confidence from
+weighted within-tile variance, argued as mitigation of the modifiable areal unit
+problem~\cite{kawakami2024hextiles}; its weighting is described only in words,
+and its user study (seven participants) tested the tiles without the variance
+encoding. Polar histograms of street bearings summarise a city's orientation
+order~\cite{boeing2019urban}; they bin the bearing \emph{of} edges rather than
+bearing \emph{from} a chosen centre, which is the quantity a lens bins.
+
+%%RELATED-STATS%%

@@ -1,0 +1,78 @@
+% ---------------------------------------------------------------------------
+\section{Implementation}
+\label{sec:implementation}
+
+\sys\ is an open-source JavaScript library (MIT licence)
+\todo{repository is private; make it public or deposit an archived snapshot
+(e.g.\ Zenodo DOI) before submission, and cite that}. The core is a set of
+pure functions over plain objects with no dependency on a map, the DOM or a
+framework; it returns geometry, which a canvas renderer paints and a MapLibre
+adapter positions on a map. The seven stages of \cref{sec:model} are the API:
+a lens is configured by one object per stage, and every figure in this paper is
+a single call with different arguments.
+
+\paragraph{The core has no map in it.} The gallery from which
+\cref{fig:gallery} is drawn runs the whole pipeline onto bare canvases with no
+map library on the page. It doubles as a standing test that the core has not
+acquired a rendering dependency. All raster figures in this paper are
+regenerated from the library by a script in the repository
+(\texttt{paper/scripts/figures.mjs}), which serves the repository, renders the
+gallery and a figure page in headless Chromium, and saves each canvas.
+
+\paragraph{Placement.} The necklace solver of \cref{sec:placement} is
+independent of the rest of the library and exported on its own. It solves the
+fixed-order, interval-free case exactly by weighted pool-adjacent-violators,
+tries every cut of the cycle, and treats the nearly-full and interval-constrained
+cases approximately, as described there. Speckmann and Verbeek's reference
+implementation is part of CartoCrow, a C++ library
+\doubt{cite CartoCrow by its repository or project URL, with access date;
+confirm there is no associated paper to cite instead}. As far as we could find,
+there is no earlier JavaScript implementation
+\doubt{``as far as we could find'' is a search claim: record where we searched
+(npm, GitHub, Observable) and when}.
+
+\paragraph{Fields.} A field calls the single-lens pipeline once per lattice
+centre and changes nothing else. It adds two things a single lens does not
+need: a lattice (hexagonal, square, triangular, or a Lloyd-relaxed centroidal
+Voronoi tessellation inside a boundary, built on a Delaunay triangulation) and a
+uniform grid index so that $m$ lenses over $n$ members do not cost $O(nm)$
+distance tests.
+
+\paragraph{Tests and performance.} The repository has 196 unit tests (Node's
+built-in runner, no runtime dependencies), covering among other things
+non-overlap, stability and overflow of the solver. \Cref{tab:timing} reports
+median wall-clock times for the pure pipeline, without rendering, on the bundled
+extract of 1{,}449 OpenStreetMap places.
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Median time of the pure pipeline (no rendering), Node~22 on one
+  core of a 2.8\,GHz Intel Xeon, 1{,}449 places; produced by
+  \texttt{paper/scripts/bench.mjs}. Field sizes are the actual lattice counts.}
+  \label{tab:timing}
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Configuration & ms \\
+    \midrule
+    One lens, 8 bearing sectors, necklace placement & 0.9 \\
+    One lens, 24 bearing sectors & 1.6 \\
+    One lens, 72 bearing sectors & 5.2 \\
+    One lens, 8 sectors $\times$ 4 categories, stacked & 0.8 \\
+    Field of 37 lenses, 8 sectors each & 5.4 \\
+    Field of 241 lenses & 16.3 \\
+    Field of 889 lenses & 15.5 \\
+    \midrule
+    Solver alone, 24 marks, 80\% fill & 0.6 \\
+    Solver alone, 72 marks & 1.1 \\
+    Solver alone, 288 marks & 15.4 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The field of 889 lenses is no slower than the field of 241 because 804 of its
+lenses (and 165 of the 241) hold fewer than the minimum of three members and are
+skipped after the index query, so the cost is dominated by the lenses actually
+drawn (85 and 76 respectively). The solver
+is $O(K^2)$ in the number of marks, which is immaterial at the bin counts a
+lens uses and visible at 288.

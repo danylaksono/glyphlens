@@ -112,7 +112,7 @@ be reachable later without a rewrite, three properties must hold now:
 
 Deferred deliberately: level-of-detail and glyph simplification at small sizes,
 which is what the tessellated case will actually need
-(cf. Jankowski et al., *Multivariate Maps*).
+(cf. McNabb & Laramee, *Multivariate Maps*).
 
 ### F-3. Why the sketches feel janky
 
@@ -1109,8 +1109,13 @@ hexagon: they agree at six points and nowhere else, and the corners are outside
 every disc. A hexagonal lattice gives each centre `(√3/2)·s²` of ground and a
 touching disc covers `π·(s/2)²` of it, so **coverage is π/(2√3) ≈ 90.7%** and
 about **9% of the map is in no lens at all**. Anything standing in those curved
-triangles is counted nowhere. Push packing past `1/√3 ≈ 0.577` and it inverts:
-the discs overlap, coverage exceeds 1, and members are counted twice.
+triangles is counted nowhere. Push packing past `0.5` and neighbouring discs
+start to overlap, so members are counted twice; the gaps do not close until
+`1/√3 ≈ 0.577`, where the disc reaches the hexagon's corners. Between the two a
+field both misses ground and double-counts it. (The coverage *ratio* passes 1
+at `√(√3/2π) ≈ 0.525`, which is neither threshold — it is a ratio of areas, not
+a share of ground.) *Corrected 2026-09-23: this entry originally put the onset
+of overlap at `1/√3`.*
 
 Neither is a defect — both are the ordinary consequence of sampling a plane
 with discs — but both were **invisible**, because the field drew no boundary at
