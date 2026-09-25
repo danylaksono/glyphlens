@@ -11,7 +11,12 @@ latexmk -pdf main.tex                 # or: pdflatex, bibtex, pdflatex, pdflatex
 node scripts/check-bib.mjs            # citation hygiene (add --online to resolve DOIs)
 node scripts/figures.mjs              # regenerate figures/ from the library (Playwright)
 node scripts/bench.mjs                # regenerate the timing table's numbers
+node scripts/solver-check.mjs         # solver vs exact references: order, full ring (~5 min)
+node scripts/interval-check.mjs       # solver vs Dykstra with feasible intervals (seconds)
 ```
+
+The two check scripts are the evidence behind §3.5's claims. Their saved
+output is in `figures/solver-check.txt` and `figures/interval-check.txt`.
 
 The class is plain `article`, because the venue is undecided. Porting to the
 IEEE VIS (vgtc) or EuroVis (egpubl) template is mechanical once it is chosen.

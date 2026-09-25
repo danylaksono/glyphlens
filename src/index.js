@@ -93,6 +93,7 @@ export {
   lateralStats,
   elasticity,
   elasticityProfile,
+  uniformElasticity,
   angularHistogram,
   radialHistogram,
   describeDistribution,

@@ -130,7 +130,8 @@ export function lateralStats(offsets, halfWidth) {
  *   E ~ n_edge / (edgeBand * n_total)
  *
  * Reference values, for `edgeBand = 0.1`:
- *   E ~ 2   uniform density; the count is mostly tracking area
+ *   E ~ 1.9 uniform density in a disc (2 - b; see `uniformElasticity`); the
+ *           count is mostly tracking area
  *   E ~ 0   everything is already well inside; widening adds nothing
  *   E >> 2  a cluster sits just beyond the rim and the reading is about to jump
  *
@@ -142,6 +143,32 @@ export function elasticity(distances, radius, edgeBand = 0.1) {
   const inner = radius * (1 - edgeBand);
   const edge = distances.filter((d) => d >= inner && d <= radius).length;
   return edge / (edgeBand * n);
+}
+
+/**
+ * The value the elasticity estimator takes under uniform density.
+ *
+ * For a selection whose area grows as `areaAt(r)`, a uniform density puts
+ * (A(r) - A((1 - b) r)) / A(r) of the members in the outer band, so the
+ * estimator returns that divided by b. For a disc or a sector (A proportional
+ * to r^2) this is 2 - b, which is 1.9 at the default band, not 2. The
+ * derivative it approximates is 2, but the backward difference is biased low.
+ * Other shapes differ. An annulus with a fixed inner radius r0 has
+ * A proportional to r^2 - r0^2, so its reference is larger, and it tends to 2 - b
+ * only as r grows. See docs/findings.md F-39.
+ *
+ * @param {number} r
+ * @param {number} [edgeBand=0.1]
+ * @param {(r:number)=>number} [areaAt]  area of the selection at radius r (default a disc)
+ */
+export function uniformElasticity(r, edgeBand = 0.1, areaAt = discArea) {
+  const a = areaAt(r);
+  return a > 0 ? (a - areaAt(r * (1 - edgeBand))) / (edgeBand * a) : 0;
+}
+
+/** Area of a disc of radius r, up to the constant, which cancels. */
+function discArea(r) {
+  return r * r;
 }
 
 /**
@@ -159,11 +186,36 @@ export function elasticity(distances, radius, edgeBand = 0.1) {
  * Samples below `minCount` members are flagged `reliable: false`. The estimator
  * is a ratio of counts and is meaningless at small n — see F-17.
  *
- * @returns {Array<{ r, count, share, elasticity }>} ascending by radius
+ * Each sample also carries the estimator's value under uniform density for the
+ * selection's shape (`reference`; see `uniformElasticity`), and the ratio of
+ * the two (`relative`, which is 1 under uniform density for any shape). With
+ * `envelope` set to a number of simulations, it also carries a pointwise
+ * Monte-Carlo envelope under complete spatial randomness (`low`, `high`). The
+ * envelope conditions on the number of members within `maxRadius` and
+ * scatters them uniformly over the selection. A value outside it is one a
+ * uniform pattern with this many members rarely produces at that radius. The
+ * envelope is pointwise, so across many radii some excursions are expected by
+ * chance. It widens where counts are small, which is the honest form of the
+ * `minCount` floor. See docs/findings.md F-39.
+ *
+ * @param {number[]} distances
+ * @param {object} [options]
+ * @param {number} [options.maxRadius]    defaults to the largest distance
+ * @param {number} [options.minRadius=0]
+ * @param {number} [options.samples=96]
+ * @param {number} [options.edgeBand=0.1]
+ * @param {number} [options.minCount=30]
+ * @param {(r:number)=>number} [options.areaAt]  selection area at radius r (default a disc)
+ * @param {number} [options.envelope=0]   simulations for the CSR envelope (0: none)
+ * @param {number} [options.level=0.95]   central coverage of the envelope
+ * @param {number} [options.seed=1]       seed, so the envelope is reproducible
+ * @returns {Array<{ r, count, share, elasticity, reliable, reference, relative, low?, high? }>}
+ *   ascending by radius
  */
 export function elasticityProfile(distances, options = {}) {
   const {
     maxRadius, minRadius = 0, samples = 96, edgeBand = 0.1, minCount = 30,
+    areaAt = discArea, envelope = 0, level = 0.95, seed = 1,
   } = options;
   const sorted = [...distances].sort((a, b) => a - b);
   const total = sorted.length;
@@ -172,35 +224,81 @@ export function elasticityProfile(distances, options = {}) {
   // draw as if it said something.
   if (total === 0 || !(top > minRadius) || samples < 2) return [];
 
-  /** Members within radius r. */
-  const countWithin = (r) => {
+  /** Members of a sorted array within radius r. */
+  const countIn = (arr, r) => {
     let lo = 0;
-    let hi = total;
+    let hi = arr.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (sorted[mid] <= r) lo = mid + 1;
+      if (arr[mid] <= r) lo = mid + 1;
       else hi = mid;
     }
     return lo;
   };
+  const countWithin = (r) => countIn(sorted, r);
+  const estimate = (arr, r) => {
+    const count = countIn(arr, r);
+    return count > 0 ? (count - countIn(arr, r * (1 - edgeBand))) / (edgeBand * count) : 0;
+  };
+  const radii = Array.from({ length: samples }, (_, i) => minRadius + ((top - minRadius) * i) / (samples - 1));
+
+  // The CSR envelope: the same estimator on patterns of the same size scattered
+  // uniformly over the selection. A uniform radius is the inverse of the
+  // normalised area, found by bisection so that any monotone areaAt works.
+  let bands = null;
+  if (envelope > 0) {
+    const n = countWithin(top);
+    const aTop = areaAt(top);
+    let state = seed >>> 0 || 1;
+    const rand = () => ((state = (state * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const radiusForArea = (target) => {
+      let lo = 0;
+      let hi = top;
+      for (let k = 0; k < 40; k++) {
+        const mid = (lo + hi) / 2;
+        if (areaAt(mid) < target) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) / 2;
+    };
+    const runs = radii.map(() => new Float64Array(envelope));
+    const sim = new Float64Array(n);
+    for (let s = 0; s < envelope; s++) {
+      for (let j = 0; j < n; j++) {
+        sim[j] = areaAt === discArea ? top * Math.sqrt(rand()) : radiusForArea(rand() * aTop);
+      }
+      sim.sort();
+      radii.forEach((r, i) => (runs[i][s] = estimate(sim, r)));
+    }
+    const q = (arr, p) => arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))];
+    bands = runs.map((arr) => {
+      arr.sort();
+      return [q(arr, (1 - level) / 2), q(arr, 1 - (1 - level) / 2)];
+    });
+  }
 
   const out = [];
   for (let i = 0; i < samples; i++) {
-    const r = minRadius + ((top - minRadius) * i) / (samples - 1);
+    const r = radii[i];
     const count = countWithin(r);
     const inner = countWithin(r * (1 - edgeBand));
+    const E = count > 0 ? (count - inner) / (edgeBand * count) : 0;
+    const reference = uniformElasticity(r, edgeBand, areaAt);
     out.push({
       r,
       count,
       share: total > 0 ? count / total : 0,
       // The same estimator as `elasticity`, so a point on this curve agrees
       // with the live readout at that radius.
-      elasticity: count > 0 ? (count - inner) / (edgeBand * count) : 0,
+      elasticity: E,
       // The estimator is a ratio of counts, so it is wild when counts are
       // small: a single member inside the edge band of a lens holding one
       // member reports E = 10 regardless of the geography. Callers should not
       // draw or read unreliable samples as cliffs. See docs/findings.md F-17.
       reliable: count >= minCount,
+      reference,
+      relative: reference > 0 ? E / reference : 0,
+      ...(bands ? { low: bands[i][0], high: bands[i][1] } : {}),
     });
   }
   return out;

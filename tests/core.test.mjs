@@ -38,6 +38,7 @@ import {
   lateralStats,
   elasticity,
   elasticityProfile,
+  uniformElasticity,
   angularHistogram,
   radialHistogram,
   describeDistribution,
@@ -898,6 +899,35 @@ test('elasticityProfile reports uniform density as E near 2', () => {
   for (const p of prof) {
     assert.ok(Math.abs(p.elasticity - 1.9) < 0.35, `E = ${p.elasticity} at r = ${p.r}`);
   }
+});
+
+test('the uniform reference is 2 - b for a disc and depends on the shape', () => {
+  assert.ok(Math.abs(uniformElasticity(500, 0.1) - 1.9) < 1e-12);
+  assert.ok(Math.abs(uniformElasticity(500, 0.2) - 1.8) < 1e-12);
+  // An annulus with inner radius 100: (200^2 - 180^2) / (0.1 (200^2 - 100^2)).
+  const annulus = (r) => Math.max(r * r - 100 * 100, 0);
+  assert.ok(Math.abs(uniformElasticity(200, 0.1, annulus) - 7600 / 3000) < 1e-12);
+});
+
+test('elasticityProfile carries the reference, the ratio and a CSR envelope', () => {
+  let seed = 3;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const radius = 1000;
+  const uniform = Array.from({ length: 2000 }, () => radius * Math.sqrt(rand()));
+  const prof = elasticityProfile(uniform, { maxRadius: radius, samples: 21, envelope: 199 })
+    .filter((p) => p.reliable);
+  const inside = prof.filter((p) => p.elasticity >= p.low && p.elasticity <= p.high).length;
+  assert.ok(inside >= prof.length - 2, `uniform data inside the envelope at ${inside} of ${prof.length} radii`);
+  for (const p of prof) {
+    assert.ok(Math.abs(p.reference - 1.9) < 1e-12);
+    assert.ok(Math.abs(p.relative - p.elasticity / 1.9) < 1e-12);
+    assert.ok(p.low <= p.high);
+  }
+  // A ring of places at 600 m lies far outside the envelope where it is crossed.
+  const ringed = [...uniform.filter((d) => d < 550), ...Array(400).fill(600)];
+  const cross = elasticityProfile(ringed, { maxRadius: radius, samples: 41, envelope: 199 })
+    .find((p) => p.r >= 600);
+  assert.ok(cross.elasticity > cross.high, `E ${cross.elasticity} vs high ${cross.high}`);
 });
 
 test('elasticityProfile flags small-count samples as unreliable', () => {

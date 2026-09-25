@@ -111,10 +111,12 @@ function continuum(data, count) {
 
 function elasticityCsv(data) {
   const distances = data.map((f) => geoDistance(CENTRE, [f.lng, f.lat]));
-  const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 121 });
+  // 999 simulations, so the 95% pointwise envelope rests on ~25 draws per tail.
+  const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 121, envelope: 999, seed: 1 });
   const rows = profile.map((p) =>
-    [p.r.toFixed(1), p.count, p.elasticity.toFixed(4), p.reliable ? 1 : 0].join(','));
-  return ['r,count,elasticity,reliable', ...rows].join('\n');
+    [p.r.toFixed(1), p.count, p.elasticity.toFixed(4), p.reliable ? 1 : 0,
+      p.reference.toFixed(4), p.low.toFixed(4), p.high.toFixed(4)].join(','));
+  return ['r,count,elasticity,reliable,reference,low,high', ...rows].join('\n');
 }
 
 async function main() {

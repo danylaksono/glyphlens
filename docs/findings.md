@@ -1423,6 +1423,46 @@ overlapped in 33 of 100 instances. The new one overlapped in none. In 43 it
 dropped only the too-narrow intervals, and in 9 it placed the marks without
 intervals.
 
+### F-39. The elasticity reference was 2, and should have been an envelope
+
+Recorded 2026-09-25.
+
+Two things were wrong with how elasticity was read, and neither was a bug in
+the estimator.
+
+- **The reference value.** Every readout, tooltip and doc said "E ≈ 2 is
+  uniform density". The derivative is 2. The estimator, a backward difference
+  over the outer band of relative width b, is (1 − (1 − b)²)/b = **2 − b**
+  under uniform density: 1.9 at the default. It also depends on the shape. An
+  annulus with a fixed inner radius r₀ has area ∝ r² − r₀², and its reference
+  is larger: 2.53 at r = 2r₀. `uniformElasticity(r, b, areaAt)` now gives the
+  reference for any shape. `elasticityProfile` reports it per sample, and also
+  `relative` (E divided by the reference), which is 1 under uniform density for
+  any shape.
+- **Distance from the reference is not evidence.** A curve wobbles around 1.9
+  whether or not the geography is doing anything, and the wobble is larger
+  where counts are small. `elasticityProfile(…, { envelope: n })` now simulates
+  n patterns with the same member count, scattered uniformly over the
+  selection, and returns a pointwise 95% band (`low`, `high`). This is the
+  standard companion to Ripley's K. It is also the principled form of F-17's
+  30-member floor, because the band widens exactly where counts are small.
+
+It changed a claim. The paper's figure had described "a second, weaker rise
+at 925–1000 m" around the Yogyakarta demo centre. Against 999 simulations, that
+rise **stays inside the envelope**: a uniform pattern of 1,071 places produces
+it by chance. The early cliff is real: Ê reaches 7.3 at 475–525 m, and the
+envelope stops at 3.6. The "adds ground faster than places" reading holds from
+1.5 to 2.7 km, where the curve is below the envelope throughout. The figure
+now draws the band, and the caption says only what the band supports.
+
+The envelope costs about 15 ms for 99 simulations on 1,449 places. The demo
+therefore draws the curve at once and fills the band in once the lens has
+stopped moving for 150 ms. The readout, tooltip and reference line now use 1.9.
+
+Not done: a global (simultaneous) envelope, which would control for reading
+many radii at once. With 102 drawn radii, a single-radius excursion from a
+pointwise band is weak evidence, and the caption says so.
+
 ---
 
 ## Open questions

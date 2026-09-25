@@ -212,10 +212,10 @@ seen.
 3. **"Elasticity is the local K slope."** — Yes: E = d ln N / d ln r, and under
    complete spatial randomness N ∝ r², so E = 2 (Ripley's K(t) = πt²). Claim the
    interface use.
-   Fix two things first: the implemented estimator's uniform value is **2 − b =
-   1.9**, not 2 (backward difference over a band b = 0.1), and the reference is
-   shape-dependent (report E / (d ln A / d ln r), which is 1 under uniformity for
-   every shape).
+   Both fixes are now done (findings F-39):
+   - the estimator's uniform value, **2 − b = 1.9**, is the reported
+     reference, and it is shape-aware;
+   - a CSR envelope replaces the bare reference value, as with Ripley's K.
 4. **"Does bearing on the ring help anyone?"** — Unknown; that is the study
    (§6). The closest evidence (Jäckle 2017: orthographic beat radial on a
    rectangular border) cuts the other way. It transfers only partly to a circular
@@ -263,8 +263,10 @@ extracts; N from a pilot-based power analysis; pre-registered.
       wrong; the paper's bib has it right).
 - [x] Fix the packing thresholds in README / design-space / findings: overlap
       begins above 0.5, gaps close at 1/√3; in between, a field does both.
-- [ ] Report elasticity against its true uniform value (2 − b) or switch to a
-      centred estimator; add the shape-aware reference and envelopes.
+- [x] Report elasticity against its true uniform value (2 − b), with a
+      shape-aware reference (`uniformElasticity`) and a pointwise CSR envelope
+      (findings F-39). The envelope showed one of the figure's claimed rises
+      to be chance. A global envelope is still to do.
 - [ ] Kernels for field mode; show equivalence with GW summary statistics.
 - [x] Solver order: tested (findings F-37, `paper/scripts/solver-check.mjs`).
       It is *not* optimal for unequal widths or weights, so it is kept as a

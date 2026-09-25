@@ -452,9 +452,10 @@ from their own distance and bearing, which reproduces exactly the geodesic
 circle the selection asserts.
 
 **Elasticity** falls out of the same geometry: `E = (dV/V)/(dr/r)` says how much
-the reading depends on the radius the analyst happened to pick. `E ≈ 2` is
-uniform density; `E ≫ 2` means a cluster sits just outside the rim and the
-number is about to jump.
+the reading depends on the radius the analyst happened to pick. The derivative
+is 2 under uniform density. The estimator, a backward difference over an outer
+band of relative width `b`, gives `2 − b` there: 1.9 at the default. `E ≫ 1.9`
+means a cluster sits just outside the rim and the number is about to jump.
 
 Because that curve does not depend on the radius currently set, it can be drawn
 **on the radius control itself** — so the cliffs are visible before you drag
@@ -463,13 +464,24 @@ onto one:
 ```js
 import { elasticityProfile } from 'glyphlens';
 
-const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 120 });
-// [{ r, count, share, elasticity, reliable }, ...]
+const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 120, envelope: 99 });
+// [{ r, count, share, elasticity, reliable, reference, relative, low, high }, ...]
 ```
 
 `reliable` matters: the estimator is a ratio of counts and is meaningless at
 small n, so don't plot or read samples below the floor as cliffs. The ring demo
-draws only the reliable span and shades the rest. See
+draws only the reliable span and shades the rest.
+
+Each sample also carries:
+- `reference`: the estimator's value under uniform density for the
+  selection's shape. It is `2 − b` for a disc; pass `areaAt` for any other
+  shape.
+- `relative`: `elasticity` divided by `reference`, so uniform density reads 1
+  for every shape.
+- `low` and `high`, with `envelope` set: a pointwise Monte-Carlo envelope under
+  complete spatial randomness, conditioned on the member count. A curve outside
+  the band is geography; inside it, it may be chance. See
+  [docs/findings.md F-39](docs/findings.md#f-39-the-elasticity-reference-was-2-and-should-have-been-an-envelope). See
 [docs/design-space.md §4](docs/design-space.md#4-within-unit-structure--the-maup-channel).
 
 ### Using the placement engine on its own

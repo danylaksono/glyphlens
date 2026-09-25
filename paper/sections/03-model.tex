@@ -366,10 +366,16 @@ point-to-event rather than an event-to-event count; the uniform reference
 depends on the lens shape (it is 2 for a disc or sector, but not for an annulus
 with fixed inner radius, nor 2 for a corridor whose width is the control); and
 it is shown as a property of the control rather than of the result.
-\todo{Report $E$ relative to the selection's own area elasticity,
-$E/(d\ln A/d\ln r)=\lambda_{\mathrm{edge}}/\bar\lambda$, which is 1 under uniform
-density for every shape; and add a Monte-Carlo envelope under a null model
-\cite{wiegand2004rings} instead of the bare reference value.}
+The library therefore reports $\hat E$ with two references in place of the bare
+value 2. The first is the estimator's own value under uniform density for the
+selection's shape, $\big(A(r)-A((1-b)r)\big)/\big(b\,A(r)\big)$ for a selection
+of area $A(r)$. That is $2-b$ for a disc or sector and larger for an annulus
+with a fixed inner radius, and the ratio of $\hat E$ to it is 1 under uniform
+density for any shape. The second is a pointwise Monte-Carlo envelope under
+complete spatial randomness, conditioned on the number of members and in the
+spirit of the simulation envelopes used with Ripley's
+$K$~\cite{ripley1977modelling}. It widens where counts are small, which makes
+it the principled version of the 30-member floor.
 \doubt{The equivalences are derived here. Ripley and Yamu et al.\ were read in
 full; Getis \& Franklin at abstract level only. Yamu et al.\ is mainly a
 planning-theory paper that uses radial analysis; a methods paper by Frankhauser
@@ -389,22 +395,34 @@ identified and checked).}
         axis lines*=left,
       ]
       \addplot[black!25, fill=black!6, draw=none] coordinates {(0,0) (0,8) (475,8) (475,0)} \closedcycle;
+      \addplot[name path=lo, draw=none, unbounded coords=jump]
+        table[x=r, y expr={\thisrow{reliable}>0 ? \thisrow{low} : nan}, col sep=comma]
+        {figures/elasticity.csv};
+      \addplot[name path=hi, draw=none, unbounded coords=jump]
+        table[x=r, y expr={\thisrow{reliable}>0 ? \thisrow{high} : nan}, col sep=comma]
+        {figures/elasticity.csv};
+      \addplot[RoyalBlue!15] fill between[of=lo and hi, soft clip={domain=475:3000}];
       \addplot[thick, color=RoyalBlue, unbounded coords=jump]
         table[x=r, y expr={\thisrow{reliable}>0 ? \thisrow{elasticity} : nan}, col sep=comma]
         {figures/elasticity.csv};
       \addplot[dashed, black!60, domain=0:3000, samples=2] {1.9};
-      \node[font=\scriptsize, anchor=west, text=black!55] at (axis cs:40,7.3) {too few members};
-      \node[font=\scriptsize, anchor=south west, text=black!60] at (axis cs:2100,1.95) {uniform: $2-b$};
+      \node[font=\scriptsize, anchor=north west, align=left, text=black!55] at (axis cs:30,7.8) {too few\\members};
+      \node[font=\scriptsize, anchor=south west, text=black!60] at (axis cs:2100,2.2) {uniform: $2-b$};
     \end{axis}
   \end{tikzpicture}
   \caption{The elasticity profile $\hat E(r)$ (\cref{eq:elasticity-hat}, $b=0.1$)
   around the demonstration centre in Yogyakarta, computed from the bundled
-  OpenStreetMap extract by the library and plotted from its output. The shaded
-  span has fewer than 30 members and is not drawn. The early cliff ($\hat E\approx7.3$
-  at 475--500\,m) says a band of places at that distance is far denser than
-  anything inside it, so a radius chosen there is fragile; a second, weaker
-  rise follows at 925--1000\,m; and beyond about 1.4\,km the curve stays below
-  the uniform reference, meaning that widening the lens adds ground faster
-  than it adds places.}
+  OpenStreetMap extract by the library and plotted from its output. The band is
+  a pointwise 95\% Monte-Carlo envelope under complete spatial randomness: 999
+  patterns with the same 1{,}071 members within 3\,km, scattered uniformly over
+  the disc. The shaded span has fewer than 30 members and is not drawn. The
+  early cliff ($\hat E$ up to 7.3 at 475--525\,m, against an envelope reaching
+  3.6) says a band of places at that distance is far denser than anything
+  inside it, so a radius chosen there is fragile. The rise at 925--1000\,m
+  stays inside the envelope, which is what a uniform pattern of this size
+  produces by chance. From 1.5 to 2.7\,km the curve lies below the envelope
+  throughout: widening the lens there adds ground faster than it adds places.
+  The envelope is pointwise, so a brief excursion at one of the 102 drawn radii is
+  weak evidence on its own.}
   \label{fig:elasticity}
 \end{figure}
