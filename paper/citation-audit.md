@@ -27,11 +27,15 @@ bibliography changes.
    ("Halo", "Wedge", "City lights", "JellyLens", "Toolglass and magic lenses",
    "Excentric labeling", "The sampling lens"); the bib adds the subtitle printed
    on the paper.
-5. **Entries without a DOI.** There are three, and each has a URL that was loaded:
+5. **Entries without a DOI.** There are four, and each has a URL that was loaded:
    - `visquill` — web pages, accessed 2026-09-23;
    - `slingsby2018tilemaps` — City Research Online eprint 20884, a workshop paper
      with no DOI;
-   - `openshaw1984maup` — the QMRG CATMOG archive scan.
+   - `openshaw1984maup` — the QMRG CATMOG archive scan;
+   - `cartocrow` — the TU Eindhoven project page, accessed 2026-09-25. It
+     lists the necklace-map algorithms with their two papers' DOIs, and links
+     the source at https://github.com/tue-alga/cartocrow. It names no paper
+     for the framework itself.
 
 Some sources were checked and then left out of the bibliography:
 - Nusrat & Kobourov 2016, verified (group E2) but not cited;
@@ -70,6 +74,15 @@ The online mode needs network access to api.crossref.org and api.datacite.org.
   generally optimal for their max-scale objective. That is a warning for the
   solver's sorted-order assumption.
 
+## Closed on 2026-09-25
+
+- **The solver's order assumption.** It is not optimal with unequal widths or
+  weights. It is kept as a stated constraint and measured by
+  `paper/scripts/solver-check.mjs` (docs/findings.md F-37).
+- **CartoCrow.** Now cited by its project page.
+- **"No earlier JavaScript implementation."** The claim now records where and
+  when we searched (paper §6).
+
 ## Still open (as of 2026-09-25)
 
 The group notes below were written while checking was still going on, so some
@@ -80,8 +93,11 @@ note, the item is still open. The draft marks each open item with `\doubt{…}`.
   texts are paywalled. The draft does not say that either paper names a uniform
   (box-car) kernel. The moving-window reading is quoted from Dykes & Brunsdon
   2007 instead.
-- **Wallinger et al. 2026.** Its numbers come from arXiv v1, not the PacificVis
-  version of record.
+- **Wallinger et al. 2026.** The participant count (n = 54) comes from arXiv
+  v1. On 2026-09-25 the version of record was checked: the DOI resolves in
+  Crossref and the TU Wien repository gives its abstract. The abstract confirms
+  similar accuracy for both leader types and faster responses with straight
+  leaders.
 - **Bertini et al. 2009; Krüger et al. 2013; Ma et al. 2020; Scheepens et al.
   2016.** Evidence is at abstract level, and the draft uses them only for what
   their abstracts say.

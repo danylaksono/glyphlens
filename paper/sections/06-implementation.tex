@@ -23,13 +23,17 @@ gallery and a figure page in headless Chromium, and saves each canvas.
 independent of the rest of the library and exported on its own. It solves the
 fixed-order, interval-free case exactly by weighted pool-adjacent-violators,
 tries every cut of the cycle, and treats the nearly-full and interval-constrained
-cases approximately, as described there. Speckmann and Verbeek's reference
-implementation is part of CartoCrow, a C++ library
-\doubt{cite CartoCrow by its repository or project URL, with access date;
-confirm there is no associated paper to cite instead}. As far as we could find,
-there is no earlier JavaScript implementation
-\doubt{``as far as we could find'' is a search claim: record where we searched
-(npm, GitHub, Observable) and when}.
+cases approximately, as described there. An implementation of Speckmann and
+Verbeek's algorithms is part of CartoCrow, a C++ framework for cartographic
+algorithms from the Applied Geometric Algorithms group at TU
+Eindhoven~\cite{cartocrow}. Its project page lists no paper for the framework
+itself, so we cite the page. We found no earlier JavaScript implementation. On
+2026-09-25 we searched the npm registry for \emph{necklace map},
+\emph{necklace maps}, \emph{necklace}, \emph{Speckmann}, \emph{boundary
+labeling} and \emph{ring map}. We also ran web and code searches for necklace
+maps with JavaScript, d3, npm and GitHub, and a search of Observable. The
+only npm package named \texttt{necklace} is an unrelated pipeline library.
+This is a search result, not a proof of absence.
 
 \paragraph{Fields.} A field calls the single-lens pipeline once per lattice
 centre and changes nothing else. It adds two things a single lens does not

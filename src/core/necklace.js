@@ -23,10 +23,20 @@
  * optimum is a weighted isotonic regression (exact, O(n)). The wrap-around
  * constraint becomes a cap on total span.
  *
- * The cyclic order that matters is the order by preferred position — any
- * crossing solution can be uncrossed without increasing cost — so we only need
- * to choose where to cut the circle. We try all n cuts and keep the cheapest:
+ * The order is fixed to the order by preferred position, so only the cut of
+ * the circle has to be chosen. We try all n cuts and keep the cheapest:
  * O(n^2), which is nothing for the bin counts a lens uses (typically <= 72).
+ *
+ * Keeping that order is a design constraint, not a free property of the
+ * optimum. A crossing solution can be uncrossed without increasing cost only
+ * when all widths and all weights are equal. With unequal ones, swapping two
+ * nearly coincident marks can make room for a third, and the unconstrained
+ * optimum is cheaper. paper/scripts/solver-check.mjs measures this: cheaper in
+ * 8-42% of clustered random instances, by a median of 3-7 degrees of RMS
+ * displacement. We keep the order anyway, because on a bearing-faithful ring
+ * the relative order of two marks is itself data. For the order-preserving
+ * problem the same script finds this solver exact on every instance it tried.
+ * See docs/findings.md F-37.
  *
  * ## Feasible intervals
  *
@@ -89,8 +99,8 @@ export function placeNecklace(items, options = {}) {
     };
   }
 
-  // Sorted cyclic order. Non-crossing is optimal, so this order is fixed and
-  // only the cut varies.
+  // Sorted cyclic order. It is kept fixed (see the header), so only the cut
+  // varies.
   const order = items
     .map((it, i) => ({ it, i, p: wrap01(it.position) }))
     .sort((a, b) => a.p - b.p);

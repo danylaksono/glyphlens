@@ -153,37 +153,62 @@ $\delta(x,y)$ be the cyclic difference on $[0,1)$. Placement solves
   \begin{aligned}
     &\min_{x}\; \sum_{k} w_k\, \delta(x_k,p_k)^2 \\
     &\text{s.t. the arcs } [x_k-h_k,\,x_k+h_k] \text{ are disjoint},\;
-    x_k\in I_k ,
+    x_k\in I_k, \\
+    &\phantom{\text{s.t. }}\text{and the marks keep the cyclic order of the } p_k,
   \end{aligned}
   \label{eq:placement}
 \end{equation}
-the necklace-map placement problem of Speckmann and Verbeek
-\cite{speckmann2010necklace,speckmann2015algorithms} with a squared-displacement
-objective. For a fixed cyclic order and no intervals, substituting
-$y_k=x_k-c_k$, where $c_k$ accumulates the minimum spacings $h_{k-1}+h_k$, turns
-non-overlap into monotonicity of $y$, so the optimum is a weighted isotonic
-regression, solved exactly in $O(K)$ by pool-adjacent-violators. The implementation
-orders marks by preferred position, tries each of the $K$ places to cut the
-cycle, and keeps the cheapest, for $O(K^2)$ overall.
-\doubt{The implementation assumes that ordering marks by preferred position is
-optimal (``any crossing solution can be uncrossed without increasing cost''). That
-is standard for equal widths but unproven here for unequal $h_k$ and $w_k$. For
-the related max-scale necklace problem with centroid intervals, Speckmann and
-Verbeek show that the order by region bearing is \emph{not} generally optimal
-(it is a tight $\frac12$-approximation)~\cite{speckmann2015algorithms}; their
-objective and constraints differ from \cref{eq:placement}, so this is a warning,
-not a counterexample. A proof or a counterexample search is needed.}
+a squared-displacement variant of the necklace-map placement problem of
+Speckmann and Verbeek~\cite{speckmann2010necklace,speckmann2015algorithms}. The
+last constraint, which we call \emph{order preservation}, corresponds to their
+fixed-order case. It also forbids a mark from winding past its neighbours: in the
+frame cut open at some point of the cycle, the unwrapped positions increase in
+the same order as the unwrapped preferred positions. With order fixed and no
+intervals, substituting $y_k=x_k-c_k$, where $c_k$ accumulates the minimum
+spacings $h_{k-1}+h_k$, turns non-overlap into monotonicity of $y$. The
+optimum is then a weighted isotonic regression, solved exactly in $O(K)$ by
+pool-adjacent-violators. The implementation tries each of the $K$ places to cut
+the cycle and keeps the cheapest, for $O(K^2)$ overall.
 
-Two parts of the solver are approximate, and we say so rather than hide it.
-When the marks nearly fill the cycle, the wrap-around constraint is enforced by
-alternating projection between monotone sequences and sequences of bounded
-span, which converges to a feasible point but not, in general, to the
-projection itself (Dykstra's algorithm would); and feasible intervals are
-enforced by clamping and re-solving for a fixed number of passes. Both are exact
-when inactive, which is the common case for a lens with a few dozen bins.
-\todo{Either implement Dykstra's algorithm for the bounded-span case and an
-exact interval method, or keep the approximation and report its gap on a
-benchmark.}
+Order preservation is a design constraint, not a free property of the
+optimum. We had first assumed, as the implementation's own comments did, that a
+crossing solution can always be uncrossed without increasing cost. That holds
+when all marks have equal widths and equal weights, and it fails otherwise. We
+ran an exact comparison (\texttt{paper/scripts/solver-check.mjs}) on random
+instances with $K = 3$--$5$ and collision-prone, clustered preferred positions.
+When reordering and winding were allowed, the optimum was cheaper than the
+order-preserving one in 8--42\% of instances with unequal widths or unequal
+weights, and in none with both equal. The median cost of keeping order was
+3--7\textdegree{} of weighted RMS displacement on a closed ring, and at most
+31\textdegree. One three-mark example has marks filling 79\% of the ring: a narrow,
+heavy mark and a wide one whose preferred positions differ by 2\textdegree, and
+a third mark about 30\textdegree{} clockwise of both. Placing the wide mark
+counterclockwise of the narrow one, against their bearing order, frees room for
+the third mark and nearly halves the cost. For the related max-scale problem, Speckmann and
+Verbeek likewise show that ordering by region bearing is not generally optimal
+(it is a tight $\frac12$-approximation)~\cite{speckmann2015algorithms}. We keep
+the constraint because the relative order of the marks is itself part of what a
+bearing-faithful ring encodes. A pair of marks drawn in the wrong order
+misstates which of two directions lies clockwise of the other, however small the
+displacement saved. Whether readers would accept a small reordering for a
+smaller displacement is an empirical question, and could be added to the
+study's displacement factor (\cref{sec:evaluation}).
+
+Two parts of the solver are approximate by construction. When the marks nearly
+fill the cycle, the wrap-around constraint caps the span of $y$. The
+implementation enforces it by alternating projection between monotone sequences
+and sequences of bounded span, which converges to a feasible point but is not
+guaranteed to reach the constrained optimum. Feasible intervals are enforced by
+clamping and re-solving for a fixed number of passes. For the first, the exact
+solution is cheap. The KKT conditions of the span-capped problem are those of
+plain isotonic regression on targets whose two end points are pulled inward by
+$\mu/w$, so a bisection on the multiplier $\mu$ solves it. Against that exact
+solver, the implementation matched the order-preserving optimum (relative
+tolerance $10^{-6}$) in all 1,800 closed-ring instances of the check,
+including the 40\% in which the cap binds, and no output overlapped. That is a
+test, not a proof. Interval handling was not tested.
+\todo{Replace alternating projection with the exact multiplier bisection (a
+dozen lines), and give intervals an exact method or a benchmarked gap.}
 
 Two placements are degenerate cases of \cref{eq:placement}: \emph{block}
 placement, in which $p_k$ are nominal slots with fixed spacing and the solver

@@ -125,6 +125,23 @@ test('necklace handles a full ring without overlap', () => {
   assertNoOverlap(placements);
 });
 
+test('necklace keeps bearing order even where reordering would cost less', () => {
+  // With unequal widths, putting the wide mark counterclockwise of the narrow
+  // one would nearly halve the cost (0.22 against 0.42); the solver keeps
+  // bearing order by design. See docs/findings.md F-37.
+  const items = [
+    { id: 'narrow', position: 0.7673, halfWidth: 0.048, weight: 4.33 },
+    { id: 'wide', position: 0.7733, halfWidth: 0.1995, weight: 3.64 },
+    { id: 'third', position: 0.855, halfWidth: 0.148, weight: 2.53 },
+  ];
+  const { placements, cost } = placeNecklace(items);
+  assertNoOverlap(placements);
+  // Unwrapped positions increase in the order of the preferred positions.
+  const x = placements.map((p) => p.preferred + p.displacement);
+  assert.ok(x[0] < x[1] && x[1] < x[2], `order broken: ${x}`);
+  assert.ok(Math.abs(cost - 0.418) < 1e-3, `cost ${cost}`);
+});
+
 test('necklace reports overflow when symbols cannot possibly fit', () => {
   const items = Array.from({ length: 10 }, (_, i) => ({
     id: i,

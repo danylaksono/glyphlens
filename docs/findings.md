@@ -1318,6 +1318,44 @@ recorded the gap honestly and buried it: a comment is where a decision goes to
 be agreed with, not where it goes to be reviewed. **When a request is answered
 by something adjacent to it, that belongs in the reply, not in the source.**
 
+### F-37. Bearing order is a constraint, not a free optimum
+
+Recorded 2026-09-25, while turning a doubt in the paper draft into a result.
+
+The necklace solver keeps marks in the order of their preferred positions and
+searches only the cut of the cycle. Its header justified that with "any crossing
+solution can be uncrossed without increasing cost". **That is true only when all
+widths and all weights are equal.** `paper/scripts/solver-check.mjs` compares the
+solver with two exact references on random instances with 3–5 marks, clustered
+so that they collide. Its output is saved in `paper/figures/solver-check.txt`.
+
+- **Order-preserving optimum.** The reference is the solver's own formulation,
+  with the span-capped isotonic regression solved exactly by bisection on the
+  KKT multiplier. The solver matched it on all 1,800 closed-ring instances, to a
+  relative 10⁻⁶. That includes the 40% where the nearly-full cap binds, so
+  alternating projection cost nothing measurable there. No output overlapped.
+- **Unconstrained optimum.** The reference enumerates every order and every
+  winding. With unequal widths *or* unequal weights it was cheaper in 8–42% of
+  instances, by a median of 3–7° of weighted RMS displacement and at most 31°
+  on a closed ring. With both equal it was never cheaper, as the uncrossing
+  argument predicts.
+- **The mechanism.** A three-mark case: a narrow, heavy mark and a wide one 2°
+  apart, and a third mark 30° clockwise, filling 79% of the ring. Putting the
+  wide mark counterclockwise of the narrow one, against bearing order, gives the
+  third mark room, and the cost drops from 0.42 to 0.22. It is now a test.
+
+The decision is to **keep the order**. On a bearing-faithful ring, which of two
+marks lies clockwise of the other is part of what is encoded, and a reordering
+misstates it however little displacement it saves. So the problem the solver
+solves is now named correctly: order-preserving placement. The paper draft
+states that as the problem (§3.5), and the source comment says the same. Whether
+readers would trade a small reordering for a smaller displacement belongs with
+Q-2's policy half, and could be added to the study.
+
+Still open: intervals were not tested. The exact span solver is a dozen lines
+and could replace alternating projection outright, but first it needs timing on
+full rings with 72 bins.
+
 ---
 
 ## Open questions

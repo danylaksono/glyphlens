@@ -11,7 +11,7 @@ this draft says about it: \textbf{F} read in full (``pre'' marks a preprint or
 author copy rather than the version of record), \textbf{A} abstract only,
 \textbf{M} bibliographic record only, \textbf{W} web pages. Verbatim quotes with
 page references are in \texttt{paper/citation-audit.md}.
-\texttt{paper/scripts/check-bib.mjs -{}-online} repeats the registry check; on 2026-09-25 all 67 DOIs resolved and every registered title matched.
+\texttt{paper/scripts/check-bib.mjs -{}-online} repeats the registry check; on 2026-09-25 all 67 DOIs resolved and every registered title matched. The four entries without a DOI (\src{visquill}, \src{slingsby2018tilemaps}, \src{openshaw1984maup}, \src{cartocrow}) were checked by loading their URLs.
 
 \begingroup
 \small
@@ -58,7 +58,7 @@ Source & Ev. & Used for & Caveat \\
 \src{niedermann2019focus} & A & fisheye displacement; optimisation when the focus stops & program type unverified \\
 \src{bekos2019external} & F pre & external-labelling taxonomy & arXiv v2 \\
 \src{bonerath2024orbital} & F & orbital arc labels; minimum leader length & --- \\
-\src{wallinger2026clarity} & F pre & $n=54$; straight leaders faster, similar accuracy & numbers from arXiv v1, not the PacificVis version \\
+\src{wallinger2026clarity} & F pre & $n=54$; straight leaders faster, similar accuracy & $n$ from arXiv v1; the version-of-record abstract confirms the result \\
 \src{gedicke2021zoomless} & F pre & labels along the map's lower edge & vol.\ 27 (2021) despite a 2020 DOI \\
 \multicolumn{4}{@{}l}{\emph{Glyph maps and within-cell structure}}\\
 \src{ward2002taxonomy} & F pre & data-driven vs structure-driven placement & author manuscript \\
@@ -90,6 +90,7 @@ Source & Ev. & Used for & Caveat \\
 \multicolumn{4}{@{}l}{\emph{Off-screen indicators, necklace maps, ring maps}}\\
 \src{speckmann2010necklace} & F pre & regions projected onto intervals; symbols without overlap; multiple necklaces; max scale then centring; ``do not need leaders'' & --- \\
 \src{speckmann2015algorithms} & F pre & fixed order $O(n\log n)$; any order NP-hard (wedge intervals); bearing order not always optimal for max scale & accepted manuscript; objective differs from ours \\
+\src{cartocrow} & W & C++ framework containing necklace-map algorithms & project page, 2026-09-25; it names no paper for the framework \\
 \src{stewart2011ringmaps} & F & evenly spaced spokes, one per unit; a leader for every spoke & ordering rule of spokes not verified \\
 \src{tominski2016comparing} & F pre & ring slots with arcs toward originals; direction-ordered slots only suggested & --- \\
 \src{jackle2017topology} & F pre & $n=18$; 94.4\% orthographic; radial familiar with a point of interest & arXiv v1 only; rectangular border \\

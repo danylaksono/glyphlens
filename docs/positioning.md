@@ -139,7 +139,7 @@ the text, so it is not used.
 | Work | What it already does | What is left for glyphlens | Ev. |
 | --- | --- | --- | --- |
 | **Speckmann & Verbeek 2010**, *Necklace Maps* (TVCG) | regions projected onto **intervals** of a star-shaped curve around the map; proportional symbols without overlap inside their intervals; centroid, wedge and density-dependent intervals; nested/disjoint necklaces; **maximise a common scale**, then centre by forces. "necklace maps do not need leaders"; association "is weaker … Interactivity can help" | glyphlens is the interactive, local version with a different objective: minimise squared displacement at fixed mark size, and **conditional** leaders | F (author PDF) |
-| **Speckmann & Verbeek 2015**, *Algorithms for Necklace Maps* (IJCGA) | fixed order O(n log n); any order NP-hard for wedge intervals; FPT in interval thickness; **ordering by region bearing is not generally optimal** for max scale (tight ½-approximation) | a warning for glyphlens's sorted-order assumption (different objective, so not a counterexample) | F (accepted manuscript) |
+| **Speckmann & Verbeek 2015**, *Algorithms for Necklace Maps* (IJCGA) | fixed order O(n log n); any order NP-hard for wedge intervals; FPT in interval thickness; **ordering by region bearing is not generally optimal** for max scale (tight ½-approximation) | the same holds for glyphlens's objective. With unequal widths or weights, reordering is often cheaper (findings F-37); glyphlens keeps bearing order as a constraint, the analogue of their fixed-order case | F (accepted manuscript) |
 | Stewart et al. 2011, *ring maps* (IJHG) | evenly spaced spokes, one per county, in attribute rings around a base map; **a leader for every spoke**; name "limited representation of spatial topology in rings" as the main limitation, and interactive ring maps as the remedy | glyphlens's conditional leaders sit between necklace maps (none) and ring maps (all) | F |
 | Draper, Livnat & Riesenfeld 2009 (TVCG) | survey of radial methods | background | M |
 
@@ -266,9 +266,13 @@ extracts; N from a pilot-based power analysis; pre-registered.
 - [ ] Report elasticity against its true uniform value (2 − b) or switch to a
       centred estimator; add the shape-aware reference and envelopes.
 - [ ] Kernels for field mode; show equivalence with GW summary statistics.
-- [ ] Solver: prove or test that order-by-preferred-position is optimal for
-      unequal widths and weights; replace alternating projection with Dykstra's
-      algorithm (or report the gap); intervals.
+- [x] Solver order: tested (findings F-37, `paper/scripts/solver-check.mjs`).
+      It is *not* optimal for unequal widths or weights, so it is kept as a
+      stated design constraint. Against an exact solver, the solver is exact for
+      the order-preserving problem, and alternating projection showed no
+      measurable gap.
+- [ ] Solver intervals: an exact method, or a benchmarked gap. Optionally
+      swap in the exact span solver after timing it on 72-bin rings.
 - [ ] Double-code the corpus for the descriptive table.
 - [ ] Make the repository public, or deposit a snapshot with a DOI.
 - [ ] Run the study.
