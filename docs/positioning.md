@@ -221,8 +221,11 @@ seen.
    (§6). The closest evidence (Jäckle 2017: orthographic beat radial on a
    rectangular border) cuts the other way. It transfers only partly to a circular
    lens, which is a reason to run the study, not to avoid it.
-5. **"Multivariate?"** — Most demos summarise one categorical variable by count.
-   Either show a genuinely multivariate census case or narrow the title.
+5. **"Multivariate?"** — Every demo summarises one categorical variable by
+   count, so the paper's title and abstract are now narrowed to that
+   (2026-09-25): *Bearing-Faithful Map Lenses for Categorical Counts: From a
+   Single Lens to a Gridded Glyphmap*. Widen the claim only together with a
+   genuinely multivariate case, such as several census deprivation domains.
 6. **"Why these seven stages?"** — Because they are a factorisation of an
    existing model (σ/λ/⋈), and each has at least two values that change the
    reading. Show that removing any stage makes two coded techniques
