@@ -1,11 +1,11 @@
 # 1449 features; node v22.22.2; Intel(R) Xeon(R) Processor @ 2.80GHz; linux
-lens, angular(8), necklace                           0.891 ms
-lens, angular(24), necklace                          1.564 ms
-lens, angular(72), necklace                          5.174 ms
-lens, cross(8) x 4 categories, stacked               0.801 ms
-field, 37 lenses, angular(8)                         5.403 ms
-field, 241 lenses, angular(8)                        16.278 ms
-field, 889 lenses, angular(8)                        15.498 ms
-placeNecklace, n=24 (random positions, fill 0.8)     0.610 ms
-placeNecklace, n=72 (random positions, fill 0.8)     1.101 ms
-placeNecklace, n=288 (random positions, fill 0.8)    15.431 ms
+lens, angular(8), necklace                           0.899 ms
+lens, angular(24), necklace                          1.239 ms
+lens, angular(72), necklace                          3.292 ms
+lens, cross(8) x 4 categories, stacked               0.943 ms
+field, 37 lenses, angular(8)                         5.233 ms
+field, 241 lenses, angular(8)                        14.145 ms
+field, 889 lenses, angular(8)                        17.081 ms
+placeNecklace, n=24 (random positions, fill 0.8)     0.407 ms
+placeNecklace, n=72 (random positions, fill 0.8)     1.321 ms
+placeNecklace, n=288 (random positions, fill 0.8)    17.069 ms

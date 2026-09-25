@@ -1352,9 +1352,76 @@ states that as the problem (§3.5), and the source comment says the same. Whethe
 readers would trade a small reordering for a smaller displacement belongs with
 Q-2's policy half, and could be added to the study.
 
-Still open: intervals were not tested. The exact span solver is a dozen lines
-and could replace alternating projection outright, but first it needs timing on
-full rings with 72 bins.
+Still open at the time: intervals were not tested, and the exact span solver
+had not been timed. Both were settled the same day; see
+[F-38](#f-38-the-solver-is-exact-and-the-interval-heuristic-was-not).
+
+### F-38. The solver is exact, and the interval heuristic was not
+
+Recorded 2026-09-25, straight after F-37.
+
+**The wrap-around cap never decides the result.** The exact span-capped solver
+(bisection on the KKT multiplier) was about ten times slower than alternating
+projection. On 24–288 marks at fills of 0.8–0.99 it never changed a result. As
+a standalone solver, alternating projection is up to twice the optimum when
+the cap binds, so the agreement needed an explanation, and there is a short one:
+
+- With fill below 1, the order-preserving optimum x\* has a gap wider than its
+  two marks need.
+- At the cut through that gap, x\* is feasible and the cap is slack. The plain
+  isotonic regression for that cut therefore returns x\*.
+- Every other cut returns x\* or something feasible and costlier.
+
+So the capped solve only keeps the losing cuts feasible, and its quality is
+irrelevant. Confirmed on 2,100 instances: keeping only the slack cuts gives the
+same cost every time. The code is unchanged, the comments now say why it is
+exact, and there is a regression test against an exact reference.
+
+**Intervals were the real gap, and they are the common case.** Angular binning
+gives every bin its own wedge as a feasible interval, so the headline lens runs
+through the interval path. That path clamped marks into their intervals and
+re-solved for up to eight passes. `paper/scripts/interval-check.mjs` compares
+it with Dykstra's algorithm run to convergence on every cut. Before and after
+are in `paper/figures/interval-check.txt`. With wedge intervals (K = 4–16), the
+heuristic:
+
+- left an interval in 2–13% of instances;
+- overlapped a neighbour in 7–13%;
+- returned a valid but costlier placement in 37–72%, by a median of about 5%
+  and at most 33%.
+
+With overlapping arcs, as areal units give, it overlapped in over half of the
+instances.
+
+The replacement is exact and no slower. Intervals become bounds on y, and each
+cut is a **bounded isotonic regression** (`isotonicBounded`):
+
+- tighten the bounds to a running maximum from the left and a running minimum
+  from the right;
+- run pool-adjacent-violators, giving each pooled block its mean clamped to the
+  block's range.
+
+The first version of the check used the tempting shortcut instead: clip the
+unconstrained fit to the bounds. That is wrong. For targets (0, 10, 5) with
+y₂ ≤ 6 it gives (0, 6, 7.5), and the optimum is (0, 6, 6). It showed up as a
+mismatch against Dykstra before any of it reached the library. The slack-gap
+argument above carries over, so cuts that overlap across the wrap-around are
+skipped. The bounded solver matched the reference on every feasible instance
+and never overlapped. A 72-bin angular lens went from 5.2 to 3.3 ms.
+
+Two behaviours are new, and `intervalsMet` reports both:
+
+- **A mark wider than its own interval.** A dominant sector with a large disc,
+  for example. Only that interval is dropped, instead of one mark making every
+  cut infeasible.
+- **Intervals that cannot all be met.** This happens when an unconstrained mark
+  has no room between neighbours pinned to their wedges. The marks are then
+  placed without intervals. Previously the answer silently overlapped.
+
+On a stress set where marks are often wider than their wedges, the old solver
+overlapped in 33 of 100 instances. The new one overlapped in none. In 43 it
+dropped only the too-narrow intervals, and in 9 it placed the marks without
+intervals.
 
 ---
 

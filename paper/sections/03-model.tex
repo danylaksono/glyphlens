@@ -194,21 +194,37 @@ displacement saved. Whether readers would accept a small reordering for a
 smaller displacement is an empirical question, and could be added to the
 study's displacement factor (\cref{sec:evaluation}).
 
-Two parts of the solver are approximate by construction. When the marks nearly
-fill the cycle, the wrap-around constraint caps the span of $y$. The
-implementation enforces it by alternating projection between monotone sequences
-and sequences of bounded span, which converges to a feasible point but is not
-guaranteed to reach the constrained optimum. Feasible intervals are enforced by
-clamping and re-solving for a fixed number of passes. For the first, the exact
-solution is cheap. The KKT conditions of the span-capped problem are those of
-plain isotonic regression on targets whose two end points are pulled inward by
-$\mu/w$, so a bisection on the multiplier $\mu$ solves it. Against that exact
-solver, the implementation matched the order-preserving optimum (relative
-tolerance $10^{-6}$) in all 1,800 closed-ring instances of the check,
-including the 40\% in which the cap binds, and no output overlapped. That is a
-test, not a proof. Interval handling was not tested.
-\todo{Replace alternating projection with the exact multiplier bisection (a
-dozen lines), and give intervals an exact method or a benchmarked gap.}
+The wrap-around constraint and feasible intervals need no approximation. When the
+marks nearly fill the cycle, the wrap-around constraint caps the span of $y$ for
+each cut, but the cap never decides the result. The order-preserving optimum
+$x^\ast$ has at least one gap wider than its two marks need, because the marks
+fill less than the whole curve. At the cut through that gap, $x^\ast$ is feasible
+and the cap is slack, so the uncapped isotonic regression for that cut returns
+$x^\ast$. Every other cut returns $x^\ast$ or a feasible point that costs more.
+(This assumes displacements below half a turn, where cyclic and unwrapped
+distances agree.) Intervals $I_k$ become per-mark bounds on $y$, and the same
+argument holds. Each cut is then a bounded isotonic regression, solved exactly in
+$O(K)$. Monotonicity lets the bounds be tightened to a running maximum from the
+left and a running minimum from the right. Pool-adjacent-violators then gives
+each pooled block its weighted mean, clamped to the block's feasible range.
+Clipping the unconstrained fit to the bounds is \emph{not} enough: for targets
+$(0,10,5)$ with $y_2\le 6$ it gives $(0,6,7.5)$, and the optimum is
+$(0,6,6)$. A mark wider than its own interval has that interval dropped. If
+the remaining intervals cannot all be met, the marks are placed without
+intervals, and the solver reports that it did so.
+
+This replaced a heuristic that clamped marks into their intervals and
+re-solved. We compared both with an exact reference, Dykstra's algorithm run to
+convergence on every cut (\texttt{paper/scripts/interval-check.mjs}). The test
+cases were wedge intervals, as angular binning produces, and overlapping arcs,
+as areal units produce, for $K = 4$--$16$. With wedges, the heuristic left an
+interval in 2--13\% of instances and overlapped a neighbour in 7--13\%. In
+37--72\% of instances it returned a valid placement that cost more than the
+optimum, by a median of about 5\% and at most 33\%. With overlapping arcs it overlapped in
+over half of the instances. The bounded solver matched the reference on every
+feasible instance and never overlapped. Without intervals, the solver matched an
+exact span-capped reference on all 1,800 closed-ring instances of the order
+check.
 
 Two placements are degenerate cases of \cref{eq:placement}: \emph{block}
 placement, in which $p_k$ are nominal slots with fixed spacing and the solver

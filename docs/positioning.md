@@ -271,8 +271,10 @@ extracts; N from a pilot-based power analysis; pre-registered.
       stated design constraint. Against an exact solver, the solver is exact for
       the order-preserving problem, and alternating projection showed no
       measurable gap.
-- [ ] Solver intervals: an exact method, or a benchmarked gap. Optionally
-      swap in the exact span solver after timing it on 72-bin rings.
+- [x] Solver intervals: the clamp-and-re-solve heuristic left intervals,
+      overlapped and was suboptimal (findings F-38). It is replaced by an exact
+      bounded isotonic regression per cut. The full-ring cap is provably
+      irrelevant to the result, so no exact span solver is needed.
 - [ ] Double-code the corpus for the descriptive table.
 - [ ] Make the repository public, or deposit a snapshot with a DOI.
 - [ ] Run the study.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isotonic, isotonicBoundedSpan } from '../src/core/isotonic.js';
+import { isotonic, isotonicBounded, isotonicBoundedSpan } from '../src/core/isotonic.js';
 import { placeNecklace, fitNecklaceScale } from '../src/core/necklace.js';
 import {
   cyclicDelta, wrap01, circleCurve, polylineCurve, arcCurve, straightenPath,
@@ -59,6 +59,13 @@ test('isotonic respects weights when pooling', () => {
   const y = isotonic([3, 1], [3, 1]);
   assert.equal(y[0], 2.5); // pulled towards the heavier point
   assert.equal(y[1], 2.5);
+});
+
+test('bounded isotonic re-pools after a bound, rather than clipping', () => {
+  // Clipping the unconstrained fit [0, 7.5, 7.5] would give [0, 6, 7.5].
+  const y = isotonicBounded([0, 10, 5], null, [-Infinity, -Infinity, -Infinity], [Infinity, 6, Infinity]);
+  assert.deepEqual(y, [0, 6, 6]);
+  assert.equal(isotonicBounded([0, 0], null, [1, -Infinity], [Infinity, 0.5]), null);
 });
 
 test('isotonic output is non-decreasing for random input', () => {
@@ -140,6 +147,111 @@ test('necklace keeps bearing order even where reordering would cost less', () =>
   const x = placements.map((p) => p.preferred + p.displacement);
   assert.ok(x[0] < x[1] && x[1] < x[2], `order broken: ${x}`);
   assert.ok(Math.abs(cost - 0.418) < 1e-3, `cost ${cost}`);
+});
+
+test('necklace is exact for order-preserving placement without intervals', () => {
+  // Reference: every cut, targets unwrapped from the cut, and the span-capped
+  // isotonic regression solved exactly by bisection on its KKT multiplier.
+  const capped = (q, v, S) => {
+    const n = q.length;
+    const at = (mu) => isotonic(q.map((x, i) => x + (i === 0 ? mu / v[0] : 0) - (i === n - 1 ? mu / v[n - 1] : 0)), v);
+    const span = (y) => y[n - 1] - y[0];
+    if (span(at(0)) <= S) return at(0);
+    let lo = 0;
+    let hi = 1;
+    while (span(at(hi)) > S) hi *= 2;
+    for (let i = 0; i < 100; i++) {
+      const mid = (lo + hi) / 2;
+      if (span(at(mid)) > S) lo = mid;
+      else hi = mid;
+    }
+    return at(hi);
+  };
+  const reference = (items) => {
+    const order = items.map((_, i) => i).sort((a, b) => items[a].position - items[b].position);
+    const n = order.length;
+    let best = Infinity;
+    for (let cut = 0; cut < n; cut++) {
+      const seq = [...order.slice(cut), ...order.slice(0, cut)].map((i) => items[i]);
+      const p = [seq[0].position];
+      for (let k = 1; k < n; k++) p[k] = p[k - 1] + wrap01(seq[k].position - seq[k - 1].position);
+      const c = [0];
+      for (let k = 1; k < n; k++) c[k] = c[k - 1] + seq[k - 1].halfWidth + seq[k].halfWidth;
+      const S = 1 - seq[0].halfWidth - seq[n - 1].halfWidth - c[n - 1];
+      const y = capped(p.map((x, k) => x - c[k]), seq.map((it) => it.weight), S);
+      const cost = seq.reduce((sum, it, k) => sum + it.weight * cyclicDelta(wrap01(y[k] + c[k]), it.position) ** 2, 0);
+      best = Math.min(best, cost);
+    }
+    return best;
+  };
+  let seed = 42;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  for (let t = 0; t < 60; t++) {
+    const n = 4 + Math.floor(rand() * 7);
+    const fill = 0.3 + 0.69 * rand();
+    const raw = Array.from({ length: n }, () => 1 + 9 * rand());
+    const total = raw.reduce((sum, r) => sum + 2 * r, 0);
+    const centre = rand();
+    const items = raw.map((r, i) => ({
+      id: i,
+      halfWidth: (r / total) * fill,
+      weight: 1 + 9 * rand(),
+      position: wrap01(centre + (rand() - 0.5) * 0.3),
+    }));
+    const { placements, cost } = placeNecklace(items);
+    assertNoOverlap(placements);
+    const ref = reference(items);
+    assert.ok(cost <= ref * (1 + 1e-6) + 1e-12, `instance ${t}: cost ${cost} > exact ${ref}`);
+  }
+});
+
+test('necklace keeps angular-wedge marks inside their wedges without overlap', () => {
+  // Each mark gets its own sector as its interval, as angular binning does.
+  // When every mark fits its sector, all of them stay inside it. When some
+  // are wider than their sector, nothing may overlap; the old
+  // clamp-and-re-solve heuristic overlapped on 33 of these 100 instances.
+  // See docs/findings.md F-38.
+  const wedges = (seed, capped) => {
+    const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    return Array.from({ length: 100 }, () => {
+      const n = 4 + Math.floor(rand() * 13);
+      const fill = 0.3 + 0.65 * rand();
+      const raw = Array.from({ length: n }, () => 1 + 4 * rand());
+      const total = raw.reduce((sum, r) => sum + 2 * r, 0);
+      return raw.map((r, i) => {
+        const [a, b] = [i / n, (i + 1) / n];
+        return {
+          id: i,
+          halfWidth: capped ? Math.min((r / total) * fill, 0.45 / n) : (r / total) * fill,
+          weight: 1 + 9 * rand(),
+          position: a + (b - a) * (0.05 + 0.9 * rand()),
+          interval: [a, b],
+        };
+      });
+    });
+  };
+
+  wedges(7, true).forEach((items, t) => {
+    const result = placeNecklace(items);
+    assertNoOverlap(result.placements);
+    assert.equal(result.intervalsMet, true);
+    result.placements.forEach((pl, i) => {
+      const [a, b] = items[i].interval;
+      const off = wrap01(pl.position - a);
+      assert.ok(
+        off >= items[i].halfWidth - 1e-9 && off <= b - a - items[i].halfWidth + 1e-9,
+        `instance ${t}, mark ${i} left its wedge`,
+      );
+    });
+  });
+
+  let met = 0;
+  wedges(7, false).forEach((items) => {
+    const result = placeNecklace(items);
+    assertNoOverlap(result.placements);
+    if (result.intervalsMet) met++;
+  });
+  assert.ok(met > 0 && met < 100, `intervals met in ${met} of 100`);
 });
 
 test('necklace reports overflow when symbols cannot possibly fit', () => {

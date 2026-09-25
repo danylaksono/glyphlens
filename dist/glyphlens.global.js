@@ -1214,13 +1214,90 @@ var glyphlens = (function (exports) {
   }
 
   /**
+   * Weighted isotonic regression with per-element bounds
+   * (`lo[i] <= y[i] <= hi[i]`). Exact, O(n).
+   *
+   * Monotonicity lets the bounds be tightened without changing the feasible
+   * set: a running maximum of `lo` from the left and a running minimum of `hi`
+   * from the right. Both are then non-decreasing, so a pooled block's feasible
+   * range is [lo of its last element, hi of its first]. The algorithm is
+   * pool-adjacent-violators in which each block takes its weighted mean clamped
+   * to that range. Clipping the unconstrained fit to the bounds is *not* the
+   * same thing: for targets [0, 10, 5] with y[1] <= 6 it gives [0, 6, 7.5], and
+   * the optimum is [0, 6, 6].
+   *
+   * Checked against Dykstra's algorithm in paper/scripts/interval-check.mjs.
+   *
+   * @param {number[]} q   target values
+   * @param {number[]} [w] weights (default 1)
+   * @param {number[]} lo  lower bounds (-Infinity for none)
+   * @param {number[]} hi  upper bounds (Infinity for none)
+   * @returns {number[] | null} the fit, or null if the bounds cannot all be met
+   */
+  function isotonicBounded(q, w, lo, hi) {
+    const n = q.length;
+    if (n === 0) return [];
+    const L = new Float64Array(n);
+    const U = new Float64Array(n);
+    L[0] = lo[0];
+    for (let i = 1; i < n; i++) L[i] = Math.max(lo[i], L[i - 1]);
+    U[n - 1] = hi[n - 1];
+    for (let i = n - 2; i >= 0; i--) U[i] = Math.min(hi[i], U[i + 1]);
+    for (let i = 0; i < n; i++) if (L[i] > U[i] + 1e-12) return null;
+
+    // Blocks on a stack: weighted sum, weighted target sum, first and last index.
+    const sw = new Float64Array(n);
+    const swq = new Float64Array(n);
+    const from = new Int32Array(n);
+    const to = new Int32Array(n);
+    const val = new Float64Array(n);
+    let top = -1;
+    const value = (b) => {
+      const mean = sw[b] === 0 ? (L[to[b]] + U[from[b]]) / 2 : swq[b] / sw[b];
+      return Math.min(Math.max(mean, L[to[b]]), U[from[b]]);
+    };
+
+    for (let i = 0; i < n; i++) {
+      top++;
+      const wi = w ? w[i] : 1;
+      sw[top] = wi;
+      swq[top] = wi * q[i];
+      from[top] = i;
+      to[top] = i;
+      val[top] = value(top);
+      while (top > 0 && val[top - 1] > val[top]) {
+        sw[top - 1] += sw[top];
+        swq[top - 1] += swq[top];
+        to[top - 1] = to[top];
+        top--;
+        val[top] = value(top);
+      }
+    }
+
+    const out = new Array(n);
+    for (let b = 0; b <= top; b++) {
+      for (let i = from[b]; i <= to[b]; i++) out[i] = val[b];
+    }
+    return out;
+  }
+
+  /**
    * Isotonic regression with an additional cap on total span
    * (`y[n-1] - y[0] <= maxSpan`).
    *
    * Solved by alternating projection onto the two convex sets (monotone
-   * sequences, and sequences of bounded span). Converges; not a closed form.
-   * Only invoked when the necklace is nearly full, which is the case where the
-   * packing is close to forced anyway.
+   * sequences, and sequences of bounded span). The result is always feasible but
+   * is not the constrained optimum: on random inputs where the cap binds, its
+   * cost is up to about twice the optimum. The exact answer is plain isotonic
+   * regression on targets whose end points are pulled inward by mu / w, with the
+   * multiplier mu found by bisection. That is roughly ten times slower.
+   *
+   * The necklace does not need the exact answer. With fill below 1, the
+   * order-preserving optimum always has a gap wider than required. At the cut
+   * through that gap the cap is slack, so plain isotonic regression already
+   * returns the optimum. A cut where the cap binds only has to produce something
+   * feasible, and any feasible answer costs at least the optimum. See
+   * core/necklace.js and docs/findings.md F-37.
    */
   function isotonicBoundedSpan(q, w, maxSpan, iterations = 24) {
     let y = isotonic(q, w);
@@ -1508,19 +1585,44 @@ var glyphlens = (function (exports) {
    * optimum is a weighted isotonic regression (exact, O(n)). The wrap-around
    * constraint becomes a cap on total span.
    *
-   * The cyclic order that matters is the order by preferred position — any
-   * crossing solution can be uncrossed without increasing cost — so we only need
-   * to choose where to cut the circle. We try all n cuts and keep the cheapest:
+   * The order is fixed to the order by preferred position, so only the cut of
+   * the circle has to be chosen. We try all n cuts and keep the cheapest:
    * O(n^2), which is nothing for the bin counts a lens uses (typically <= 72).
+   *
+   * Keeping that order is a design constraint, not a free property of the
+   * optimum. A crossing solution can be uncrossed without increasing cost only
+   * when all widths and all weights are equal. With unequal ones, swapping two
+   * nearly coincident marks can make room for a third, and the unconstrained
+   * optimum is cheaper. paper/scripts/solver-check.mjs measures this: cheaper in
+   * 8-42% of clustered random instances, by a median of 3-7 degrees of RMS
+   * displacement. We keep the order anyway, because on a bearing-faithful ring
+   * the relative order of two marks is itself data. See docs/findings.md F-37.
+   *
+   * Without intervals, the order-preserving problem is solved exactly. The
+   * optimum x* has at least one gap wider than its two marks need, because the
+   * marks fill less than the whole curve. Cutting there, x* is feasible and the
+   * wrap-around cap is slack, so the plain isotonic regression for that cut is
+   * x*. Every other cut either reaches x* too or returns a feasible, costlier
+   * point. So the approximate span projection (isotonicBoundedSpan) never decides
+   * the result; it only keeps the losing cuts feasible. This holds for
+   * displacements below half a turn, where the cyclic and unwrapped costs agree.
    *
    * ## Feasible intervals
    *
    * `interval: [lo, hi]` confines an item to an arc. For point data the interval
    * is the whole circle and only `position` matters; for an area it is the
    * angular projection of the geometry seen from the lens centre, which is
-   * Speckmann & Verbeek's original primitive. Interval handling is by projection
-   * onto the box between isotonic passes — approximate, unlike the unconstrained
-   * case. Recorded in docs/findings.md F-1.
+   * Speckmann & Verbeek's original primitive. Intervals become bounds on y, and
+   * each cut is solved exactly by bounded isotonic regression (isotonicBounded).
+   * The argument above carries over unchanged: the optimum still has a slack
+   * gap, and the cut through it still meets the cap. So a cut whose solution
+   * overlaps across the wrap-around is skipped. A mark wider than its own
+   * interval has that interval dropped. If no cut can meet the rest, the marks
+   * are placed without intervals. Either way `intervalsMet` is false.
+   *
+   * This replaced a clamp-and-re-solve heuristic that left an interval or
+   * overlapped a neighbour in roughly one in ten wedge instances, and was a
+   * median 5% costlier (paper/scripts/interval-check.mjs; docs/findings.md F-38).
    */
 
 
@@ -1537,18 +1639,21 @@ var glyphlens = (function (exports) {
    * @param {NecklaceItem[]} items
    * @param {object} [options]
    * @param {boolean} [options.cyclic=true]
-   * @param {number} [options.intervalPasses=8] projection passes for feasible intervals
    * @returns {{
    *   placements: Array<{ id, position, preferred, displacement, halfWidth, clamped }>,
    *   fill: number,        fraction of the curve consumed by symbols
    *   overflow: boolean,   true if the symbols cannot fit at all
-   *   cost: number
+   *   cost: number,
+   *   intervalsMet: boolean false if some interval was not honoured: either a
+   *                         mark was wider than its own interval (that interval
+   *                         alone is dropped), or no placement meets them all
+   *                         (the marks are then placed without intervals)
    * }}
    */
   function placeNecklace(items, options = {}) {
-    const { cyclic = true, intervalPasses = 8 } = options;
+    const { cyclic = true } = options;
     const n = items.length;
-    if (n === 0) return { placements: [], fill: 0, overflow: false, cost: 0 };
+    if (n === 0) return { placements: [], fill: 0, overflow: false, cost: 0, intervalsMet: true };
 
     const totalWidth = items.reduce((s, it) => s + 2 * it.halfWidth, 0);
     const fill = totalWidth;
@@ -1569,11 +1674,12 @@ var glyphlens = (function (exports) {
         fill,
         overflow: totalWidth > 1,
         cost: 0,
+        intervalsMet: true,
       };
     }
 
-    // Sorted cyclic order. Non-crossing is optimal, so this order is fixed and
-    // only the cut varies.
+    // Sorted cyclic order. It is kept fixed (see the header), so only the cut
+    // varies.
     const order = items
       .map((it, i) => ({ it, i, p: wrap01(it.position) }))
       .sort((a, b) => a.p - b.p);
@@ -1583,6 +1689,11 @@ var glyphlens = (function (exports) {
     // The caller is told via `overflow` and can re-scale properly.
     const shrink = overflow ? 1 / totalWidth : 1;
 
+    // A mark wider than its own interval cannot meet it. Drop that interval
+    // rather than let it make every cut infeasible; the others still hold.
+    const usable = (it) => it.interval && 2 * it.halfWidth * shrink <= arcLength(it.interval, cyclic) + 1e-12;
+    const hasIntervals = items.some(usable);
+    const dropped = items.some((it) => it.interval && !usable(it));
     let best = null;
 
     for (let cut = 0; cut < (cyclic ? n : 1); cut++) {
@@ -1610,39 +1721,36 @@ var glyphlens = (function (exports) {
       // Wrap-around leaves this much slack for the chain to spread into.
       const maxSpan = cyclic ? 1 - seq[0].w - seq[n - 1].w - c[n - 1] : Infinity;
 
-      let y =
-        cyclic && Number.isFinite(maxSpan)
-          ? isotonicBoundedSpan(q, v, Math.max(maxSpan, 0))
-          : isotonic(q, v);
-
-      let x = y.map((yi, k) => yi + c[k]);
-
-      // Feasible intervals, by projection. Clamp then restore ordering; repeat.
-      const hasIntervals = seq.some((s) => s.it.interval);
+      let y;
       if (hasIntervals) {
-        for (let pass = 0; pass < intervalPasses; pass++) {
-          let moved = false;
-          for (let k = 0; k < n; k++) {
-            const iv = seq[k].it.interval;
-            if (!iv) continue;
-            // Bring the interval into the same unwrapped frame as x[k].
-            const base = Math.floor(x[k]);
-            const lo = base + wrap01(iv[0] - (p[k] - wrap01(p[k])));
-            const hi = lo + wrap01(iv[1] - iv[0]);
-            const clampedX = Math.min(Math.max(x[k], lo + seq[k].w), hi - seq[k].w);
-            if (Math.abs(clampedX - x[k]) > 1e-9) {
-              x[k] = clampedX;
-              moved = true;
-            }
+        // Exact: isotonic regression with each mark's interval as bounds on y.
+        const lo = new Array(n);
+        const hi = new Array(n);
+        for (let k = 0; k < n; k++) {
+          const iv = usable(seq[k].it) ? seq[k].it.interval : null;
+          if (!iv) {
+            lo[k] = -Infinity;
+            hi[k] = Infinity;
+            continue;
           }
-          if (!moved) break;
-          y = isotonic(
-            x.map((xi, k) => xi - c[k]),
-            v,
-          );
-          x = y.map((yi, k) => yi + c[k]);
+          const [a, b] = intervalAround(iv, seq[k].p, p[k], cyclic);
+          lo[k] = a + seq[k].w - c[k];
+          hi[k] = b - seq[k].w - c[k];
+        }
+        y = isotonicBounded(q, v, lo, hi);
+        // Intervals this cut cannot meet, or a solution that overlaps across the
+        // cut: either way this cut is not the optimum (see the header).
+        if (!y || (cyclic && y[n - 1] - y[0] > maxSpan + 1e-12)) continue;
+      } else {
+        y = isotonic(q, v);
+        if (cyclic && y[n - 1] - y[0] > maxSpan + 1e-12) {
+          // Not the optimum either, but kept feasible so that a lens whose
+          // marks exactly fill the ring still gets an answer.
+          y = isotonicBoundedSpan(q, v, Math.max(maxSpan, 0));
         }
       }
+
+      const x = y.map((yi, k) => yi + c[k]);
 
       let cost = 0;
       for (let k = 0; k < n; k++) {
@@ -1651,6 +1759,16 @@ var glyphlens = (function (exports) {
       }
 
       if (!best || cost < best.cost) best = { cost, seq, x };
+    }
+
+    if (!best) {
+      // The intervals cannot all be met (or the marks cannot fit). Place without
+      // them and say so, rather than return an overlapping layout.
+      const relaxed = placeNecklace(
+        items.map(({ interval, ...it }) => it),
+        options,
+      );
+      return { ...relaxed, intervalsMet: false };
     }
 
     const placements = new Array(n);
@@ -1666,7 +1784,25 @@ var glyphlens = (function (exports) {
       };
     });
 
-    return { placements, fill, overflow, cost: best.cost };
+    return { placements, fill, overflow, cost: best.cost, intervalsMet: !dropped };
+  }
+
+  /**
+   * A cyclic interval [a, b] as an arc [lo, hi] in the unwrapped frame in which
+   * the preferred position `p` sits at `pUnwrapped`. The copy of the arc that
+   * contains `p` is used, or the nearer copy if `p` lies outside the arc. An
+   * interval of zero length is taken to be the whole curve.
+   */
+  function arcLength([a, b], cyclic) {
+    return cyclic ? wrap01(b - a) || 1 : b - a;
+  }
+
+  function intervalAround([a, b], p, pUnwrapped, cyclic) {
+    if (!cyclic) return [a + (pUnwrapped - p), b + (pUnwrapped - p)];
+    const len = arcLength([a, b], true);
+    let lo = pUnwrapped - wrap01(p - a);
+    if (pUnwrapped - (lo + len) > lo + 1 - pUnwrapped) lo += 1;
+    return [lo, lo + len];
   }
 
   /**
@@ -6029,6 +6165,7 @@ var glyphlens = (function (exports) {
   exports.inCircumcircle = inCircumcircle;
   exports.insertNode = insertNode;
   exports.isotonic = isotonic;
+  exports.isotonicBounded = isotonicBounded;
   exports.isotonicBoundedSpan = isotonicBoundedSpan;
   exports.lateralStats = lateralStats;
   exports.lattice = lattice;

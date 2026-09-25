@@ -20,10 +20,10 @@ regenerated from the library by a script in the repository
 gallery and a figure page in headless Chromium, and saves each canvas.
 
 \paragraph{Placement.} The necklace solver of \cref{sec:placement} is
-independent of the rest of the library and exported on its own. It solves the
-fixed-order, interval-free case exactly by weighted pool-adjacent-violators,
-tries every cut of the cycle, and treats the nearly-full and interval-constrained
-cases approximately, as described there. An implementation of Speckmann and
+independent of the rest of the library and exported on its own. It tries every
+cut of the cycle and solves each exactly: by weighted pool-adjacent-violators,
+or by its bounded variant when marks have feasible intervals. That makes
+order-preserving placement exact, as argued there. An implementation of Speckmann and
 Verbeek's algorithms is part of CartoCrow, a C++ framework for cartographic
 algorithms from the Applied Geometric Algorithms group at TU
 Eindhoven~\cite{cartocrow}. Its project page lists no paper for the framework
@@ -49,7 +49,7 @@ uses the first and third: the gallery and the coding of
 \cref{tab:timing} is a benchmark. A usage study with developers is not part of
 this work.
 
-\paragraph{Tests and performance.} The repository has 196 unit tests (Node's
+\paragraph{Tests and performance.} The repository has 200 unit tests (Node's
 built-in runner, no runtime dependencies), covering among other things
 non-overlap, stability and overflow of the solver. \Cref{tab:timing} reports
 median wall-clock times for the pure pipeline, without rendering, on the bundled
@@ -67,21 +67,21 @@ extract of 1{,}449 OpenStreetMap places.
     Configuration & ms \\
     \midrule
     One lens, 8 bearing sectors, necklace placement & 0.9 \\
-    One lens, 24 bearing sectors & 1.6 \\
-    One lens, 72 bearing sectors & 5.2 \\
-    One lens, 8 sectors $\times$ 4 categories, stacked & 0.8 \\
-    Field of 37 lenses, 8 sectors each & 5.4 \\
-    Field of 241 lenses & 16.3 \\
-    Field of 889 lenses & 15.5 \\
+    One lens, 24 bearing sectors & 1.2 \\
+    One lens, 72 bearing sectors & 3.3 \\
+    One lens, 8 sectors $\times$ 4 categories, stacked & 0.9 \\
+    Field of 37 lenses, 8 sectors each & 5.2 \\
+    Field of 241 lenses & 14.1 \\
+    Field of 889 lenses & 17.1 \\
     \midrule
-    Solver alone, 24 marks, 80\% fill & 0.6 \\
-    Solver alone, 72 marks & 1.1 \\
-    Solver alone, 288 marks & 15.4 \\
+    Solver alone, 24 marks, 80\% fill & 0.4 \\
+    Solver alone, 72 marks & 1.3 \\
+    Solver alone, 288 marks & 17.1 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The field of 889 lenses is no slower than the field of 241 because 804 of its
+The field of 889 lenses is only slightly slower than the field of 241 because 804 of its
 lenses (and 165 of the 241) hold fewer than the minimum of three members and are
 skipped after the index query, so the cost is dominated by the lenses actually
 drawn (85 and 76 respectively). The solver

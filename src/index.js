@@ -101,7 +101,7 @@ export {
 
 // Placement
 export { placeNecklace, placeByBearing, fitNecklaceScale } from './core/necklace.js';
-export { isotonic, isotonicBoundedSpan } from './core/isotonic.js';
+export { isotonic, isotonicBounded, isotonicBoundedSpan } from './core/isotonic.js';
 
 // Geometry
 export {
