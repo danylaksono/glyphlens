@@ -15,7 +15,8 @@ import {
   projectOntoPath, pathLength,
   pointInPolygon, polygonArea, polygonCentroid, angularExtent,
 } from '../src/core/geo.js';
-import { select, selectionArea, normaliseRings } from '../src/core/selection.js';
+import { select, selectionArea, normaliseRings, applyKernel } from '../src/core/selection.js';
+import { aggregate } from '../src/core/areal.js';
 import {
   binAngular, binCategorical, binChainage, circularMean, compassLabel,
 } from '../src/core/binning.js';
@@ -864,6 +865,58 @@ test('placement modes agree on bin count and stay in range', () => {
       assert.ok(Number.isFinite(b.ringOffset), `${mode}: ringOffset missing`);
     }
   }
+});
+
+// ------------------------------------------------- kernels
+
+test('a bisquare field reproduces GW proportions exactly', () => {
+  let seed = 9;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const origin = [110.37, -7.79];
+  const data = Array.from({ length: 400 }, () => ({
+    lng: origin[0] + (rand() - 0.5) * 0.04,
+    lat: origin[1] + (rand() - 0.5) * 0.04,
+    category: rand() < 0.3 ? 'a' : 'b',
+  }));
+  const h = 500;
+  const centres = [origin, [origin[0] + 0.005, origin[1]], [origin[0], origin[1] - 0.006]];
+  const { lenses } = computeField({
+    centres,
+    spacing: 700,
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: h, kernel: 'bisquare' },
+    binning: { mode: 'categorical', category: (f) => f.category, categories: ['a', 'b'] },
+    normalisation: { mode: 'share' },
+    marks: { type: 'bar' },
+    ring: { radius: 12 },
+  });
+  assert.equal(lenses.length, 3);
+  for (const lens of lenses) {
+    let num = 0;
+    let den = 0;
+    for (const f of data) {
+      const u = distance(lens.center, [f.lng, f.lat]) / h;
+      const w = u < 1 ? (1 - u * u) ** 2 : 0;
+      den += w;
+      if (f.category === 'a') num += w;
+    }
+    const share = lens.bins.find((b) => b.key === 'a').value;
+    assert.ok(Math.abs(share - num / den) < 1e-12, `${share} vs ${num / den}`);
+  }
+});
+
+test('kernels reject a corridor and leave the box-car case untouched', () => {
+  const items = [{ distance: 10 }, { distance: 90 }];
+  assert.equal(applyKernel(items, { type: 'disc', radius: 100 }), items);
+  const w = applyKernel(items, { type: 'disc', radius: 100, kernel: 'bisquare' }).map((it) => it.weight);
+  assert.ok(Math.abs(w[0] - 0.99 ** 2) < 1e-12 && Math.abs(w[1] - 0.19 ** 2) < 1e-12);
+  assert.throws(() => applyKernel(items, { type: 'corridor', radius: 100, kernel: 'gaussian' }));
+});
+
+test('an intensive mean over point members is a mean, not 0', () => {
+  const items = [{ feature: { v: 2 } }, { feature: { v: 4 } }];
+  assert.equal(aggregate(items, { value: (f) => f.v, kind: 'intensive' }), 3);
 });
 
 // ------------------------------------------------- elasticity profile

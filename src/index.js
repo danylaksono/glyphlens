@@ -69,6 +69,8 @@ export {
   selectionArea,
   normaliseRings,
   contains,
+  applyKernel,
+  KERNELS,
 } from './core/selection.js';
 export {
   bin,

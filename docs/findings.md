@@ -1463,6 +1463,40 @@ Not done: a global (simultaneous) envelope, which would control for reading
 many radii at once. With 102 drawn radii, a single-radius excursion from a
 pointwise band is weak evidence, and the caption says so.
 
+### F-40. A field is GW statistics, and now says so
+
+Recorded 2026-09-25.
+
+The paper concedes that a field of disc lenses on a lattice computes
+geographically weighted summary statistics with a box-car kernel. The concession
+was untested: nothing checked that the pipeline actually produces those
+numbers, and it could not use any other kernel.
+
+- **Kernels.** A centred selection (disc, sector, annulus or polygon) now takes
+  `kernel: 'boxcar' | 'bisquare' | 'gaussian'` (or a function of d/h) and
+  `bandwidth` (default: the radius). `applyKernel` multiplies each member's
+  weight by K(d/h) right after selection. Every stage downstream already
+  honoured a weight, because areal apportioning needed it (F-21), so nothing
+  else changed. A corridor throws, because its `distance` is chainage, not
+  distance from a centre. `addField` forwards `kernel` and `bandwidth`.
+- **The check.** `paper/scripts/gw-check.mjs` computes GW proportions at the
+  241 centres of a hex lattice, with h = 600 m, twice: directly over all 1,449
+  places, and through `computeField` with categorical binning and `share`. The
+  second path runs through the spatial index, selection, weighting, binning and
+  normalisation. Box-car agrees exactly and bi-square to 5×10⁻¹⁶. The Gaussian
+  is truncated at the lens radius, so its largest error in a proportion is
+  0.09 at a radius of 2h, 0.01 at 3h and 5×10⁻⁴ at 4h. The doc comment first
+  said 3h was enough. The measurement said otherwise, so it now says 4h.
+- **A bug on the way.** An intensive (mean) measure multiplied by `it.weight`.
+  Point members have no weight, so a mean over points was NaN, and `den > 0`
+  turned that into a silent 0. Areal members always carry a weight, which is
+  why no test had seen it. It now defaults to 1, and there is a test.
+
+This is a validity check, not a contribution. What the lens adds to GW
+statistics is where each summary is drawn: decomposed by bearing and placed at
+that bearing on the lens boundary. It also adds the one-object continuum from a
+single lens to the field.
+
 ---
 
 ## Open questions

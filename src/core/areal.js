@@ -188,7 +188,9 @@ export function aggregate(items, measure) {
     let num = 0;
     let den = 0;
     for (const it of items) {
-      const w = (weight?.(it.feature) ?? 1) * it.weight;
+      // Point members carry no weight of their own; without the default, a
+      // mean over points was NaN and came back as 0.
+      const w = (weight?.(it.feature) ?? 1) * (it.weight ?? 1);
       num += (value(it.feature) ?? 0) * w;
       den += w;
     }
@@ -196,7 +198,7 @@ export function aggregate(items, measure) {
   }
 
   let total = 0;
-  for (const it of items) total += (value(it.feature) ?? 0) * it.weight;
+  for (const it of items) total += (value(it.feature) ?? 0) * (it.weight ?? 1);
   return total;
 }
 

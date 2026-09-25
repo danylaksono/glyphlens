@@ -43,9 +43,19 @@ We do not claim the statistics. What the lens adds is (i) keeping the
 within-lens decomposition by bearing and distance, drawn at its true bearing,
 where a GW summary is one scalar per location, and (ii) one model in which the
 single lens and the field are the same object at different settings.
-\todo{Implement bi-square and Gaussian kernels so that the field reproduces GW
-summary statistics exactly, and show it; this turns the obvious reviewer
-objection into a validity check.}
+We turned the equivalence into a check. The selection takes a distance-decay
+kernel (box-car, bi-square, or the Gaussian that Dykes and Brunsdon
+use~\cite{dykes2007gwvis}), and it multiplies each member's weight by $K(d/h)$.
+With categorical binning and share normalisation, a field then computes GW
+proportions. On the bundled extract, at the 241 centres of a hexagonal lattice
+with $h = 600$\,m, it agreed with the direct formula over all 1{,}449 places
+exactly with the box-car kernel and to $5\times10^{-16}$ with the bi-square
+(\texttt{paper/scripts/gw-check.mjs}). A lens has a radius and the Gaussian
+does not have compact support, so the field truncates it: the largest error in a
+proportion was 0.09 at a radius of $2h$, 0.01 at $3h$ and $5\times10^{-4}$ at
+$4h$. The equivalence is a validity check on the implementation, not a
+contribution. It also makes the field a GW visualization with the lens's
+bearing decomposition added.
 \doubt{Brunsdon et al.\ 2002 was read at abstract level; whether it discusses a
 uniform kernel explicitly is unverified. Dykes \& Brunsdon and Slingsby 2018 were
 read in full.}

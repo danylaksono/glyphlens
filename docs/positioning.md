@@ -206,9 +206,10 @@ seen.
    that (displacement, residual leaders, unrolling, within-unit spread). Name both.
 2. **"Field mode is GW summary statistics — and directed GW statistics already
    decompose by direction."** — Yes to both (Brunsdon 2002; Dykes & Brunsdon
-   2007). Implement bi-square and Gaussian kernels and show the field reproduces
-   GW summary statistics exactly; what remains is where each direction's summary
-   is *drawn* (at its bearing, on the lens boundary) and the one-object continuum.
+   2007). Done: with a bi-square kernel, the field reproduces GW proportions to
+   rounding (findings F-40). What remains is where each direction's summary is
+   *drawn* (at its bearing, on the lens boundary) and the one-object
+   continuum.
 3. **"Elasticity is the local K slope."** — Yes: E = d ln N / d ln r, and under
    complete spatial randomness N ∝ r², so E = 2 (Ripley's K(t) = πt²). Claim the
    interface use.
@@ -267,7 +268,9 @@ extracts; N from a pilot-based power analysis; pre-registered.
       shape-aware reference (`uniformElasticity`) and a pointwise CSR envelope
       (findings F-39). The envelope showed one of the figure's claimed rises
       to be chance. A global envelope is still to do.
-- [ ] Kernels for field mode; show equivalence with GW summary statistics.
+- [x] Kernels for field mode (box-car, bi-square, Gaussian). A bi-square field
+      reproduces GW proportions to 5×10⁻¹⁶ at 241 lattice centres (findings
+      F-40, `paper/scripts/gw-check.mjs`).
 - [x] Solver order: tested (findings F-37, `paper/scripts/solver-check.mjs`).
       It is *not* optimal for unequal widths or weights, so it is kept as a
       stated design constraint. Against an exact solver, the solver is exact for

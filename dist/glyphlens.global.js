@@ -472,6 +472,48 @@ var glyphlens = (function (exports) {
     }
   }
 
+  /**
+   * Distance-decay kernels, as in geographically weighted statistics.
+   *
+   * A lens with the default `boxcar` kernel counts every member fully: a hard
+   * cut-off, the simplest GW kernel. With `bisquare` or `gaussian`, each member
+   * is weighted by its distance from the centre, relative to a bandwidth `h`
+   * (the selection radius unless `bandwidth` says otherwise). A field of such
+   * lenses on a lattice then computes GW summary statistics at the lattice
+   * points. See docs/findings.md F-40.
+   *
+   *   boxcar    1 for d <= h
+   *   bisquare  (1 - (d/h)^2)^2 for d < h, else 0
+   *   gaussian  exp(-(d/h)^2 / 2); membership still ends at the selection radius,
+   *             which truncates the kernel. On the bundled extract a radius of
+   *             3h leaves errors of up to 0.01 in a proportion, and 4h up to
+   *             5e-4 (paper/scripts/gw-check.mjs)
+   */
+  const KERNELS = {
+    boxcar: (u) => (u <= 1 ? 1 : 0),
+    bisquare: (u) => (u < 1 ? (1 - u * u) ** 2 : 0),
+    gaussian: (u) => Math.exp(-0.5 * u * u),
+  };
+
+  /**
+   * Multiply each selected member's weight by the selection's kernel. A no-op
+   * for the default box-car kernel. Only selections measured from a centre can
+   * take a kernel, because only there is a member's `distance` a distance from
+   * the centre. A corridor's `distance` is chainage.
+   */
+  function applyKernel(items, selection) {
+    const kind = selection.kernel ?? 'boxcar';
+    if (kind === 'boxcar') return items;
+    const K = typeof kind === 'function' ? kind : KERNELS[kind];
+    if (!K) throw new Error(`unknown kernel "${kind}"`);
+    if (selection.type === 'corridor') {
+      throw new Error('a kernel needs distance from a centre; corridor distances are chainage');
+    }
+    const h = selection.bandwidth ?? selection.radius;
+    if (!(h > 0)) throw new Error('a kernel needs a positive bandwidth or radius');
+    return items.map((it) => ({ ...it, weight: (it.weight ?? 1) * K(it.distance / h) }));
+  }
+
   /** Selection area in square kilometres, for density normalisation. */
   function selectionArea(selection) {
     const r = (selection.radius ?? 0) / 1000;
@@ -705,7 +747,9 @@ var glyphlens = (function (exports) {
       let num = 0;
       let den = 0;
       for (const it of items) {
-        const w = (weight?.(it.feature) ?? 1) * it.weight;
+        // Point members carry no weight of their own; without the default, a
+        // mean over points was NaN and came back as 0.
+        const w = (weight?.(it.feature) ?? 1) * (it.weight ?? 1);
         num += (value(it.feature) ?? 0) * w;
         den += w;
       }
@@ -713,7 +757,7 @@ var glyphlens = (function (exports) {
     }
 
     let total = 0;
-    for (const it of items) total += (value(it.feature) ?? 0) * it.weight;
+    for (const it of items) total += (value(it.feature) ?? 0) * (it.weight ?? 1);
     return total;
   }
 
@@ -2312,7 +2356,9 @@ var glyphlens = (function (exports) {
     const sel = config.areal
       ? arealSelect(data, selection, { ...config.areal, getAnchor: config.areal.getAnchor })
       : select(data, selection, { getPosition });
-    const { items } = sel;
+    // A distance-decay kernel, if any, becomes part of each member's weight, so
+    // every aggregate downstream is kernel-weighted without knowing it.
+    const items = applyKernel(sel.items, selection);
     if (sel.length != null) selection.length = sel.length;
     // A polygon has no centre until its centroid is computed, and everything
     // downstream measures bearing and distance from one. Adopt what the selector
@@ -6019,7 +6065,9 @@ var glyphlens = (function (exports) {
         kind: built.kind,
         data: o.data ?? [],
         getPosition: o.getPosition,
-        selection: { type: 'disc', radius },
+        // A distance-decay kernel turns the field into GW summary statistics at
+        // the lattice points (docs/findings.md F-40). The default is box-car.
+        selection: { type: 'disc', radius, kernel: o.kernel, bandwidth: o.bandwidth },
         binning: o.binning,
         normalisation: o.normalisation,
         placement: o.placement,
@@ -6215,6 +6263,7 @@ var glyphlens = (function (exports) {
   exports.DEFAULT_STYLE = DEFAULT_STYLE;
   exports.DIVERGING = DIVERGING;
   exports.FieldOverlay = FieldOverlay;
+  exports.KERNELS = KERNELS;
   exports.LATTICES = LATTICES;
   exports.LensOverlay = LensOverlay;
   exports.LensRenderer = LensRenderer;
@@ -6225,6 +6274,7 @@ var glyphlens = (function (exports) {
   exports.addLens = addLens;
   exports.aggregate = aggregate;
   exports.angularHistogram = angularHistogram;
+  exports.applyKernel = applyKernel;
   exports.arcBasis = arcBasis;
   exports.arcCurve = arcCurve;
   exports.areaFractionInside = areaFractionInside;

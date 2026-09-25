@@ -266,6 +266,21 @@ It is also a reading: `cells: 'delaunay'` draws the triangulation, and on a
 relaxed lattice that is the only way to see which cells are adjacent, since
 nothing about their shapes says so.
 
+**A field is geographically weighted statistics with the simplest kernel**: each
+lens counts every member inside its disc fully, a hard cut-off. Give it a
+distance-decay kernel instead and it computes GW summary statistics at the
+lattice points:
+
+```js
+addField(map, { data: places, count: 240, kernel: 'bisquare' });          // bandwidth = the disc radius
+computeLens({ ..., selection: { type: 'disc', radius: 2400, kernel: 'gaussian', bandwidth: 600 } });
+```
+
+With categorical binning and `share`, a bi-square field matches the direct GW
+proportion to 5×10⁻¹⁶ at every centre (`paper/scripts/gw-check.mjs`). A
+Gaussian has no edge but a lens does, so give it a radius of about 4× the
+bandwidth. See [F-40](docs/findings.md#f-40-a-field-is-gw-statistics-and-now-says-so).
+
 What is still unexplored — density-weighted cells, per-cell radii, and whether
 an irregular lattice costs the comparability a regular one buys — is written up
 in [F-35](docs/findings.md#f-35-relaxation-is-the-lattice-for-a-shape-rather-than-a-plane).
