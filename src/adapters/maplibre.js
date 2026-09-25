@@ -690,7 +690,9 @@ export class FieldOverlay {
       kind: built.kind,
       data: o.data ?? [],
       getPosition: o.getPosition,
-      selection: { type: 'disc', radius },
+      // A distance-decay kernel turns the field into GW summary statistics at
+      // the lattice points (docs/findings.md F-40). The default is box-car.
+      selection: { type: 'disc', radius, kernel: o.kernel, bandwidth: o.bandwidth },
       binning: o.binning,
       normalisation: o.normalisation,
       placement: o.placement,

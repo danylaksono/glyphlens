@@ -421,10 +421,13 @@ E = (dV/V) / (dr/r)
 
 how much the encoded value moves per proportional change in radius. Because
 every member's distance is already known, this is computable exactly and
-cheaply, with no resampling. A value with `E ≈ 2` (uniform density, area-driven)
-behaves very differently from one with `E ≈ 0` (everything is already inside;
-widening the lens adds nothing) or `E ≫ 2` (a cluster sitting just outside the
-current edge). Reporting it says how much the reading depends on a choice the
+cheaply, with no resampling. A value near the uniform reference (uniform
+density, area-driven) behaves very differently from one with `E ≈ 0`
+(everything is already inside; widening the lens adds nothing) or one far above
+it (a cluster sitting just outside the current edge). For a disc the reference
+is `2 − b` = 1.9, not 2, because the estimator is a backward difference. A
+Monte-Carlo envelope under spatial randomness says whether a departure from it
+is more than chance (findings F-39). Reporting it says how much the reading depends on a choice the
 analyst made arbitrarily.
 
 Built, and it lives **on the radius control** rather than on the marks. The
@@ -468,8 +471,9 @@ O(n·m). The three preconditions recorded in
 **The lattice tessellates and the lenses do not**, which is worth stating
 plainly because a glyph map looks like a partition. Centres sit on a lattice;
 each selects a *disc* of `spacing × packing`. At the default packing the discs
-merely touch, so the cell's corners belong to no lens; above `1/√3` they
-overlap and double-count. `cells` draws the disc, the implied cell or both, and
+merely touch, so the cell's corners belong to no lens; above `1/2` neighbours
+overlap and double-count, and only at `1/√3` do the gaps close, so no packing
+is both gap-free and overlap-free. `cells` draws the disc, the implied cell or both, and
 `stats.coverage` reports the ratio — because neither the gaps nor the overlaps
 are visible otherwise
 ([F-33](findings.md#f-33-a-fields-cells-tessellate-and-its-lenses-do-not)).

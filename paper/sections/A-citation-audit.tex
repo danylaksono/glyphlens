@@ -1,0 +1,105 @@
+% ---------------------------------------------------------------------------
+% Citation audit. For co-authors; remove before submission.
+\section*{Appendix: citation audit (remove before submission)}
+\label{sec:audit}
+
+Every entry in the bibliography was checked on 2026-09-23 and 2026-09-25 against its registry
+record---Crossref, or DataCite for the Eurographics (10.2312), Dagstuhl
+(10.4230) and arXiv (10.48550) DOIs---or, where there is no DOI, against the
+page at its URL. The table records, for each source, the evidence behind what
+this draft says about it: \textbf{F} read in full (``pre'' marks a preprint or
+author copy rather than the version of record), \textbf{A} abstract only,
+\textbf{M} bibliographic record only, \textbf{W} web pages. Verbatim quotes with
+page references are in \texttt{paper/citation-audit.md}.
+\texttt{paper/scripts/check-bib.mjs -{}-online} repeats the registry check; on 2026-09-25 all 67 DOIs resolved and every registered title matched. The four entries without a DOI (\src{visquill}, \src{slingsby2018tilemaps}, \src{openshaw1984maup}, \src{cartocrow}) were checked by loading their URLs.
+
+\begingroup
+\small
+\setlength{\LTcapwidth}{\textwidth}
+\renewcommand{\arraystretch}{1.1}
+\begin{longtable}{@{}p{3.2cm}p{1.0cm}p{5.6cm}p{6.6cm}@{}}
+\toprule
+Source & Ev. & Used for & Caveat \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\multicolumn{4}{@{}l}{\emph{Lens models and design-space method}}\\
+\src{bier1993toolglass} & F & origin of magic lenses & --- \\
+\src{bier1994taxonomy} & F & taxonomy of see-through tools & a taxonomy of see-through tools in general, not of lenses; several same-title DOIs exist \\
+\src{fox1998composing} & F & composing lenses & a programming-model contribution (delegation), not a visual one \\
+\src{tominski2014star} & F & $\Sel$/$\Jn$ model; data types and tasks; future directions (combination, toolkit) & the symbol $\lambda$ is not in the 2014 STAR; neither survey lists adaptive lenses or evaluation as future directions \\
+\src{tominski2017survey} & F pre & $\lambda$ notation; effect extent (interior, side effects, separate view) & online 2016, issue 2017 \\
+\src{mota2025design} & F & seven dimensions; effect scope and encoding values; 45-paper corpus & arXiv v2 only; no published version found \\
+\src{dai2026mapping} & A & five-phase construction process & full text not accessed; nothing about how it evaluates design spaces is used \\
+\src{beaudouinlafon2004designing} & F & descriptive, evaluative, generative power & --- \\
+\src{ledo2018toolkits} & F & toolkit evaluation strategies & --- \\
+\multicolumn{4}{@{}l}{\emph{Lenses and probes on maps}}\\
+\src{tong2017glyphlens} & A & name collision; occlusion lens for 3D glyphs & --- \\
+\src{hurter2011moleview} & F & semantic lens that pushes elements to its border & author order is Hurter, Ersoy, Telea (several surveys have it wrong) \\
+\src{pindat2012jellylens} & F & content-adaptive lens shape & --- \\
+\src{zhang2020clusterlens} & F & re-aggregation inside a lens & no charts or ring \\
+\src{karnick2010route} & F pre & detail lenses on the map border in route order; leaders to first and last only; direction-coherence cost & preprint \\
+\src{ellis2005sampling} & F & sampling lens; aggregates as future work & scatterplots and parallel coordinates, not maps \\
+\src{dumas2015vectorlens} & F & ring encoding direction for selection & online 2014, issue 2015; no map example \\
+\src{butkiewicz2008probes} & F & probes: region + user-placed pane of charts, linked by line or colour & --- \\
+\src{butkiewicz2010maup} & F pre & MAUP alerts between compared regions; scale component explicitly excluded & read the anonymised EuroVis submission, not the published version \\
+\src{kruger2013trajectorylenses} & A & set-operation lenses; aggregates near the lens or in colour-matched panels & full text not accessed (open copy withdrawn); verbatim related-work excerpts only \\
+\src{scheepens2016traffic} & A & selection widget by area and direction; annotation windows & whether it is called a lens, and where windows sit, unverified \\
+\src{ma2020gtmaplens} & A & movable lenses over geo-text & what is shown and where, unverified \\
+\src{tominski2012stacking} & F pre & time lens: ring of cyclic time bins around a query circle & ring placement around the circle strongly implied, not stated \\
+\src{visquill} & W & shipped aggregating ring lens on maps & angle meaning not documented; Lab blueprint spaces one bar per category \\
+\multicolumn{4}{@{}l}{\emph{Labelling around a focus region}}\\
+\src{fekete1999excentric} & F pre & left/right label stacks; radial variant orders by bearing; summary glyph as future work & read the HCIL tech report; its study numbers differ from how others report them---do not quote them \\
+\src{bertini2009extended} & A & density extensions; ``summary statistics'' & what the statistics are is unverified \\
+\src{fink2012focus} & F pre & labels on the circle; radial ports; conflicts dropped; clustering variant; focus placement & --- \\
+\src{haunert2014labeling} & A & leaders to the centre; one position per label; real-time JavaScript & --- \\
+\src{heinsohn2014boundary} & A & moving focus regions & mechanism for coherence unverified; biological networks \\
+\src{niedermann2019focus} & A & fisheye displacement; optimisation when the focus stops & program type unverified \\
+\src{bekos2019external} & F pre & external-labelling taxonomy & arXiv v2 \\
+\src{bonerath2024orbital} & F & orbital arc labels; minimum leader length & --- \\
+\src{wallinger2026clarity} & F pre & $n=54$; straight leaders faster, similar accuracy & $n$ from arXiv v1; the version-of-record abstract confirms the result \\
+\src{gedicke2021zoomless} & F pre & labels along the map's lower edge & vol.\ 27 (2021) despite a 2020 DOI \\
+\multicolumn{4}{@{}l}{\emph{Glyph maps and within-cell structure}}\\
+\src{ward2002taxonomy} & F pre & data-driven vs structure-driven placement & author manuscript \\
+\src{borgo2013glyph} & F & glyph design guidance & DataCite lists 2012 in error; pages from the DOI suffix \\
+\src{fuchs2017glyph} & F pre & 64 studies; layout and map backgrounds understudied & --- \\
+\src{wickham2012glyphmaps} & F pre, A & glyphs at the data's own grid locations & quote the version of record's abstract where possible \\
+\src{mcnabb2019multivariate} & A, F pre & hierarchical-centroid placement with LOD & --- \\
+\src{slingsby2018tilemaps} & F & tilemaps; GW outputs \emph{proposed}; grid resizing and larger kernels discussed & workshop paper, no DOI; GW use not demonstrated \\
+\src{slingsby2023gridded} & F pre & screen-space grid re-aggregated on zoom; within-cell heterogeneity as future work & --- \\
+\src{laksono2024gridded} & F & gridded glyphmaps for GMCDA & no user study \\
+\src{trautner2022honeycomb} & F pre & diamond cut; $n=42$ study; the C3 sentence & the quoted sentence concerns colour-only hexbins; amber inclusions untested \\
+\src{kawakami2024hextiles} & F & variance-based per-tile confidence & arXiv only; no formula; study ($n=7$) without the variance encoding, no significant effects \\
+\src{boeing2019urban} & F pre & polar histograms of street bearings & bearing of edges, not from a centre \\
+\src{gleicher2011comparison} & A & juxtaposition, superposition, explicit encoding & --- \\
+\multicolumn{4}{@{}l}{\emph{Local statistics, scale and point patterns}}\\
+\src{brunsdon1996gwr} & A & origin of GW methods & the ``sudden cut-off'' reading is unverified and not used \\
+\src{brunsdon2002gwss} & A & GW summary statistics & whether it names a uniform kernel is unverified \\
+\src{dykes2007gwvis} & F pre & ``moving spatial window mean smoother''; scalograms; regular grid; directed weighting & Gaussian kernel; $h$ precomputed, not a slider; check the sign in the directed-kernel formula before reproducing it \\
+\src{goodwin2016multiple} & F pre & local correlation across scale & --- \\
+\src{anselin1995lisa} & A & local indicators & --- \\
+\src{openshaw1984maup} & F (scan) & MAUP: scale and aggregation problems & reviews and defines the problem, does not introduce it; year not printed in the scan \\
+\src{fotheringham1991maup} & A & MAUP unpredictable in multivariate analysis & --- \\
+\src{ripley1977modelling} & F & $K(t)=\pi t^2$ under Poisson; envelopes & the $L$-function is not in the paper body \\
+\src{getis1987second} & A & point-centred second-order analysis & the $L_i$ formula is unverified and not used \\
+\src{wiegand2004rings} & A & circle vs ring statistics; null models & ``envelopes'' not verified in this paper \\
+\src{yamu2016fractal} & F & radial (mass--radius) analysis & a planning-theory paper; a methods citation would be better \\
+\src{willett2007scented} & F & scented widgets & credits histogram sliders to earlier work \\
+\src{mardia1999directional} & M & circular mean, resultant length, circular SD & book not accessed; definitions are standard but the equation numbers are unverified \\
+\multicolumn{4}{@{}l}{\emph{Off-screen indicators, necklace maps, ring maps}}\\
+\src{speckmann2010necklace} & F pre & regions projected onto intervals; symbols without overlap; multiple necklaces; max scale then centring; ``do not need leaders'' & --- \\
+\src{speckmann2015algorithms} & F pre & fixed order $O(n\log n)$; any order NP-hard (wedge intervals); bearing order not always optimal for max scale & accepted manuscript; objective differs from ours \\
+\src{cartocrow} & W & C++ framework containing necklace-map algorithms & project page, 2026-09-25; it names no paper for the framework \\
+\src{stewart2011ringmaps} & F & evenly spaced spokes, one per unit; a leader for every spoke & ordering rule of spokes not verified \\
+\src{tominski2016comparing} & F pre & ring slots with arcs toward originals; direction-ordered slots only suggested & --- \\
+\src{jackle2017topology} & F pre & $n=18$; 94.4\% orthographic; radial familiar with a point of interest & arXiv v1 only; rectangular border \\
+\src{baudisch2003halo} & M & off-screen proxy (via Jäckle et al.'s classification) & own text not read \\
+\src{zellweger2003citylights} & M & off-screen proxy (via Jäckle et al.) & own text not read \\
+\src{gustafson2007edgeradar} & M & border region (via Jäckle et al.) & own text not read \\
+\src{gustafson2008wedge} & M & off-screen proxy (via Jäckle et al.) & own text not read \\
+\src{jackle2015ambient} & M & aggregated border grid (via Jäckle et al.) & own text not read \\
+\src{danyluk2026ringmaps} & A (partial) & AR ring maps for pedestrian navigation & how landmarks are placed is unverified \\
+\src{draper2009radial} & M & survey of radial methods (its title) & --- \\
+\end{longtable}
+\endgroup

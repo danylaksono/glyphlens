@@ -1,0 +1,428 @@
+% ---------------------------------------------------------------------------
+\section{A model of summarising lenses}
+\label{sec:model}
+
+\subsection{From selection, function and join to seven stages}
+
+Tominski et al.\ model a lens as a small pipeline embedded in the
+visualization pipeline: a selection $\Sel$ picks out the part of the data the
+lens affects, a lens function $\lambda$ transforms it, and a join $\Jn$
+composes the result with the base visualization~\cite{tominski2014star,
+tominski2017survey}. The model is deliberately general, and for the lenses it
+was built around---magnifiers, filters, restylers---$\lambda$ is a
+transformation of the selected elements and $\Jn$ is compositing into the
+lens's interior. Neither needs further structure.
+
+A \emph{summarising} lens is different in both places. Its $\lambda$ does not
+transform the selected elements; it replaces them with a much smaller derived
+dataset---one value per bin---and then with marks for those values. And its
+$\Jn$ is no longer compositing: the marks have to go \emph{somewhere}, and
+where they go carries meaning. We therefore refine the two opaque stages into
+three each, and keep $\Sel$:
+\begin{equation}
+  \lambda \;=\; \Mrk \circ \Nrm \circ \Bin,
+  \qquad
+  \Jn \;=\; \Asc \circ \Anc \circ \Plc .
+  \label{eq:refine}
+\end{equation}
+Binning $\Bin$ decomposes the selected members; normalisation $\Nrm$ turns each
+bin into a value against a baseline; marks $\Mrk$ turn values into glyphs.
+Placement $\Plc$ decides where on a curve each glyph goes; the anchor $\Anc$
+decides what that curve is; association $\Asc$ decides how a glyph is tied back
+to the ground it summarises. \Cref{fig:pipeline} shows the seven stages and the
+correspondence. The rest of this section defines each stage precisely enough
+that the techniques of \cref{sec:descriptive} can be written as paths through
+it.
+
+\begin{figure*}[t]
+  \centering
+  \begin{tikzpicture}[
+      node distance=4.2mm,
+      stage/.style={draw, rounded corners=2pt, minimum height=9mm, minimum width=20mm,
+        align=center, font=\small, fill=white},
+      arr/.style={-{Latex[length=2mm]}, thick},
+      brace/.style={decorate, decoration={brace, amplitude=5pt, raise=2pt}, thick},
+    ]
+    \node[stage] (sel) {$\Sel$\\selection};
+    \node[stage, right=of sel] (bin) {$\Bin$\\binning};
+    \node[stage, right=of bin] (nrm) {$\Nrm$\\normalisation};
+    \node[stage, right=of nrm] (plc) {$\Plc$\\placement};
+    \node[stage, right=of plc] (anc) {$\Anc$\\anchor};
+    \node[stage, right=of anc] (mrk) {$\Mrk$\\marks};
+    \node[stage, right=of mrk] (asc) {$\Asc$\\association};
+    \draw[arr] (sel) -- (bin);
+    \draw[arr] (bin) -- (nrm);
+    \draw[arr] (nrm) -- (plc);
+    \draw[arr] (plc) -- (anc);
+    \draw[arr] (anc) -- (mrk);
+    \draw[arr] (mrk) -- (asc);
+    \draw[brace] (sel.north west) -- node[above=7pt, font=\small] {$\Sel$} (sel.north east);
+    \draw[brace] (bin.north west) -- node[above=7pt, font=\small] {part of $\lambda$} (nrm.north east);
+    \draw[brace] (plc.north west) -- node[above=7pt, font=\small] {$\Jn$} (anc.north east);
+    \draw[brace] (mrk.north west) -- node[above=7pt, font=\small] {$\lambda$ (marks) \;/\; $\Jn$ (association)} (asc.north east);
+    \node[below=2.5mm of nrm, font=\footnotesize, text width=48mm, align=center, text=black!65]
+      {what is summarised, and against what};
+    \node[below=2.5mm of anc, font=\footnotesize, text width=48mm, align=center, text=black!65]
+      {where the summary goes, and on what};
+  \end{tikzpicture}
+  \caption{The seven stages of a summarising lens, and how they refine
+  Tominski et al.'s selection $\Sel$, lens function $\lambda$ and join
+  $\Jn$~\cite{tominski2014star}. The execution order interleaves the two
+  refinements (marks are sized before they are drawn on the anchor), which is
+  why $\lambda=\Mrk\circ\Nrm\circ\Bin$ and $\Jn=\Asc\circ\Anc\circ\Plc$ are
+  written as a factorisation rather than as two contiguous blocks.}
+  \label{fig:pipeline}
+\end{figure*}
+
+\subsection{Selection $\Sel$}
+
+A selection is a region $R$ with an anchor point $c$ from which bearing and
+distance are measured. It returns the members $M=\{m_i\}$ inside $R$, each
+annotated with its distance $d_i$ and bearing $\theta_i$ from $c$---or, for a
+corridor along a polyline $P$, with its chainage $s_i$ (distance along $P$) and
+signed offset $o_i$ (distance across, positive to the left of travel). We
+distinguish five shapes: a \emph{disc}, an \emph{annulus}, a \emph{sector}, a
+\emph{corridor}, and an arbitrary \emph{polygon}. A lasso, an administrative
+unit and an isochrone are all polygons: they differ only in where the shape
+came from, so a lens that accepts rings accepts all three. A polygon has no
+natural centre, so $c$ defaults to its area-weighted centroid and can be
+overridden (an isochrone's origin is the obvious override).
+
+For areal data---census units rather than points---a member can be partly
+inside $R$. Two standard answers are supported: count a unit if its centroid is
+inside, or weight it by the fraction of its area inside. The measure being
+aggregated must then declare whether it is \emph{extensive} (counts, which
+apportion and sum) or \emph{intensive} (rates, shares and medians, which do
+neither and are averaged with a weight). Nothing about a number says which it
+is, and summing a column of percentages produces a plausible and wrong
+picture, so the implementation requires the declaration.
+
+\subsection{Binning $\Bin$}
+
+Binning partitions $M$ into bins $B_1,\dots,B_K$ and gives each bin a
+\emph{preferred position} $p_k\in[0,1)$ on the anchor curve and, optionally, a
+\emph{feasible interval} $I_k\subseteq[0,1)$. These two quantities are the only
+things placement consumes. Six modes are defined:
+
+\begin{description}[leftmargin=0pt, itemsep=1pt]
+  \item[categorical] one bin per category; $p_k$ is a nominal slot, so angle
+    carries order and nothing else.
+  \item[angular] one bin per bearing sector; $p_k$ is the sector's bearing
+    over $360^\circ$, so angle \emph{is} bearing.
+  \item[radial] one bin per distance band; there is no bearing, so bins take
+    nominal slots and the radial axis is the reading.
+  \item[cross] bearing sector $\times$ category.
+  \item[chainage] one bin per stretch of a corridor; $p_k = s/L$ on an open
+    curve.
+  \item[unit] one bin per areal unit; $I_k$ is the arc the unit subtends seen
+    from $c$, which is Speckmann and Verbeek's original necklace primitive
+    \cite{speckmann2010necklace}.
+\end{description}
+
+A categorical bin may also be positioned at the circular mean of its members'
+bearings, which is what morphs a category ring into a bearing-faithful one
+(\cref{sec:generative}). That position is only meaningful when the members are
+concentrated, so every bin also carries the mean resultant length
+$R_k\in[0,1]$ of its bearings~\cite{mardia1999directional}; we return to this in
+\cref{sec:within}.
+
+\subsection{Normalisation $\Nrm$}
+
+Normalisation maps a bin to a value $v_k$. \emph{Count} and \emph{density}
+(count per unit area) are the familiar pair; a radius slider silently
+confounds them, which is why normalisation is a stage and not a formatting
+option. \emph{Share} is $n_k/n$. The \emph{location quotient}
+$\mathrm{LQ}_k=(n_k/n)/(b_k/b)$ and a $z$-score compare the lens against a
+baseline profile $b$; \emph{delta} is a signed difference from a reference
+(another lens, time or region)---in the terms of visual comparison, an explicit
+encoding of the difference rather than juxtaposition or
+superposition~\cite{gleicher2011comparison}. The baseline is itself a choice---the
+complement of the lens, the study area, or a fixed reference---and changes the
+reading materially. One lens defaults to its complement (``what is this place
+unusually full of, compared with its surroundings''); a field of lenses must
+share one baseline, or every cell becomes average by construction
+(\cref{sec:continuum}).
+
+\subsection{Placement $\Plc$}
+\label{sec:placement}
+
+Let mark $k$ need half-width $h_k$ on the curve (its own width plus any room
+reserved for its label, in units of the curve parameter), and let
+$\delta(x,y)$ be the cyclic difference on $[0,1)$. Placement solves
+\begin{equation}
+  \begin{aligned}
+    &\min_{x}\; \sum_{k} w_k\, \delta(x_k,p_k)^2 \\
+    &\text{s.t. the arcs } [x_k-h_k,\,x_k+h_k] \text{ are disjoint},\;
+    x_k\in I_k, \\
+    &\phantom{\text{s.t. }}\text{and the marks keep the cyclic order of the } p_k,
+  \end{aligned}
+  \label{eq:placement}
+\end{equation}
+a squared-displacement variant of the necklace-map placement problem of
+Speckmann and Verbeek~\cite{speckmann2010necklace,speckmann2015algorithms}. The
+last constraint, which we call \emph{order preservation}, corresponds to their
+fixed-order case. It also forbids a mark from winding past its neighbours: in the
+frame cut open at some point of the cycle, the unwrapped positions increase in
+the same order as the unwrapped preferred positions. With order fixed and no
+intervals, substituting $y_k=x_k-c_k$, where $c_k$ accumulates the minimum
+spacings $h_{k-1}+h_k$, turns non-overlap into monotonicity of $y$. The
+optimum is then a weighted isotonic regression, solved exactly in $O(K)$ by
+pool-adjacent-violators. The implementation tries each of the $K$ places to cut
+the cycle and keeps the cheapest, for $O(K^2)$ overall.
+
+Order preservation is a design constraint, not a free property of the
+optimum. We had first assumed, as the implementation's own comments did, that a
+crossing solution can always be uncrossed without increasing cost. That holds
+when all marks have equal widths and equal weights, and it fails otherwise. We
+ran an exact comparison (\texttt{paper/scripts/solver-check.mjs}) on random
+instances with $K = 3$--$5$ and collision-prone, clustered preferred positions.
+When reordering and winding were allowed, the optimum was cheaper than the
+order-preserving one in 8--42\% of instances with unequal widths or unequal
+weights, and in none with both equal. The median cost of keeping order was
+3--7\textdegree{} of weighted RMS displacement on a closed ring, and at most
+31\textdegree. One three-mark example has marks filling 79\% of the ring: a narrow,
+heavy mark and a wide one whose preferred positions differ by 2\textdegree, and
+a third mark about 30\textdegree{} clockwise of both. Placing the wide mark
+counterclockwise of the narrow one, against their bearing order, frees room for
+the third mark and nearly halves the cost. For the related max-scale problem, Speckmann and
+Verbeek likewise show that ordering by region bearing is not generally optimal
+(it is a tight $\frac12$-approximation)~\cite{speckmann2015algorithms}. We keep
+the constraint because the relative order of the marks is itself part of what a
+bearing-faithful ring encodes. A pair of marks drawn in the wrong order
+misstates which of two directions lies clockwise of the other, however small the
+displacement saved. Whether readers would accept a small reordering for a
+smaller displacement is an empirical question, and could be added to the
+study's displacement factor (\cref{sec:evaluation}).
+
+The wrap-around constraint and feasible intervals need no approximation. When the
+marks nearly fill the cycle, the wrap-around constraint caps the span of $y$ for
+each cut, but the cap never decides the result. The order-preserving optimum
+$x^\ast$ has at least one gap wider than its two marks need, because the marks
+fill less than the whole curve. At the cut through that gap, $x^\ast$ is feasible
+and the cap is slack, so the uncapped isotonic regression for that cut returns
+$x^\ast$. Every other cut returns $x^\ast$ or a feasible point that costs more.
+(This assumes displacements below half a turn, where cyclic and unwrapped
+distances agree.) Intervals $I_k$ become per-mark bounds on $y$, and the same
+argument holds. Each cut is then a bounded isotonic regression, solved exactly in
+$O(K)$. Monotonicity lets the bounds be tightened to a running maximum from the
+left and a running minimum from the right. Pool-adjacent-violators then gives
+each pooled block its weighted mean, clamped to the block's feasible range.
+Clipping the unconstrained fit to the bounds is \emph{not} enough: for targets
+$(0,10,5)$ with $y_2\le 6$ it gives $(0,6,7.5)$, and the optimum is
+$(0,6,6)$. A mark wider than its own interval has that interval dropped. If
+the remaining intervals cannot all be met, the marks are placed without
+intervals, and the solver reports that it did so.
+
+This replaced a heuristic that clamped marks into their intervals and
+re-solved. We compared both with an exact reference, Dykstra's algorithm run to
+convergence on every cut (\texttt{paper/scripts/interval-check.mjs}). The test
+cases were wedge intervals, as angular binning produces, and overlapping arcs,
+as areal units produce, for $K = 4$--$16$. With wedges, the heuristic left an
+interval in 2--13\% of instances and overlapped a neighbour in 7--13\%. In
+37--72\% of instances it returned a valid placement that cost more than the
+optimum, by a median of about 5\% and at most 33\%. With overlapping arcs it overlapped in
+over half of the instances. The bounded solver matched the reference on every
+feasible instance and never overlapped. Without intervals, the solver matched an
+exact span-capped reference on all 1,800 closed-ring instances of the order
+check.
+
+Two placements are degenerate cases of \cref{eq:placement}: \emph{block}
+placement, in which $p_k$ are nominal slots with fixed spacing and the solver
+has nothing to do, and \emph{stacked} placement, in which each variable gets
+its own concentric curve and competes only with itself, so displacement
+vanishes at the cost of radial space and cross-variable comparability.
+
+\subsection{Anchor $\Anc$}
+
+Placement is solved in the curve's parameter, and each mark's room is reserved
+as a \emph{fraction} of the curve. Nothing in it assumes a circle. Any curve
+of the same length $\ell$ accepts the same solution, so the anchor is a free
+axis, and the useful thing to vary along it is curvature. For a ring of radius
+$r_0$ ($\ell = 2\pi r_0$) we define the family $\Anc_u$, $u\in[0,1]$: the arc of
+length $\ell$ and curvature $(1-u)/r_0$ through a fixed parameter $t_0$,
+rotated so that $\Anc_1$ is horizontal. $u=0$ is the closed ring; $u=1$ is a
+straight baseline on which bearing becomes a horizontal axis. Changing $u$
+never re-runs placement: it is a change of anchor, not a re-solve, so it
+composes with every other stage. The seam falls opposite $t_0$; choosing $t_0$
+in the widest gap between marks means opening the ring never cuts a mark in
+two.
+
+The same axis applies to an open curve. Straightening a corridor onto its own
+chainage produces a route profile, which is a \emph{linear cartogram}: chainage
+and offset survive exactly, position does not.
+
+The trade the anchor controls is exact and worth stating. A ring keeps
+\emph{adjacency}---each mark points at the part of the map it summarises---and
+pays for it in comparability, because every mark grows from its own baseline in
+its own direction. A straight axis makes lengths directly comparable and gives
+labels somewhere to go, and pays in adjacency.
+
+\subsection{Marks $\Mrk$}
+
+A mark turns $v_k$ into a glyph at $\Anc(x_k)$: a radial \emph{bar} (length
+$\propto v_k$), a \emph{disc} (area $\propto v_k$, the classic necklace-map
+symbol), or a \emph{rose} (the bin's own angular histogram, oriented to true
+north so that roses compare with each other and with the compass). Which way a
+mark grows is a second, weaker way of buying comparability: along the curve's
+outward normal (maximal association), always screen-up (one shared baseline;
+on a closed ring the lower marks grow back across the lens), or upright but
+never inward (a shared axis with two baselines). A nested glyph such as a rose
+carries two readings and must say which owns size; roses default to equal
+size, because a rose scaled by value is illegible for exactly the small bins
+whose direction is least certain.
+
+\subsection{Association $\Asc$}
+\label{sec:association}
+
+On a closed ring around its own selection, adjacency associates a mark with its
+ground for free. Two things spend that: \emph{placement}, which moves a mark
+off its bearing to avoid overlap, and the \emph{anchor}, which under unrolling
+detaches the whole chart from the geography. They are the same loss by
+degrees, so one encoding answers both. A \emph{leader} runs from the mark to
+the position placement tried to honour---the preferred bearing---at the
+members' own mean distance from $c$, drawn in the lens's azimuthal frame. Its
+length is therefore the association that was given away.
+
+The leader is triggered by the \emph{gap} between where a mark is and where its
+data is, not by the solver's reported displacement. The distinction matters
+under block placement: the solver is asked for a nominal slot, reports zero
+displacement, and yet every mark is as far from its data as it can be. With
+the gap as trigger, morphing a ring from bearing back to category order fades
+the leaders in exactly as the marks leave their bearings. A leader is refused
+where it would have to guess: a distance band or a nominal slot has no bearing
+to point along, and a lens without a metric scale has no distance to point at.
+
+\subsection{Within-unit structure}
+\label{sec:within}
+
+Every stage above yields one number per bin, and that number hides whether the
+bin's members are spread evenly or piled in one corner---which is what makes an
+aggregate fragile to how its unit was drawn. Hexagon-based techniques have
+begun to encode this: Honeycomb Plots cut each tile along the regression plane
+of its within-tile density, a ``diamond cut''~\cite{trautner2022honeycomb}, and
+HexTiles derive a per-tile confidence from weighted within-tile variance, argued
+explicitly as mitigation of the modifiable areal unit
+problem~\cite{kawakami2024hextiles}.
+
+A lens gets this more cheaply than a tile, for a structural reason. A hexagon
+has no privileged origin or orientation, so the within-tile distribution must be
+fitted. A lens is already a polar coordinate system centred on a point the
+analyst chose, so its within-unit distribution decomposes, with no fitting,
+into bearing and distance. For each bin we compute the circular mean
+$\bar\theta_k$ and mean resultant length $R_k$ of member bearings, the circular
+standard deviation $\sqrt{-2\ln R_k}$~\cite{mardia1999directional}, and the
+mean, coefficient of variation and edge share of member distances; on a
+corridor, the signed mean offset (\emph{bias}) and the mean offset sign
+(\emph{sidedness}), which disagree precisely when provision is balanced by
+count but not by distance. These are drawn as a \emph{spread} arc (circular SD),
+a \emph{gradient} arrow (lens-level $\bar\theta$, length $\propto R$), the
+members drawn back through the aggregate (\emph{inclusions}, after Honeycomb's
+``amber inclusions''), or the rose mark.
+
+\subsection{The radius control as a scale diagnostic}
+\label{sec:elasticity}
+
+The unit of a lens is modifiable by a control the analyst is already holding,
+so the lens can report how much its reading depends on that choice. Let $N(r)$
+be the number of members within distance $r$ of $c$. We define the
+\emph{elasticity} of the count with respect to the radius,
+\begin{equation}
+  E(r) \;=\; \frac{d\ln N}{d\ln r} \;=\; \frac{r\,N'(r)}{N(r)}
+  \;=\; 2\,\frac{\lambda_{\mathrm{rim}}(r)}{\bar\lambda(r)},
+  \label{eq:elasticity}
+\end{equation}
+where $\lambda_{\mathrm{rim}}=N'(r)/2\pi r$ is the intensity on the rim and
+$\bar\lambda=N/\pi r^2$ the mean intensity inside. The last form follows
+directly and is the useful reading: $E=2$ when the rim is as dense as the
+interior (uniform density), $E\to 0$ when everything is already inside, and
+$E\gg2$ when a cluster sits just beyond the rim and the reading is about to
+jump. The implementation uses a backward difference over a band of relative
+width $b$,
+\begin{equation}
+  \hat E(r) \;=\; \frac{N(r)-N\big((1-b)r\big)}{b\,N(r)},
+  \label{eq:elasticity-hat}
+\end{equation}
+which tends to $E$ as $b\to0$ and equals $2-b$ (not $2$) under uniform density;
+with the default $b=0.1$ the uniform reference is $1.9$. Samples with fewer than
+a floor of members (30 by default) are flagged unreliable, because
+\cref{eq:elasticity-hat} is a ratio of small counts.
+
+$E(r)$ does not depend on the radius currently set, so it is computed once per
+centre and drawn on the radius slider itself: the analyst sees where the cliffs
+are before dragging onto one (\cref{fig:elasticity}). This is an instance of
+embedding a visualization in the control that it informs, in the manner of
+scented widgets~\cite{willett2007scented}.
+
+We do not claim the statistic. Counting within growing distances of a point is
+the idea behind Ripley's $K$ function, for which $K(t)=\pi t^2$ under a Poisson
+process~\cite{ripley1977modelling}, and behind second-order neighbourhood
+analysis, which takes that view from each individual
+point~\cite{getis1987second}; under complete spatial randomness $N\propto r^2$
+and so $E=2$. The same log--log slope around a freely chosen centre is the
+mass--radius (fractal) dimension of radial analysis in urban
+morphology~\cite{yamu2016fractal}. Three things distinguish the lens's use of it:
+the centre is an arbitrary location rather than an event, so this is a
+point-to-event rather than an event-to-event count; the uniform reference
+depends on the lens shape (it is 2 for a disc or sector, but not for an annulus
+with fixed inner radius, nor 2 for a corridor whose width is the control); and
+it is shown as a property of the control rather than of the result.
+The library therefore reports $\hat E$ with two references in place of the bare
+value 2. The first is the estimator's own value under uniform density for the
+selection's shape, $\big(A(r)-A((1-b)r)\big)/\big(b\,A(r)\big)$ for a selection
+of area $A(r)$. That is $2-b$ for a disc or sector and larger for an annulus
+with a fixed inner radius, and the ratio of $\hat E$ to it is 1 under uniform
+density for any shape. The second is a pointwise Monte-Carlo envelope under
+complete spatial randomness, conditioned on the number of members and in the
+spirit of the simulation envelopes used with Ripley's
+$K$~\cite{ripley1977modelling}. It widens where counts are small, which makes
+it the principled version of the 30-member floor.
+\doubt{The equivalences are derived here. Ripley and Yamu et al.\ were read in
+full; Getis \& Franklin at abstract level only. Yamu et al.\ is mainly a
+planning-theory paper that uses radial analysis; a methods paper by Frankhauser
+would be the more canonical citation for mass--radius dimension (not yet
+identified and checked).}
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        width=\columnwidth, height=45mm,
+        xlabel={radius $r$ (m)}, ylabel={$\hat E(r)$},
+        xmin=0, xmax=3000, ymin=0, ymax=8,
+        ytick={0,1.9,4,6,8}, yticklabels={0,1.9,4,6,8},
+        grid=major, grid style={black!8},
+        tick label style={font=\footnotesize}, label style={font=\footnotesize},
+        axis lines*=left,
+      ]
+      \addplot[black!25, fill=black!6, draw=none] coordinates {(0,0) (0,8) (475,8) (475,0)} \closedcycle;
+      \addplot[name path=lo, draw=none, unbounded coords=jump]
+        table[x=r, y expr={\thisrow{reliable}>0 ? \thisrow{low} : nan}, col sep=comma]
+        {figures/elasticity.csv};
+      \addplot[name path=hi, draw=none, unbounded coords=jump]
+        table[x=r, y expr={\thisrow{reliable}>0 ? \thisrow{high} : nan}, col sep=comma]
+        {figures/elasticity.csv};
+      \addplot[RoyalBlue!15] fill between[of=lo and hi, soft clip={domain=475:3000}];
+      \addplot[thick, color=RoyalBlue, unbounded coords=jump]
+        table[x=r, y expr={\thisrow{reliable}>0 ? \thisrow{elasticity} : nan}, col sep=comma]
+        {figures/elasticity.csv};
+      \addplot[dashed, black!60, domain=0:3000, samples=2] {1.9};
+      \node[font=\scriptsize, anchor=north west, align=left, text=black!55] at (axis cs:30,7.8) {too few\\members};
+      \node[font=\scriptsize, anchor=south west, text=black!60] at (axis cs:2100,2.2) {uniform: $2-b$};
+    \end{axis}
+  \end{tikzpicture}
+  \caption{The elasticity profile $\hat E(r)$ (\cref{eq:elasticity-hat}, $b=0.1$)
+  around the demonstration centre in Yogyakarta, computed from the bundled
+  OpenStreetMap extract by the library and plotted from its output. The band is
+  a pointwise 95\% Monte-Carlo envelope under complete spatial randomness: 999
+  patterns with the same 1{,}071 members within 3\,km, scattered uniformly over
+  the disc. The shaded span has fewer than 30 members and is not drawn. The
+  early cliff ($\hat E$ up to 7.3 at 475--525\,m, against an envelope reaching
+  3.6) says a band of places at that distance is far denser than anything
+  inside it, so a radius chosen there is fragile. The rise at 925--1000\,m
+  stays inside the envelope, which is what a uniform pattern of this size
+  produces by chance. From 1.5 to 2.7\,km the curve lies below the envelope
+  throughout: widening the lens there adds ground faster than it adds places.
+  The envelope is pointwise, so a brief excursion at one of the 102 drawn radii is
+  weak evidence on its own.}
+  \label{fig:elasticity}
+\end{figure}

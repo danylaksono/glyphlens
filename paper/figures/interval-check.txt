@@ -1,0 +1,19 @@
+# After (exact bounded isotonic per cut), commit following 23b261b
+interval check: 300 instances per row, seed 1
+kind    n  feasible  impl out of interval  impl overlap  impl > opt (median / max rel.)  bounded PAV = opt  relaxed
+wedges  4       295                     0             0      0 (0.0 % / 0.0 %)             295 / 295       0
+wedges  8       290                     0             0      0 (0.0 % / 0.0 %)             290 / 290       0
+wedges 16       257                     0             0      0 (0.0 % / 0.0 %)             257 / 257       0
+units   4       269                     0             0      0 (0.0 % / 0.0 %)             269 / 269       0
+units   8       234                     0             0      0 (0.0 % / 0.0 %)             234 / 234       0
+units  16       178                     0             0      0 (0.0 % / 0.0 %)             178 / 178       0
+
+# Before (clamp-and-re-solve heuristic, 8 passes), solver at 23b261b
+interval check: 300 instances per row, seed 1
+kind    n  feasible  impl out of interval  impl overlap  impl > opt (median / max rel.)  bounded PAV = opt  relaxed
+wedges  4       295                     6            21    110 (5.2 % / 32.6 %)            295 / 295       0
+wedges  8       290                    16            38    175 (5.3 % / 30.3 %)            290 / 290       0
+wedges 16       257                    34            33    184 (4.7 % / 26.5 %)            257 / 257       0
+units   4       269                    44           151     38 (6138.1 % / Infinity %)     269 / 269       0
+units   8       234                    70           130     37 (435.4 % / Infinity %)      234 / 234       0
+units  16       178                    78           101     24 (63.9 % / Infinity %)       178 / 178       0

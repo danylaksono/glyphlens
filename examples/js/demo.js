@@ -384,6 +384,7 @@ function clearSketch() {
 // moves or the data changes, and merely re-marked when the slider moves.
 let profile = [];
 let profileKey = '';
+let envelopeTimer = null;
 
 function refreshProfile() {
   // `onChange` fires once from inside `addLens`, before `lens` is assigned.
@@ -402,12 +403,19 @@ function refreshProfile() {
     type: 'disc', center: centre, radius: maxRadius,
   }, { getPosition: (f) => [f.lng, f.lat] });
 
-  profile = elasticityProfile(items.map((i) => i.distance), {
-    minRadius: Number(slider.min),
-    maxRadius,
-    samples: 120,
-  });
+  const distances = items.map((i) => i.distance);
+  const options = { minRadius: Number(slider.min), maxRadius, samples: 120 };
+  profile = elasticityProfile(distances, options);
   drawProfile();
+
+  // The CSR envelope costs ~15 ms, too much for every frame of a drag, so it
+  // is filled in once the lens has settled (docs/findings.md F-39).
+  clearTimeout(envelopeTimer);
+  envelopeTimer = setTimeout(() => {
+    if (profileKey !== key) return;
+    profile = elasticityProfile(distances, { ...options, envelope: 99 });
+    drawProfile();
+  }, 150);
 }
 
 function drawProfile() {
@@ -439,6 +447,17 @@ function drawProfile() {
   const cap = Math.max(4, ...usable.map((p) => p.elasticity)) * 0.9;
   const y = (e) => h - Math.min(1, e / cap) * (h - 3) - 1;
 
+  // Where a uniform pattern with this many members would fall, once computed.
+  // A curve outside the band is geography; inside it, it may be chance.
+  if (usable[0].high != null) {
+    ctx.beginPath();
+    usable.forEach((p, i) => (i ? ctx.lineTo(x(p.r), y(p.high)) : ctx.moveTo(x(p.r), y(p.high))));
+    for (let i = usable.length - 1; i >= 0; i--) ctx.lineTo(x(usable[i].r), y(usable[i].low));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(20,24,29,0.07)';
+    ctx.fill();
+  }
+
   ctx.beginPath();
   ctx.moveTo(x(usable[0].r), h);
   for (const p of usable) ctx.lineTo(x(p.r), y(p.elasticity));
@@ -462,14 +481,16 @@ function drawProfile() {
     ctx.restore();
   }
 
-  // E = 2 is uniform density: below it the count is barely moving, above it
-  // the radius is doing more work than the geography.
+  // The estimator's value under uniform density (2 - b = 1.9 for a disc, not
+  // 2): below it the count is barely moving, above it the radius is doing more
+  // work than the geography.
+  const ref = usable[0].reference;
   ctx.save();
   ctx.setLineDash([2, 3]);
   ctx.strokeStyle = 'rgba(20,24,29,0.28)';
   ctx.beginPath();
-  ctx.moveTo(0, y(2));
-  ctx.lineTo(w, y(2));
+  ctx.moveTo(0, y(ref));
+  ctx.lineTo(w, y(ref));
   ctx.stroke();
   ctx.restore();
 
@@ -492,10 +513,11 @@ function updateReadout(state) {
   $('stat-disp').textContent = `${Math.round(state.stats.maxDisplacement)}°`;
 
   // Elasticity: how much the reading depends on the radius that happens to be
-  // set. ~2 is uniform density; >>2 means a cluster sits just outside the rim.
+  // set. ~1.9 is uniform density (2 - b for a disc); >>1.9 means a cluster sits
+  // just outside the rim.
   const E = state.stats.elasticity;
   $('stat-elast').textContent = Number.isFinite(E) ? E.toFixed(1) : '–';
-  $('stat-elast').title = 'd(count)/d(radius), scaled. ~2 = uniform density.';
+  $('stat-elast').title = 'd(count)/d(radius), scaled. ~1.9 = uniform density in a disc.';
 
   const R = state.stats.concentration;
   $('stat-conc').textContent = Number.isFinite(R) ? R.toFixed(2) : '–';

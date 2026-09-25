@@ -15,7 +15,7 @@
  * a circle, a coastline or a route.
  */
 
-import { select, selectComplement, selectionArea } from './selection.js';
+import { select, selectComplement, selectionArea, applyKernel } from './selection.js';
 import { arealSelect } from './areal.js';
 import { bin } from './binning.js';
 import { normalise, confidence, profileOf } from './normalise.js';
@@ -65,7 +65,9 @@ export function computeLens(config) {
   const sel = config.areal
     ? arealSelect(data, selection, { ...config.areal, getAnchor: config.areal.getAnchor })
     : select(data, selection, { getPosition });
-  const { items } = sel;
+  // A distance-decay kernel, if any, becomes part of each member's weight, so
+  // every aggregate downstream is kernel-weighted without knowing it.
+  const items = applyKernel(sel.items, selection);
   if (sel.length != null) selection.length = sel.length;
   // A polygon has no centre until its centroid is computed, and everything
   // downstream measures bearing and distance from one. Adopt what the selector

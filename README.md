@@ -204,9 +204,10 @@ surface, which is the resolution limit of the technique rather than a bug.
 
 **The lattice tessellates; the lenses do not.** Centres sit on a lattice, and
 each selects a *disc* of `spacing × packing`. At the default packing the discs
-merely touch, so the corners of each cell are in **no** lens; above
-`1/√3 ≈ 0.577` they overlap and count some places twice. Both are invisible
-unless you ask:
+merely touch, so the corners of each cell are in **no** lens; any larger
+packing makes neighbours overlap and count some places twice, and the gaps do
+not close until `1/√3 ≈ 0.577` — so in between, a field does both. Both are
+invisible unless you ask:
 
 ```js
 field.setCells('both');     // 'selection' (the disc) · 'lattice' (the cell)
@@ -264,6 +265,21 @@ const { neighbours, edges, hull, triangles } = delaunay(points);
 It is also a reading: `cells: 'delaunay'` draws the triangulation, and on a
 relaxed lattice that is the only way to see which cells are adjacent, since
 nothing about their shapes says so.
+
+**A field is geographically weighted statistics with the simplest kernel**: each
+lens counts every member inside its disc fully, a hard cut-off. Give it a
+distance-decay kernel instead and it computes GW summary statistics at the
+lattice points:
+
+```js
+addField(map, { data: places, count: 240, kernel: 'bisquare' });          // bandwidth = the disc radius
+computeLens({ ..., selection: { type: 'disc', radius: 2400, kernel: 'gaussian', bandwidth: 600 } });
+```
+
+With categorical binning and `share`, a bi-square field matches the direct GW
+proportion to 5×10⁻¹⁶ at every centre (`paper/scripts/gw-check.mjs`). A
+Gaussian has no edge but a lens does, so give it a radius of about 4× the
+bandwidth. See [F-40](docs/findings.md#f-40-a-field-is-gw-statistics-and-now-says-so).
 
 What is still unexplored — density-weighted cells, per-cell radii, and whether
 an irregular lattice costs the comparability a regular one buys — is written up
@@ -451,9 +467,10 @@ from their own distance and bearing, which reproduces exactly the geodesic
 circle the selection asserts.
 
 **Elasticity** falls out of the same geometry: `E = (dV/V)/(dr/r)` says how much
-the reading depends on the radius the analyst happened to pick. `E ≈ 2` is
-uniform density; `E ≫ 2` means a cluster sits just outside the rim and the
-number is about to jump.
+the reading depends on the radius the analyst happened to pick. The derivative
+is 2 under uniform density. The estimator, a backward difference over an outer
+band of relative width `b`, gives `2 − b` there: 1.9 at the default. `E ≫ 1.9`
+means a cluster sits just outside the rim and the number is about to jump.
 
 Because that curve does not depend on the radius currently set, it can be drawn
 **on the radius control itself** — so the cliffs are visible before you drag
@@ -462,13 +479,24 @@ onto one:
 ```js
 import { elasticityProfile } from 'glyphlens';
 
-const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 120 });
-// [{ r, count, share, elasticity, reliable }, ...]
+const profile = elasticityProfile(distances, { maxRadius: 3000, samples: 120, envelope: 99 });
+// [{ r, count, share, elasticity, reliable, reference, relative, low, high }, ...]
 ```
 
 `reliable` matters: the estimator is a ratio of counts and is meaningless at
 small n, so don't plot or read samples below the floor as cliffs. The ring demo
-draws only the reliable span and shades the rest. See
+draws only the reliable span and shades the rest.
+
+Each sample also carries:
+- `reference`: the estimator's value under uniform density for the
+  selection's shape. It is `2 − b` for a disc; pass `areaAt` for any other
+  shape.
+- `relative`: `elasticity` divided by `reference`, so uniform density reads 1
+  for every shape.
+- `low` and `high`, with `envelope` set: a pointwise Monte-Carlo envelope under
+  complete spatial randomness, conditioned on the member count. A curve outside
+  the band is geography; inside it, it may be chance. See
+  [docs/findings.md F-39](docs/findings.md#f-39-the-elasticity-reference-was-2-and-should-have-been-an-envelope). See
 [docs/design-space.md §4](docs/design-space.md#4-within-unit-structure--the-maup-channel).
 
 ### Using the placement engine on its own

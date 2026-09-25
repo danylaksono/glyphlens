@@ -69,6 +69,8 @@ export {
   selectionArea,
   normaliseRings,
   contains,
+  applyKernel,
+  KERNELS,
 } from './core/selection.js';
 export {
   bin,
@@ -93,6 +95,7 @@ export {
   lateralStats,
   elasticity,
   elasticityProfile,
+  uniformElasticity,
   angularHistogram,
   radialHistogram,
   describeDistribution,
@@ -101,7 +104,7 @@ export {
 
 // Placement
 export { placeNecklace, placeByBearing, fitNecklaceScale } from './core/necklace.js';
-export { isotonic, isotonicBoundedSpan } from './core/isotonic.js';
+export { isotonic, isotonicBounded, isotonicBoundedSpan } from './core/isotonic.js';
 
 // Geometry
 export {

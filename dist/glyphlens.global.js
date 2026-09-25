@@ -472,6 +472,48 @@ var glyphlens = (function (exports) {
     }
   }
 
+  /**
+   * Distance-decay kernels, as in geographically weighted statistics.
+   *
+   * A lens with the default `boxcar` kernel counts every member fully: a hard
+   * cut-off, the simplest GW kernel. With `bisquare` or `gaussian`, each member
+   * is weighted by its distance from the centre, relative to a bandwidth `h`
+   * (the selection radius unless `bandwidth` says otherwise). A field of such
+   * lenses on a lattice then computes GW summary statistics at the lattice
+   * points. See docs/findings.md F-40.
+   *
+   *   boxcar    1 for d <= h
+   *   bisquare  (1 - (d/h)^2)^2 for d < h, else 0
+   *   gaussian  exp(-(d/h)^2 / 2); membership still ends at the selection radius,
+   *             which truncates the kernel. On the bundled extract a radius of
+   *             3h leaves errors of up to 0.01 in a proportion, and 4h up to
+   *             5e-4 (paper/scripts/gw-check.mjs)
+   */
+  const KERNELS = {
+    boxcar: (u) => (u <= 1 ? 1 : 0),
+    bisquare: (u) => (u < 1 ? (1 - u * u) ** 2 : 0),
+    gaussian: (u) => Math.exp(-0.5 * u * u),
+  };
+
+  /**
+   * Multiply each selected member's weight by the selection's kernel. A no-op
+   * for the default box-car kernel. Only selections measured from a centre can
+   * take a kernel, because only there is a member's `distance` a distance from
+   * the centre. A corridor's `distance` is chainage.
+   */
+  function applyKernel(items, selection) {
+    const kind = selection.kernel ?? 'boxcar';
+    if (kind === 'boxcar') return items;
+    const K = typeof kind === 'function' ? kind : KERNELS[kind];
+    if (!K) throw new Error(`unknown kernel "${kind}"`);
+    if (selection.type === 'corridor') {
+      throw new Error('a kernel needs distance from a centre; corridor distances are chainage');
+    }
+    const h = selection.bandwidth ?? selection.radius;
+    if (!(h > 0)) throw new Error('a kernel needs a positive bandwidth or radius');
+    return items.map((it) => ({ ...it, weight: (it.weight ?? 1) * K(it.distance / h) }));
+  }
+
   /** Selection area in square kilometres, for density normalisation. */
   function selectionArea(selection) {
     const r = (selection.radius ?? 0) / 1000;
@@ -705,7 +747,9 @@ var glyphlens = (function (exports) {
       let num = 0;
       let den = 0;
       for (const it of items) {
-        const w = (weight?.(it.feature) ?? 1) * it.weight;
+        // Point members carry no weight of their own; without the default, a
+        // mean over points was NaN and came back as 0.
+        const w = (weight?.(it.feature) ?? 1) * (it.weight ?? 1);
         num += (value(it.feature) ?? 0) * w;
         den += w;
       }
@@ -713,7 +757,7 @@ var glyphlens = (function (exports) {
     }
 
     let total = 0;
-    for (const it of items) total += (value(it.feature) ?? 0) * it.weight;
+    for (const it of items) total += (value(it.feature) ?? 0) * (it.weight ?? 1);
     return total;
   }
 
@@ -1214,13 +1258,90 @@ var glyphlens = (function (exports) {
   }
 
   /**
+   * Weighted isotonic regression with per-element bounds
+   * (`lo[i] <= y[i] <= hi[i]`). Exact, O(n).
+   *
+   * Monotonicity lets the bounds be tightened without changing the feasible
+   * set: a running maximum of `lo` from the left and a running minimum of `hi`
+   * from the right. Both are then non-decreasing, so a pooled block's feasible
+   * range is [lo of its last element, hi of its first]. The algorithm is
+   * pool-adjacent-violators in which each block takes its weighted mean clamped
+   * to that range. Clipping the unconstrained fit to the bounds is *not* the
+   * same thing: for targets [0, 10, 5] with y[1] <= 6 it gives [0, 6, 7.5], and
+   * the optimum is [0, 6, 6].
+   *
+   * Checked against Dykstra's algorithm in paper/scripts/interval-check.mjs.
+   *
+   * @param {number[]} q   target values
+   * @param {number[]} [w] weights (default 1)
+   * @param {number[]} lo  lower bounds (-Infinity for none)
+   * @param {number[]} hi  upper bounds (Infinity for none)
+   * @returns {number[] | null} the fit, or null if the bounds cannot all be met
+   */
+  function isotonicBounded(q, w, lo, hi) {
+    const n = q.length;
+    if (n === 0) return [];
+    const L = new Float64Array(n);
+    const U = new Float64Array(n);
+    L[0] = lo[0];
+    for (let i = 1; i < n; i++) L[i] = Math.max(lo[i], L[i - 1]);
+    U[n - 1] = hi[n - 1];
+    for (let i = n - 2; i >= 0; i--) U[i] = Math.min(hi[i], U[i + 1]);
+    for (let i = 0; i < n; i++) if (L[i] > U[i] + 1e-12) return null;
+
+    // Blocks on a stack: weighted sum, weighted target sum, first and last index.
+    const sw = new Float64Array(n);
+    const swq = new Float64Array(n);
+    const from = new Int32Array(n);
+    const to = new Int32Array(n);
+    const val = new Float64Array(n);
+    let top = -1;
+    const value = (b) => {
+      const mean = sw[b] === 0 ? (L[to[b]] + U[from[b]]) / 2 : swq[b] / sw[b];
+      return Math.min(Math.max(mean, L[to[b]]), U[from[b]]);
+    };
+
+    for (let i = 0; i < n; i++) {
+      top++;
+      const wi = w ? w[i] : 1;
+      sw[top] = wi;
+      swq[top] = wi * q[i];
+      from[top] = i;
+      to[top] = i;
+      val[top] = value(top);
+      while (top > 0 && val[top - 1] > val[top]) {
+        sw[top - 1] += sw[top];
+        swq[top - 1] += swq[top];
+        to[top - 1] = to[top];
+        top--;
+        val[top] = value(top);
+      }
+    }
+
+    const out = new Array(n);
+    for (let b = 0; b <= top; b++) {
+      for (let i = from[b]; i <= to[b]; i++) out[i] = val[b];
+    }
+    return out;
+  }
+
+  /**
    * Isotonic regression with an additional cap on total span
    * (`y[n-1] - y[0] <= maxSpan`).
    *
    * Solved by alternating projection onto the two convex sets (monotone
-   * sequences, and sequences of bounded span). Converges; not a closed form.
-   * Only invoked when the necklace is nearly full, which is the case where the
-   * packing is close to forced anyway.
+   * sequences, and sequences of bounded span). The result is always feasible but
+   * is not the constrained optimum: on random inputs where the cap binds, its
+   * cost is up to about twice the optimum. The exact answer is plain isotonic
+   * regression on targets whose end points are pulled inward by mu / w, with the
+   * multiplier mu found by bisection. That is roughly ten times slower.
+   *
+   * The necklace does not need the exact answer. With fill below 1, the
+   * order-preserving optimum always has a gap wider than required. At the cut
+   * through that gap the cap is slack, so plain isotonic regression already
+   * returns the optimum. A cut where the cap binds only has to produce something
+   * feasible, and any feasible answer costs at least the optimum. See
+   * core/necklace.js and docs/findings.md F-37.
    */
   function isotonicBoundedSpan(q, w, maxSpan, iterations = 24) {
     let y = isotonic(q, w);
@@ -1508,19 +1629,44 @@ var glyphlens = (function (exports) {
    * optimum is a weighted isotonic regression (exact, O(n)). The wrap-around
    * constraint becomes a cap on total span.
    *
-   * The cyclic order that matters is the order by preferred position — any
-   * crossing solution can be uncrossed without increasing cost — so we only need
-   * to choose where to cut the circle. We try all n cuts and keep the cheapest:
+   * The order is fixed to the order by preferred position, so only the cut of
+   * the circle has to be chosen. We try all n cuts and keep the cheapest:
    * O(n^2), which is nothing for the bin counts a lens uses (typically <= 72).
+   *
+   * Keeping that order is a design constraint, not a free property of the
+   * optimum. A crossing solution can be uncrossed without increasing cost only
+   * when all widths and all weights are equal. With unequal ones, swapping two
+   * nearly coincident marks can make room for a third, and the unconstrained
+   * optimum is cheaper. paper/scripts/solver-check.mjs measures this: cheaper in
+   * 8-42% of clustered random instances, by a median of 3-7 degrees of RMS
+   * displacement. We keep the order anyway, because on a bearing-faithful ring
+   * the relative order of two marks is itself data. See docs/findings.md F-37.
+   *
+   * Without intervals, the order-preserving problem is solved exactly. The
+   * optimum x* has at least one gap wider than its two marks need, because the
+   * marks fill less than the whole curve. Cutting there, x* is feasible and the
+   * wrap-around cap is slack, so the plain isotonic regression for that cut is
+   * x*. Every other cut either reaches x* too or returns a feasible, costlier
+   * point. So the approximate span projection (isotonicBoundedSpan) never decides
+   * the result; it only keeps the losing cuts feasible. This holds for
+   * displacements below half a turn, where the cyclic and unwrapped costs agree.
    *
    * ## Feasible intervals
    *
    * `interval: [lo, hi]` confines an item to an arc. For point data the interval
    * is the whole circle and only `position` matters; for an area it is the
    * angular projection of the geometry seen from the lens centre, which is
-   * Speckmann & Verbeek's original primitive. Interval handling is by projection
-   * onto the box between isotonic passes — approximate, unlike the unconstrained
-   * case. Recorded in docs/findings.md F-1.
+   * Speckmann & Verbeek's original primitive. Intervals become bounds on y, and
+   * each cut is solved exactly by bounded isotonic regression (isotonicBounded).
+   * The argument above carries over unchanged: the optimum still has a slack
+   * gap, and the cut through it still meets the cap. So a cut whose solution
+   * overlaps across the wrap-around is skipped. A mark wider than its own
+   * interval has that interval dropped. If no cut can meet the rest, the marks
+   * are placed without intervals. Either way `intervalsMet` is false.
+   *
+   * This replaced a clamp-and-re-solve heuristic that left an interval or
+   * overlapped a neighbour in roughly one in ten wedge instances, and was a
+   * median 5% costlier (paper/scripts/interval-check.mjs; docs/findings.md F-38).
    */
 
 
@@ -1537,18 +1683,21 @@ var glyphlens = (function (exports) {
    * @param {NecklaceItem[]} items
    * @param {object} [options]
    * @param {boolean} [options.cyclic=true]
-   * @param {number} [options.intervalPasses=8] projection passes for feasible intervals
    * @returns {{
    *   placements: Array<{ id, position, preferred, displacement, halfWidth, clamped }>,
    *   fill: number,        fraction of the curve consumed by symbols
    *   overflow: boolean,   true if the symbols cannot fit at all
-   *   cost: number
+   *   cost: number,
+   *   intervalsMet: boolean false if some interval was not honoured: either a
+   *                         mark was wider than its own interval (that interval
+   *                         alone is dropped), or no placement meets them all
+   *                         (the marks are then placed without intervals)
    * }}
    */
   function placeNecklace(items, options = {}) {
-    const { cyclic = true, intervalPasses = 8 } = options;
+    const { cyclic = true } = options;
     const n = items.length;
-    if (n === 0) return { placements: [], fill: 0, overflow: false, cost: 0 };
+    if (n === 0) return { placements: [], fill: 0, overflow: false, cost: 0, intervalsMet: true };
 
     const totalWidth = items.reduce((s, it) => s + 2 * it.halfWidth, 0);
     const fill = totalWidth;
@@ -1569,11 +1718,12 @@ var glyphlens = (function (exports) {
         fill,
         overflow: totalWidth > 1,
         cost: 0,
+        intervalsMet: true,
       };
     }
 
-    // Sorted cyclic order. Non-crossing is optimal, so this order is fixed and
-    // only the cut varies.
+    // Sorted cyclic order. It is kept fixed (see the header), so only the cut
+    // varies.
     const order = items
       .map((it, i) => ({ it, i, p: wrap01(it.position) }))
       .sort((a, b) => a.p - b.p);
@@ -1583,6 +1733,11 @@ var glyphlens = (function (exports) {
     // The caller is told via `overflow` and can re-scale properly.
     const shrink = overflow ? 1 / totalWidth : 1;
 
+    // A mark wider than its own interval cannot meet it. Drop that interval
+    // rather than let it make every cut infeasible; the others still hold.
+    const usable = (it) => it.interval && 2 * it.halfWidth * shrink <= arcLength(it.interval, cyclic) + 1e-12;
+    const hasIntervals = items.some(usable);
+    const dropped = items.some((it) => it.interval && !usable(it));
     let best = null;
 
     for (let cut = 0; cut < (cyclic ? n : 1); cut++) {
@@ -1610,39 +1765,36 @@ var glyphlens = (function (exports) {
       // Wrap-around leaves this much slack for the chain to spread into.
       const maxSpan = cyclic ? 1 - seq[0].w - seq[n - 1].w - c[n - 1] : Infinity;
 
-      let y =
-        cyclic && Number.isFinite(maxSpan)
-          ? isotonicBoundedSpan(q, v, Math.max(maxSpan, 0))
-          : isotonic(q, v);
-
-      let x = y.map((yi, k) => yi + c[k]);
-
-      // Feasible intervals, by projection. Clamp then restore ordering; repeat.
-      const hasIntervals = seq.some((s) => s.it.interval);
+      let y;
       if (hasIntervals) {
-        for (let pass = 0; pass < intervalPasses; pass++) {
-          let moved = false;
-          for (let k = 0; k < n; k++) {
-            const iv = seq[k].it.interval;
-            if (!iv) continue;
-            // Bring the interval into the same unwrapped frame as x[k].
-            const base = Math.floor(x[k]);
-            const lo = base + wrap01(iv[0] - (p[k] - wrap01(p[k])));
-            const hi = lo + wrap01(iv[1] - iv[0]);
-            const clampedX = Math.min(Math.max(x[k], lo + seq[k].w), hi - seq[k].w);
-            if (Math.abs(clampedX - x[k]) > 1e-9) {
-              x[k] = clampedX;
-              moved = true;
-            }
+        // Exact: isotonic regression with each mark's interval as bounds on y.
+        const lo = new Array(n);
+        const hi = new Array(n);
+        for (let k = 0; k < n; k++) {
+          const iv = usable(seq[k].it) ? seq[k].it.interval : null;
+          if (!iv) {
+            lo[k] = -Infinity;
+            hi[k] = Infinity;
+            continue;
           }
-          if (!moved) break;
-          y = isotonic(
-            x.map((xi, k) => xi - c[k]),
-            v,
-          );
-          x = y.map((yi, k) => yi + c[k]);
+          const [a, b] = intervalAround(iv, seq[k].p, p[k], cyclic);
+          lo[k] = a + seq[k].w - c[k];
+          hi[k] = b - seq[k].w - c[k];
+        }
+        y = isotonicBounded(q, v, lo, hi);
+        // Intervals this cut cannot meet, or a solution that overlaps across the
+        // cut: either way this cut is not the optimum (see the header).
+        if (!y || (cyclic && y[n - 1] - y[0] > maxSpan + 1e-12)) continue;
+      } else {
+        y = isotonic(q, v);
+        if (cyclic && y[n - 1] - y[0] > maxSpan + 1e-12) {
+          // Not the optimum either, but kept feasible so that a lens whose
+          // marks exactly fill the ring still gets an answer.
+          y = isotonicBoundedSpan(q, v, Math.max(maxSpan, 0));
         }
       }
+
+      const x = y.map((yi, k) => yi + c[k]);
 
       let cost = 0;
       for (let k = 0; k < n; k++) {
@@ -1651,6 +1803,16 @@ var glyphlens = (function (exports) {
       }
 
       if (!best || cost < best.cost) best = { cost, seq, x };
+    }
+
+    if (!best) {
+      // The intervals cannot all be met (or the marks cannot fit). Place without
+      // them and say so, rather than return an overlapping layout.
+      const relaxed = placeNecklace(
+        items.map(({ interval, ...it }) => it),
+        options,
+      );
+      return { ...relaxed, intervalsMet: false };
     }
 
     const placements = new Array(n);
@@ -1666,7 +1828,25 @@ var glyphlens = (function (exports) {
       };
     });
 
-    return { placements, fill, overflow, cost: best.cost };
+    return { placements, fill, overflow, cost: best.cost, intervalsMet: !dropped };
+  }
+
+  /**
+   * A cyclic interval [a, b] as an arc [lo, hi] in the unwrapped frame in which
+   * the preferred position `p` sits at `pUnwrapped`. The copy of the arc that
+   * contains `p` is used, or the nearer copy if `p` lies outside the arc. An
+   * interval of zero length is taken to be the whole curve.
+   */
+  function arcLength([a, b], cyclic) {
+    return cyclic ? wrap01(b - a) || 1 : b - a;
+  }
+
+  function intervalAround([a, b], p, pUnwrapped, cyclic) {
+    if (!cyclic) return [a + (pUnwrapped - p), b + (pUnwrapped - p)];
+    const len = arcLength([a, b], true);
+    let lo = pUnwrapped - wrap01(p - a);
+    if (pUnwrapped - (lo + len) > lo + 1 - pUnwrapped) lo += 1;
+    return [lo, lo + len];
   }
 
   /**
@@ -1836,7 +2016,8 @@ var glyphlens = (function (exports) {
    *   E ~ n_edge / (edgeBand * n_total)
    *
    * Reference values, for `edgeBand = 0.1`:
-   *   E ~ 2   uniform density; the count is mostly tracking area
+   *   E ~ 1.9 uniform density in a disc (2 - b; see `uniformElasticity`); the
+   *           count is mostly tracking area
    *   E ~ 0   everything is already well inside; widening adds nothing
    *   E >> 2  a cluster sits just beyond the rim and the reading is about to jump
    *
@@ -1848,6 +2029,32 @@ var glyphlens = (function (exports) {
     const inner = radius * (1 - edgeBand);
     const edge = distances.filter((d) => d >= inner && d <= radius).length;
     return edge / (edgeBand * n);
+  }
+
+  /**
+   * The value the elasticity estimator takes under uniform density.
+   *
+   * For a selection whose area grows as `areaAt(r)`, a uniform density puts
+   * (A(r) - A((1 - b) r)) / A(r) of the members in the outer band, so the
+   * estimator returns that divided by b. For a disc or a sector (A proportional
+   * to r^2) this is 2 - b, which is 1.9 at the default band, not 2. The
+   * derivative it approximates is 2, but the backward difference is biased low.
+   * Other shapes differ. An annulus with a fixed inner radius r0 has
+   * A proportional to r^2 - r0^2, so its reference is larger, and it tends to 2 - b
+   * only as r grows. See docs/findings.md F-39.
+   *
+   * @param {number} r
+   * @param {number} [edgeBand=0.1]
+   * @param {(r:number)=>number} [areaAt]  area of the selection at radius r (default a disc)
+   */
+  function uniformElasticity(r, edgeBand = 0.1, areaAt = discArea) {
+    const a = areaAt(r);
+    return a > 0 ? (a - areaAt(r * (1 - edgeBand))) / (edgeBand * a) : 0;
+  }
+
+  /** Area of a disc of radius r, up to the constant, which cancels. */
+  function discArea(r) {
+    return r * r;
   }
 
   /**
@@ -1865,11 +2072,36 @@ var glyphlens = (function (exports) {
    * Samples below `minCount` members are flagged `reliable: false`. The estimator
    * is a ratio of counts and is meaningless at small n — see F-17.
    *
-   * @returns {Array<{ r, count, share, elasticity }>} ascending by radius
+   * Each sample also carries the estimator's value under uniform density for the
+   * selection's shape (`reference`; see `uniformElasticity`), and the ratio of
+   * the two (`relative`, which is 1 under uniform density for any shape). With
+   * `envelope` set to a number of simulations, it also carries a pointwise
+   * Monte-Carlo envelope under complete spatial randomness (`low`, `high`). The
+   * envelope conditions on the number of members within `maxRadius` and
+   * scatters them uniformly over the selection. A value outside it is one a
+   * uniform pattern with this many members rarely produces at that radius. The
+   * envelope is pointwise, so across many radii some excursions are expected by
+   * chance. It widens where counts are small, which is the honest form of the
+   * `minCount` floor. See docs/findings.md F-39.
+   *
+   * @param {number[]} distances
+   * @param {object} [options]
+   * @param {number} [options.maxRadius]    defaults to the largest distance
+   * @param {number} [options.minRadius=0]
+   * @param {number} [options.samples=96]
+   * @param {number} [options.edgeBand=0.1]
+   * @param {number} [options.minCount=30]
+   * @param {(r:number)=>number} [options.areaAt]  selection area at radius r (default a disc)
+   * @param {number} [options.envelope=0]   simulations for the CSR envelope (0: none)
+   * @param {number} [options.level=0.95]   central coverage of the envelope
+   * @param {number} [options.seed=1]       seed, so the envelope is reproducible
+   * @returns {Array<{ r, count, share, elasticity, reliable, reference, relative, low?, high? }>}
+   *   ascending by radius
    */
   function elasticityProfile(distances, options = {}) {
     const {
       maxRadius, minRadius = 0, samples = 96, edgeBand = 0.1, minCount = 30,
+      areaAt = discArea, envelope = 0, level = 0.95, seed = 1,
     } = options;
     const sorted = [...distances].sort((a, b) => a - b);
     const total = sorted.length;
@@ -1878,35 +2110,81 @@ var glyphlens = (function (exports) {
     // draw as if it said something.
     if (total === 0 || !(top > minRadius) || samples < 2) return [];
 
-    /** Members within radius r. */
-    const countWithin = (r) => {
+    /** Members of a sorted array within radius r. */
+    const countIn = (arr, r) => {
       let lo = 0;
-      let hi = total;
+      let hi = arr.length;
       while (lo < hi) {
         const mid = (lo + hi) >> 1;
-        if (sorted[mid] <= r) lo = mid + 1;
+        if (arr[mid] <= r) lo = mid + 1;
         else hi = mid;
       }
       return lo;
     };
+    const countWithin = (r) => countIn(sorted, r);
+    const estimate = (arr, r) => {
+      const count = countIn(arr, r);
+      return count > 0 ? (count - countIn(arr, r * (1 - edgeBand))) / (edgeBand * count) : 0;
+    };
+    const radii = Array.from({ length: samples }, (_, i) => minRadius + ((top - minRadius) * i) / (samples - 1));
+
+    // The CSR envelope: the same estimator on patterns of the same size scattered
+    // uniformly over the selection. A uniform radius is the inverse of the
+    // normalised area, found by bisection so that any monotone areaAt works.
+    let bands = null;
+    if (envelope > 0) {
+      const n = countWithin(top);
+      const aTop = areaAt(top);
+      let state = seed >>> 0 || 1;
+      const rand = () => ((state = (state * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+      const radiusForArea = (target) => {
+        let lo = 0;
+        let hi = top;
+        for (let k = 0; k < 40; k++) {
+          const mid = (lo + hi) / 2;
+          if (areaAt(mid) < target) lo = mid;
+          else hi = mid;
+        }
+        return (lo + hi) / 2;
+      };
+      const runs = radii.map(() => new Float64Array(envelope));
+      const sim = new Float64Array(n);
+      for (let s = 0; s < envelope; s++) {
+        for (let j = 0; j < n; j++) {
+          sim[j] = areaAt === discArea ? top * Math.sqrt(rand()) : radiusForArea(rand() * aTop);
+        }
+        sim.sort();
+        radii.forEach((r, i) => (runs[i][s] = estimate(sim, r)));
+      }
+      const q = (arr, p) => arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))];
+      bands = runs.map((arr) => {
+        arr.sort();
+        return [q(arr, (1 - level) / 2), q(arr, 1 - (1 - level) / 2)];
+      });
+    }
 
     const out = [];
     for (let i = 0; i < samples; i++) {
-      const r = minRadius + ((top - minRadius) * i) / (samples - 1);
+      const r = radii[i];
       const count = countWithin(r);
       const inner = countWithin(r * (1 - edgeBand));
+      const E = count > 0 ? (count - inner) / (edgeBand * count) : 0;
+      const reference = uniformElasticity(r, edgeBand, areaAt);
       out.push({
         r,
         count,
         share: total > 0 ? count / total : 0,
         // The same estimator as `elasticity`, so a point on this curve agrees
         // with the live readout at that radius.
-        elasticity: count > 0 ? (count - inner) / (edgeBand * count) : 0,
+        elasticity: E,
         // The estimator is a ratio of counts, so it is wild when counts are
         // small: a single member inside the edge band of a lens holding one
         // member reports E = 10 regardless of the geography. Callers should not
         // draw or read unreliable samples as cliffs. See docs/findings.md F-17.
         reliable: count >= minCount,
+        reference,
+        relative: reference > 0 ? E / reference : 0,
+        ...(bands ? { low: bands[i][0], high: bands[i][1] } : {}),
       });
     }
     return out;
@@ -2078,7 +2356,9 @@ var glyphlens = (function (exports) {
     const sel = config.areal
       ? arealSelect(data, selection, { ...config.areal, getAnchor: config.areal.getAnchor })
       : select(data, selection, { getPosition });
-    const { items } = sel;
+    // A distance-decay kernel, if any, becomes part of each member's weight, so
+    // every aggregate downstream is kernel-weighted without knowing it.
+    const items = applyKernel(sel.items, selection);
     if (sel.length != null) selection.length = sel.length;
     // A polygon has no centre until its centroid is computed, and everything
     // downstream measures bearing and distance from one. Adopt what the selector
@@ -5785,7 +6065,9 @@ var glyphlens = (function (exports) {
         kind: built.kind,
         data: o.data ?? [],
         getPosition: o.getPosition,
-        selection: { type: 'disc', radius },
+        // A distance-decay kernel turns the field into GW summary statistics at
+        // the lattice points (docs/findings.md F-40). The default is box-car.
+        selection: { type: 'disc', radius, kernel: o.kernel, bandwidth: o.bandwidth },
         binning: o.binning,
         normalisation: o.normalisation,
         placement: o.placement,
@@ -5981,6 +6263,7 @@ var glyphlens = (function (exports) {
   exports.DEFAULT_STYLE = DEFAULT_STYLE;
   exports.DIVERGING = DIVERGING;
   exports.FieldOverlay = FieldOverlay;
+  exports.KERNELS = KERNELS;
   exports.LATTICES = LATTICES;
   exports.LensOverlay = LensOverlay;
   exports.LensRenderer = LensRenderer;
@@ -5991,6 +6274,7 @@ var glyphlens = (function (exports) {
   exports.addLens = addLens;
   exports.aggregate = aggregate;
   exports.angularHistogram = angularHistogram;
+  exports.applyKernel = applyKernel;
   exports.arcBasis = arcBasis;
   exports.arcCurve = arcCurve;
   exports.areaFractionInside = areaFractionInside;
@@ -6029,6 +6313,7 @@ var glyphlens = (function (exports) {
   exports.inCircumcircle = inCircumcircle;
   exports.insertNode = insertNode;
   exports.isotonic = isotonic;
+  exports.isotonicBounded = isotonicBounded;
   exports.isotonicBoundedSpan = isotonicBoundedSpan;
   exports.lateralStats = lateralStats;
   exports.lattice = lattice;
@@ -6062,6 +6347,7 @@ var glyphlens = (function (exports) {
   exports.spatialIndex = spatialIndex;
   exports.straightenPath = straightenPath;
   exports.touchingRadius = touchingRadius;
+  exports.uniformElasticity = uniformElasticity;
   exports.voronoiCells = voronoiCells;
   exports.voronoiFromDelaunay = voronoiFromDelaunay;
   exports.wrap01 = wrap01;

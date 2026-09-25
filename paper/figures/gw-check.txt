@@ -1,0 +1,7 @@
+GW proportions: 241 lattice centres, bandwidth 600 m, 1449 places
+kernel     radius   centres compared   max |field - direct|
+boxcar       600 m                241   0.00e+0
+bisquare     600 m                241   5.00e-16
+gaussian    1200 m                241   8.92e-2
+gaussian    1800 m                241   1.00e-2
+gaussian    2400 m                241   4.78e-4

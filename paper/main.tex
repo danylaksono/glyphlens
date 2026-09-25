@@ -1,0 +1,105 @@
+% glyphlens paper — working draft for co-authors.
+%
+% Build:  latexmk -pdf main.tex      (or: pdflatex, bibtex, pdflatex, pdflatex)
+%
+% Conventions (see README.md):
+%   \doubt{...}  a claim, reading or citation use that is NOT fully verified;
+%                each one says what would settle it.
+%   \todo{...}   work the authors still have to do.
+%   \annotatefalse (below) hides both, for a clean read — never for submission
+%   while any remain.
+%
+% The class is plain `article` on purpose: the venue is undecided (see
+% docs/positioning.md §7). Porting to the IEEE VIS (vgtc) or EuroVis (egpubl)
+% template is mechanical once it is.
+
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[margin=0.8in,columnsep=0.28in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,decorations.pathreplacing,calc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{fillbetween}
+\usepackage{subcaption}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{doi}
+\usepackage{cleveref}
+
+% --- annotations -----------------------------------------------------------
+\newif\ifannotate
+\annotatetrue
+\ifannotate
+  \newcommand{\doubt}[1]{{\color{BurntOrange}\,[\textbf{?}\,#1]}}
+  \newcommand{\todo}[1]{{\color{BrickRed}\,[\textbf{TODO}\,#1]}}
+\else
+  \newcommand{\doubt}[1]{}
+  \newcommand{\todo}[1]{}
+\fi
+
+% Audit table: author, year and number of a source.
+\newcommand{\src}[1]{\citeauthor{#1}~\citeyear{#1}~\cite{#1}}
+
+% --- names -----------------------------------------------------------------
+% One place to change the system's name: "GlyphLens" is already the title of
+% Tong, Li & Shen (TVCG 2017), so the library needs renaming before submission.
+\newcommand{\sys}{\textsf{glyphlens}}
+% Pipeline stages. Tominski et al.'s model uses sigma, lambda and bowtie.
+\newcommand{\Sel}{\sigma}
+\newcommand{\Bin}{\beta}
+\newcommand{\Nrm}{\nu}
+\newcommand{\Plc}{\varphi}
+\newcommand{\Anc}{\gamma}
+\newcommand{\Mrk}{\mu}
+\newcommand{\Asc}{\rho}
+\newcommand{\Jn}{\bowtie}
+
+\title{Bearing-Faithful Map Lenses for Categorical Counts:\\
+From a Single Lens to a Gridded Glyphmap%
+\todo{working title}}
+% Narrowed on 2026-09-25 to what the demonstrations show: one categorical
+% variable summarised by count. Widen it only together with a multivariate case
+% (see "How multivariate is this?" in the discussion).
+
+
+\author{Dany Laksono \and Aidan Slingsby \and Radu Jianu%
+\todo{affiliations, order and author list to be agreed}}
+
+\date{Working draft --- \today}
+
+\raggedbottom
+\begin{document}
+\maketitle
+
+\input{sections/00-abstract}
+\input{sections/01-introduction}
+\input{sections/02-related}
+\input{sections/03-model}
+\input{sections/04-descriptive}
+\input{sections/05-generative}
+\input{sections/06-implementation}
+\input{sections/07-evaluation}
+\input{sections/08-discussion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\onecolumn
+\input{sections/A-citation-audit}
+
+\end{document}

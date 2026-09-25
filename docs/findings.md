@@ -112,7 +112,7 @@ be reachable later without a rewrite, three properties must hold now:
 
 Deferred deliberately: level-of-detail and glyph simplification at small sizes,
 which is what the tessellated case will actually need
-(cf. Jankowski et al., *Multivariate Maps*).
+(cf. McNabb & Laramee, *Multivariate Maps*).
 
 ### F-3. Why the sketches feel janky
 
@@ -170,12 +170,22 @@ VisQuill is a reactive-geometry kit (a constraint solver over points, shapes and
 values); the lens gallery is a *demo* of it. So "don't duplicate VisQuill" is
 not really about lenses. The two projects differ in what they are *about*:
 reactive geometry vs. composable cartographic strategy. Confirmed from
-<https://visquill.com/product/> — self-described as "not a charting library",
+<https://visquill.com/products> (the `/product/` URL recorded earlier no longer loads; checked 2026-09-23) — self-described as "not a charting library",
 Lab examples MIT.
 
 Practical consequence: no reason to reimplement constraint solving. Placement
 here is a small number of purpose-built cartographic algorithms, not a general
 solver.
+
+**Addendum, 2026-09-23 — VisQuill also ships the lens as a product.** VisQuill
+Lens (<https://visquill.com/visuals/lens>, a browser app and a Power BI visual)
+is described as "Drag interactive lens overlays across a map; each lens
+aggregates the data beneath it into a live bar chart", with up to three lenses
+at once. So for the *aggregating ring lens* VisQuill is a direct precedent, not
+only a toolkit demo, and the paper must position against it by name. What its
+pages do not say is what angle means; the open-source Lab blueprint spaces one
+bar per category evenly along the arc, which is category order. See
+[positioning.md](positioning.md) §3.3.
 
 ### F-6. A category's mean bearing is often not a direction
 
@@ -219,6 +229,16 @@ Consequences for the design space:
   bearing" at all for diffuse distributions. A directional *distribution* per
   category — a small rose per category, or a concentration-weighted arc rather
   than a bar — may be the better mark.
+
+**Addendum, 2026-09-23 — re-measured on the bundled extract.** Within 1.2 km of
+the demo centre in `examples/data/yogyakarta.json` (315 places), the means are
+retail 302° (R 0.51, n 135), food 329° (R 0.28, n 153), health 42° (R 0.36,
+n 11) and civic 182° (R 0.12, n 16); all places together 313° (R 0.34). So the
+two large categories do bundle to the north-west with the data as a whole, but
+the four are *not* within twenty degrees on this extract. The original
+observation was probably on a different pull (the first builds read Overpass
+live — see F-3); which data it was is not recorded. The conclusion stands; the paper
+reports the bundled numbers because they are reproducible.
 
 ### F-7. Placement must reserve room for labels, not just marks
 
@@ -1109,8 +1129,13 @@ hexagon: they agree at six points and nowhere else, and the corners are outside
 every disc. A hexagonal lattice gives each centre `(√3/2)·s²` of ground and a
 touching disc covers `π·(s/2)²` of it, so **coverage is π/(2√3) ≈ 90.7%** and
 about **9% of the map is in no lens at all**. Anything standing in those curved
-triangles is counted nowhere. Push packing past `1/√3 ≈ 0.577` and it inverts:
-the discs overlap, coverage exceeds 1, and members are counted twice.
+triangles is counted nowhere. Push packing past `0.5` and neighbouring discs
+start to overlap, so members are counted twice; the gaps do not close until
+`1/√3 ≈ 0.577`, where the disc reaches the hexagon's corners. Between the two a
+field both misses ground and double-counts it. (The coverage *ratio* passes 1
+at `√(√3/2π) ≈ 0.525`, which is neither threshold — it is a ratio of areas, not
+a share of ground.) *Corrected 2026-09-23: this entry originally put the onset
+of overlap at `1/√3`.*
 
 Neither is a defect — both are the ordinary consequence of sampling a plane
 with discs — but both were **invisible**, because the field drew no boundary at
@@ -1292,6 +1317,185 @@ The general lesson is about the substitution rather than the algorithm. Writing
 recorded the gap honestly and buried it: a comment is where a decision goes to
 be agreed with, not where it goes to be reviewed. **When a request is answered
 by something adjacent to it, that belongs in the reply, not in the source.**
+
+### F-37. Bearing order is a constraint, not a free optimum
+
+Recorded 2026-09-25, while turning a doubt in the paper draft into a result.
+
+The necklace solver keeps marks in the order of their preferred positions and
+searches only the cut of the cycle. Its header justified that with "any crossing
+solution can be uncrossed without increasing cost". **That is true only when all
+widths and all weights are equal.** `paper/scripts/solver-check.mjs` compares the
+solver with two exact references on random instances with 3–5 marks, clustered
+so that they collide. Its output is saved in `paper/figures/solver-check.txt`.
+
+- **Order-preserving optimum.** The reference is the solver's own formulation,
+  with the span-capped isotonic regression solved exactly by bisection on the
+  KKT multiplier. The solver matched it on all 1,800 closed-ring instances, to a
+  relative 10⁻⁶. That includes the 40% where the nearly-full cap binds, so
+  alternating projection cost nothing measurable there. No output overlapped.
+- **Unconstrained optimum.** The reference enumerates every order and every
+  winding. With unequal widths *or* unequal weights it was cheaper in 8–42% of
+  instances, by a median of 3–7° of weighted RMS displacement and at most 31°
+  on a closed ring. With both equal it was never cheaper, as the uncrossing
+  argument predicts.
+- **The mechanism.** A three-mark case: a narrow, heavy mark and a wide one 2°
+  apart, and a third mark 30° clockwise, filling 79% of the ring. Putting the
+  wide mark counterclockwise of the narrow one, against bearing order, gives the
+  third mark room, and the cost drops from 0.42 to 0.22. It is now a test.
+
+The decision is to **keep the order**. On a bearing-faithful ring, which of two
+marks lies clockwise of the other is part of what is encoded, and a reordering
+misstates it however little displacement it saves. So the problem the solver
+solves is now named correctly: order-preserving placement. The paper draft
+states that as the problem (§3.5), and the source comment says the same. Whether
+readers would trade a small reordering for a smaller displacement belongs with
+Q-2's policy half, and could be added to the study.
+
+Still open at the time: intervals were not tested, and the exact span solver
+had not been timed. Both were settled the same day; see
+[F-38](#f-38-the-solver-is-exact-and-the-interval-heuristic-was-not).
+
+### F-38. The solver is exact, and the interval heuristic was not
+
+Recorded 2026-09-25, straight after F-37.
+
+**The wrap-around cap never decides the result.** The exact span-capped solver
+(bisection on the KKT multiplier) was about ten times slower than alternating
+projection. On 24–288 marks at fills of 0.8–0.99 it never changed a result. As
+a standalone solver, alternating projection is up to twice the optimum when
+the cap binds, so the agreement needed an explanation, and there is a short one:
+
+- With fill below 1, the order-preserving optimum x\* has a gap wider than its
+  two marks need.
+- At the cut through that gap, x\* is feasible and the cap is slack. The plain
+  isotonic regression for that cut therefore returns x\*.
+- Every other cut returns x\* or something feasible and costlier.
+
+So the capped solve only keeps the losing cuts feasible, and its quality is
+irrelevant. Confirmed on 2,100 instances: keeping only the slack cuts gives the
+same cost every time. The code is unchanged, the comments now say why it is
+exact, and there is a regression test against an exact reference.
+
+**Intervals were the real gap, and they are the common case.** Angular binning
+gives every bin its own wedge as a feasible interval, so the headline lens runs
+through the interval path. That path clamped marks into their intervals and
+re-solved for up to eight passes. `paper/scripts/interval-check.mjs` compares
+it with Dykstra's algorithm run to convergence on every cut. Before and after
+are in `paper/figures/interval-check.txt`. With wedge intervals (K = 4–16), the
+heuristic:
+
+- left an interval in 2–13% of instances;
+- overlapped a neighbour in 7–13%;
+- returned a valid but costlier placement in 37–72%, by a median of about 5%
+  and at most 33%.
+
+With overlapping arcs, as areal units give, it overlapped in over half of the
+instances.
+
+The replacement is exact and no slower. Intervals become bounds on y, and each
+cut is a **bounded isotonic regression** (`isotonicBounded`):
+
+- tighten the bounds to a running maximum from the left and a running minimum
+  from the right;
+- run pool-adjacent-violators, giving each pooled block its mean clamped to the
+  block's range.
+
+The first version of the check used the tempting shortcut instead: clip the
+unconstrained fit to the bounds. That is wrong. For targets (0, 10, 5) with
+y₂ ≤ 6 it gives (0, 6, 7.5), and the optimum is (0, 6, 6). It showed up as a
+mismatch against Dykstra before any of it reached the library. The slack-gap
+argument above carries over, so cuts that overlap across the wrap-around are
+skipped. The bounded solver matched the reference on every feasible instance
+and never overlapped. A 72-bin angular lens went from 5.2 to 3.3 ms.
+
+Two behaviours are new, and `intervalsMet` reports both:
+
+- **A mark wider than its own interval.** A dominant sector with a large disc,
+  for example. Only that interval is dropped, instead of one mark making every
+  cut infeasible.
+- **Intervals that cannot all be met.** This happens when an unconstrained mark
+  has no room between neighbours pinned to their wedges. The marks are then
+  placed without intervals. Previously the answer silently overlapped.
+
+On a stress set where marks are often wider than their wedges, the old solver
+overlapped in 33 of 100 instances. The new one overlapped in none. In 43 it
+dropped only the too-narrow intervals, and in 9 it placed the marks without
+intervals.
+
+### F-39. The elasticity reference was 2, and should have been an envelope
+
+Recorded 2026-09-25.
+
+Two things were wrong with how elasticity was read, and neither was a bug in
+the estimator.
+
+- **The reference value.** Every readout, tooltip and doc said "E ≈ 2 is
+  uniform density". The derivative is 2. The estimator, a backward difference
+  over the outer band of relative width b, is (1 − (1 − b)²)/b = **2 − b**
+  under uniform density: 1.9 at the default. It also depends on the shape. An
+  annulus with a fixed inner radius r₀ has area ∝ r² − r₀², and its reference
+  is larger: 2.53 at r = 2r₀. `uniformElasticity(r, b, areaAt)` now gives the
+  reference for any shape. `elasticityProfile` reports it per sample, and also
+  `relative` (E divided by the reference), which is 1 under uniform density for
+  any shape.
+- **Distance from the reference is not evidence.** A curve wobbles around 1.9
+  whether or not the geography is doing anything, and the wobble is larger
+  where counts are small. `elasticityProfile(…, { envelope: n })` now simulates
+  n patterns with the same member count, scattered uniformly over the
+  selection, and returns a pointwise 95% band (`low`, `high`). This is the
+  standard companion to Ripley's K. It is also the principled form of F-17's
+  30-member floor, because the band widens exactly where counts are small.
+
+It changed a claim. The paper's figure had described "a second, weaker rise
+at 925–1000 m" around the Yogyakarta demo centre. Against 999 simulations, that
+rise **stays inside the envelope**: a uniform pattern of 1,071 places produces
+it by chance. The early cliff is real: Ê reaches 7.3 at 475–525 m, and the
+envelope stops at 3.6. The "adds ground faster than places" reading holds from
+1.5 to 2.7 km, where the curve is below the envelope throughout. The figure
+now draws the band, and the caption says only what the band supports.
+
+The envelope costs about 15 ms for 99 simulations on 1,449 places. The demo
+therefore draws the curve at once and fills the band in once the lens has
+stopped moving for 150 ms. The readout, tooltip and reference line now use 1.9.
+
+Not done: a global (simultaneous) envelope, which would control for reading
+many radii at once. With 102 drawn radii, a single-radius excursion from a
+pointwise band is weak evidence, and the caption says so.
+
+### F-40. A field is GW statistics, and now says so
+
+Recorded 2026-09-25.
+
+The paper concedes that a field of disc lenses on a lattice computes
+geographically weighted summary statistics with a box-car kernel. The concession
+was untested: nothing checked that the pipeline actually produces those
+numbers, and it could not use any other kernel.
+
+- **Kernels.** A centred selection (disc, sector, annulus or polygon) now takes
+  `kernel: 'boxcar' | 'bisquare' | 'gaussian'` (or a function of d/h) and
+  `bandwidth` (default: the radius). `applyKernel` multiplies each member's
+  weight by K(d/h) right after selection. Every stage downstream already
+  honoured a weight, because areal apportioning needed it (F-21), so nothing
+  else changed. A corridor throws, because its `distance` is chainage, not
+  distance from a centre. `addField` forwards `kernel` and `bandwidth`.
+- **The check.** `paper/scripts/gw-check.mjs` computes GW proportions at the
+  241 centres of a hex lattice, with h = 600 m, twice: directly over all 1,449
+  places, and through `computeField` with categorical binning and `share`. The
+  second path runs through the spatial index, selection, weighting, binning and
+  normalisation. Box-car agrees exactly and bi-square to 5×10⁻¹⁶. The Gaussian
+  is truncated at the lens radius, so its largest error in a proportion is
+  0.09 at a radius of 2h, 0.01 at 3h and 5×10⁻⁴ at 4h. The doc comment first
+  said 3h was enough. The measurement said otherwise, so it now says 4h.
+- **A bug on the way.** An intensive (mean) measure multiplied by `it.weight`.
+  Point members have no weight, so a mean over points was NaN, and `den > 0`
+  turned that into a silent 0. Areal members always carry a weight, which is
+  why no test had seen it. It now defaults to 1, and there is a test.
+
+This is a validity check, not a contribution. What the lens adds to GW
+statistics is where each summary is drawn: decomposed by bearing and placed at
+that bearing on the lens boundary. It also adds the one-object continuum from a
+single lens to the field.
 
 ---
 

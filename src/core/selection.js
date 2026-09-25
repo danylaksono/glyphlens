@@ -169,6 +169,48 @@ export function contains(selection, distanceM, bearingDeg) {
   }
 }
 
+/**
+ * Distance-decay kernels, as in geographically weighted statistics.
+ *
+ * A lens with the default `boxcar` kernel counts every member fully: a hard
+ * cut-off, the simplest GW kernel. With `bisquare` or `gaussian`, each member
+ * is weighted by its distance from the centre, relative to a bandwidth `h`
+ * (the selection radius unless `bandwidth` says otherwise). A field of such
+ * lenses on a lattice then computes GW summary statistics at the lattice
+ * points. See docs/findings.md F-40.
+ *
+ *   boxcar    1 for d <= h
+ *   bisquare  (1 - (d/h)^2)^2 for d < h, else 0
+ *   gaussian  exp(-(d/h)^2 / 2); membership still ends at the selection radius,
+ *             which truncates the kernel. On the bundled extract a radius of
+ *             3h leaves errors of up to 0.01 in a proportion, and 4h up to
+ *             5e-4 (paper/scripts/gw-check.mjs)
+ */
+export const KERNELS = {
+  boxcar: (u) => (u <= 1 ? 1 : 0),
+  bisquare: (u) => (u < 1 ? (1 - u * u) ** 2 : 0),
+  gaussian: (u) => Math.exp(-0.5 * u * u),
+};
+
+/**
+ * Multiply each selected member's weight by the selection's kernel. A no-op
+ * for the default box-car kernel. Only selections measured from a centre can
+ * take a kernel, because only there is a member's `distance` a distance from
+ * the centre. A corridor's `distance` is chainage.
+ */
+export function applyKernel(items, selection) {
+  const kind = selection.kernel ?? 'boxcar';
+  if (kind === 'boxcar') return items;
+  const K = typeof kind === 'function' ? kind : KERNELS[kind];
+  if (!K) throw new Error(`unknown kernel "${kind}"`);
+  if (selection.type === 'corridor') {
+    throw new Error('a kernel needs distance from a centre; corridor distances are chainage');
+  }
+  const h = selection.bandwidth ?? selection.radius;
+  if (!(h > 0)) throw new Error('a kernel needs a positive bandwidth or radius');
+  return items.map((it) => ({ ...it, weight: (it.weight ?? 1) * K(it.distance / h) }));
+}
+
 /** Selection area in square kilometres, for density normalisation. */
 export function selectionArea(selection) {
   const r = (selection.radius ?? 0) / 1000;

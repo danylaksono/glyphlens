@@ -1,0 +1,59 @@
+% ---------------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+Interactive lenses are one of visualization's most general interaction
+primitives: a movable region under which the base visualization is shown
+differently~\cite{bier1993toolglass,tominski2014star,tominski2017survey}. On
+maps, many lenses \emph{magnify}, \emph{filter} or \emph{re-render} what lies
+beneath them. Others instead \emph{summarise} it: a probe pairs a
+region with charts of its contents~\cite{butkiewicz2008probes}, a time lens
+wraps a query circle in a ring of temporal aggregates~\cite{tominski2012stacking},
+and a shipped map-lens product draws a bar chart of the data under each lens
+around its rim~\cite{visquill}.
+
+A summarising lens has to answer two questions that a magnifier does not. What
+is summarised---which members, decomposed how, normalised against what? And
+where does the summary go---in which order around the lens, on what curve, and
+how is each mark tied back to the ground it describes? In the rings we have
+seen, the second question is answered by habit: marks are laid out in category
+(or time) order, so the most valuable channel on a ring---angular
+position---carries a category or time order and nothing geographic. A bar at eleven
+o'clock says nothing about the north-west.
+
+This paper makes three moves. First, we refine Tominski et al.'s lens model
+(selection $\Sel$, lens function $\lambda$, join
+$\Jn$~\cite{tominski2017survey}) for summarising lenses into seven stages,
+$\lambda=\Mrk\circ\Nrm\circ\Bin$ and $\Jn=\Asc\circ\Anc\circ\Plc$
+(\cref{sec:model}), and use it to describe existing techniques
+(\cref{sec:descriptive}) and to generate new ones (\cref{sec:generative}).
+Second, we make angle mean \emph{bearing}: each aggregate is placed on the lens
+boundary at the bearing of what it summarises, using necklace-map
+placement~\cite{speckmann2010necklace} with minimal displacement; a leader is
+drawn exactly where the gap between a mark and its data would mislead; and
+because placement is solved in the curve's parameter, the ring unrolls into an
+axis without re-solving. Third, we treat the number of lenses as a parameter,
+so that one lens, a handful of small multiples and a gridded glyphmap are the
+same object, and we are explicit about how much of that continuum is
+geographically weighted statistics under another name (\cref{sec:discussion}).
+
+\paragraph{Contributions.}
+\begin{itemize}[leftmargin=*, itemsep=1pt]
+  \item A seven-stage model of summarising lenses that refines the
+    selection--function--join model, with two values the existing lens design
+    spaces lack: an effect scope \emph{on the boundary}, and thematic marks
+    under a spatial layout (\cref{sec:model}).
+  \item Bearing-faithful placement of aggregates on a lens boundary, with a
+    residual leader and curvature as a free axis (\cref{sec:placement,sec:association}).
+  \item Within-unit structure read from the lens's polar frame, and the
+    elasticity of the count with respect to the radius drawn on the radius
+    control, positioned against the local point-pattern statistics it
+    re-expresses (\cref{sec:within,sec:elasticity}).
+  \item The lens-to-glyphmap continuum as one object (\cref{sec:continuum}).
+  \item An open-source implementation (\cref{sec:implementation}) and the
+    design of the controlled study the central claim requires
+    (\cref{sec:evaluation}).
+\end{itemize}
+
+\todo{Teaser figure: category ring $\to$ necklace $\to$ unrolled with leaders
+$\to$ field, from \texttt{figures/}.}

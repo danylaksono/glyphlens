@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isotonic, isotonicBoundedSpan } from '../src/core/isotonic.js';
+import { isotonic, isotonicBounded, isotonicBoundedSpan } from '../src/core/isotonic.js';
 import { placeNecklace, fitNecklaceScale } from '../src/core/necklace.js';
 import {
   cyclicDelta, wrap01, circleCurve, polylineCurve, arcCurve, straightenPath,
@@ -15,7 +15,8 @@ import {
   projectOntoPath, pathLength,
   pointInPolygon, polygonArea, polygonCentroid, angularExtent,
 } from '../src/core/geo.js';
-import { select, selectionArea, normaliseRings } from '../src/core/selection.js';
+import { select, selectionArea, normaliseRings, applyKernel } from '../src/core/selection.js';
+import { aggregate } from '../src/core/areal.js';
 import {
   binAngular, binCategorical, binChainage, circularMean, compassLabel,
 } from '../src/core/binning.js';
@@ -38,6 +39,7 @@ import {
   lateralStats,
   elasticity,
   elasticityProfile,
+  uniformElasticity,
   angularHistogram,
   radialHistogram,
   describeDistribution,
@@ -59,6 +61,13 @@ test('isotonic respects weights when pooling', () => {
   const y = isotonic([3, 1], [3, 1]);
   assert.equal(y[0], 2.5); // pulled towards the heavier point
   assert.equal(y[1], 2.5);
+});
+
+test('bounded isotonic re-pools after a bound, rather than clipping', () => {
+  // Clipping the unconstrained fit [0, 7.5, 7.5] would give [0, 6, 7.5].
+  const y = isotonicBounded([0, 10, 5], null, [-Infinity, -Infinity, -Infinity], [Infinity, 6, Infinity]);
+  assert.deepEqual(y, [0, 6, 6]);
+  assert.equal(isotonicBounded([0, 0], null, [1, -Infinity], [Infinity, 0.5]), null);
 });
 
 test('isotonic output is non-decreasing for random input', () => {
@@ -123,6 +132,128 @@ test('necklace handles a full ring without overlap', () => {
   const { placements, fill } = placeNecklace(items);
   assert.ok(fill <= 1 + 1e-9);
   assertNoOverlap(placements);
+});
+
+test('necklace keeps bearing order even where reordering would cost less', () => {
+  // With unequal widths, putting the wide mark counterclockwise of the narrow
+  // one would nearly halve the cost (0.22 against 0.42); the solver keeps
+  // bearing order by design. See docs/findings.md F-37.
+  const items = [
+    { id: 'narrow', position: 0.7673, halfWidth: 0.048, weight: 4.33 },
+    { id: 'wide', position: 0.7733, halfWidth: 0.1995, weight: 3.64 },
+    { id: 'third', position: 0.855, halfWidth: 0.148, weight: 2.53 },
+  ];
+  const { placements, cost } = placeNecklace(items);
+  assertNoOverlap(placements);
+  // Unwrapped positions increase in the order of the preferred positions.
+  const x = placements.map((p) => p.preferred + p.displacement);
+  assert.ok(x[0] < x[1] && x[1] < x[2], `order broken: ${x}`);
+  assert.ok(Math.abs(cost - 0.418) < 1e-3, `cost ${cost}`);
+});
+
+test('necklace is exact for order-preserving placement without intervals', () => {
+  // Reference: every cut, targets unwrapped from the cut, and the span-capped
+  // isotonic regression solved exactly by bisection on its KKT multiplier.
+  const capped = (q, v, S) => {
+    const n = q.length;
+    const at = (mu) => isotonic(q.map((x, i) => x + (i === 0 ? mu / v[0] : 0) - (i === n - 1 ? mu / v[n - 1] : 0)), v);
+    const span = (y) => y[n - 1] - y[0];
+    if (span(at(0)) <= S) return at(0);
+    let lo = 0;
+    let hi = 1;
+    while (span(at(hi)) > S) hi *= 2;
+    for (let i = 0; i < 100; i++) {
+      const mid = (lo + hi) / 2;
+      if (span(at(mid)) > S) lo = mid;
+      else hi = mid;
+    }
+    return at(hi);
+  };
+  const reference = (items) => {
+    const order = items.map((_, i) => i).sort((a, b) => items[a].position - items[b].position);
+    const n = order.length;
+    let best = Infinity;
+    for (let cut = 0; cut < n; cut++) {
+      const seq = [...order.slice(cut), ...order.slice(0, cut)].map((i) => items[i]);
+      const p = [seq[0].position];
+      for (let k = 1; k < n; k++) p[k] = p[k - 1] + wrap01(seq[k].position - seq[k - 1].position);
+      const c = [0];
+      for (let k = 1; k < n; k++) c[k] = c[k - 1] + seq[k - 1].halfWidth + seq[k].halfWidth;
+      const S = 1 - seq[0].halfWidth - seq[n - 1].halfWidth - c[n - 1];
+      const y = capped(p.map((x, k) => x - c[k]), seq.map((it) => it.weight), S);
+      const cost = seq.reduce((sum, it, k) => sum + it.weight * cyclicDelta(wrap01(y[k] + c[k]), it.position) ** 2, 0);
+      best = Math.min(best, cost);
+    }
+    return best;
+  };
+  let seed = 42;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  for (let t = 0; t < 60; t++) {
+    const n = 4 + Math.floor(rand() * 7);
+    const fill = 0.3 + 0.69 * rand();
+    const raw = Array.from({ length: n }, () => 1 + 9 * rand());
+    const total = raw.reduce((sum, r) => sum + 2 * r, 0);
+    const centre = rand();
+    const items = raw.map((r, i) => ({
+      id: i,
+      halfWidth: (r / total) * fill,
+      weight: 1 + 9 * rand(),
+      position: wrap01(centre + (rand() - 0.5) * 0.3),
+    }));
+    const { placements, cost } = placeNecklace(items);
+    assertNoOverlap(placements);
+    const ref = reference(items);
+    assert.ok(cost <= ref * (1 + 1e-6) + 1e-12, `instance ${t}: cost ${cost} > exact ${ref}`);
+  }
+});
+
+test('necklace keeps angular-wedge marks inside their wedges without overlap', () => {
+  // Each mark gets its own sector as its interval, as angular binning does.
+  // When every mark fits its sector, all of them stay inside it. When some
+  // are wider than their sector, nothing may overlap; the old
+  // clamp-and-re-solve heuristic overlapped on 33 of these 100 instances.
+  // See docs/findings.md F-38.
+  const wedges = (seed, capped) => {
+    const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    return Array.from({ length: 100 }, () => {
+      const n = 4 + Math.floor(rand() * 13);
+      const fill = 0.3 + 0.65 * rand();
+      const raw = Array.from({ length: n }, () => 1 + 4 * rand());
+      const total = raw.reduce((sum, r) => sum + 2 * r, 0);
+      return raw.map((r, i) => {
+        const [a, b] = [i / n, (i + 1) / n];
+        return {
+          id: i,
+          halfWidth: capped ? Math.min((r / total) * fill, 0.45 / n) : (r / total) * fill,
+          weight: 1 + 9 * rand(),
+          position: a + (b - a) * (0.05 + 0.9 * rand()),
+          interval: [a, b],
+        };
+      });
+    });
+  };
+
+  wedges(7, true).forEach((items, t) => {
+    const result = placeNecklace(items);
+    assertNoOverlap(result.placements);
+    assert.equal(result.intervalsMet, true);
+    result.placements.forEach((pl, i) => {
+      const [a, b] = items[i].interval;
+      const off = wrap01(pl.position - a);
+      assert.ok(
+        off >= items[i].halfWidth - 1e-9 && off <= b - a - items[i].halfWidth + 1e-9,
+        `instance ${t}, mark ${i} left its wedge`,
+      );
+    });
+  });
+
+  let met = 0;
+  wedges(7, false).forEach((items) => {
+    const result = placeNecklace(items);
+    assertNoOverlap(result.placements);
+    if (result.intervalsMet) met++;
+  });
+  assert.ok(met > 0 && met < 100, `intervals met in ${met} of 100`);
 });
 
 test('necklace reports overflow when symbols cannot possibly fit', () => {
@@ -736,6 +867,58 @@ test('placement modes agree on bin count and stay in range', () => {
   }
 });
 
+// ------------------------------------------------- kernels
+
+test('a bisquare field reproduces GW proportions exactly', () => {
+  let seed = 9;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const origin = [110.37, -7.79];
+  const data = Array.from({ length: 400 }, () => ({
+    lng: origin[0] + (rand() - 0.5) * 0.04,
+    lat: origin[1] + (rand() - 0.5) * 0.04,
+    category: rand() < 0.3 ? 'a' : 'b',
+  }));
+  const h = 500;
+  const centres = [origin, [origin[0] + 0.005, origin[1]], [origin[0], origin[1] - 0.006]];
+  const { lenses } = computeField({
+    centres,
+    spacing: 700,
+    data,
+    getPosition: (f) => [f.lng, f.lat],
+    selection: { type: 'disc', radius: h, kernel: 'bisquare' },
+    binning: { mode: 'categorical', category: (f) => f.category, categories: ['a', 'b'] },
+    normalisation: { mode: 'share' },
+    marks: { type: 'bar' },
+    ring: { radius: 12 },
+  });
+  assert.equal(lenses.length, 3);
+  for (const lens of lenses) {
+    let num = 0;
+    let den = 0;
+    for (const f of data) {
+      const u = distance(lens.center, [f.lng, f.lat]) / h;
+      const w = u < 1 ? (1 - u * u) ** 2 : 0;
+      den += w;
+      if (f.category === 'a') num += w;
+    }
+    const share = lens.bins.find((b) => b.key === 'a').value;
+    assert.ok(Math.abs(share - num / den) < 1e-12, `${share} vs ${num / den}`);
+  }
+});
+
+test('kernels reject a corridor and leave the box-car case untouched', () => {
+  const items = [{ distance: 10 }, { distance: 90 }];
+  assert.equal(applyKernel(items, { type: 'disc', radius: 100 }), items);
+  const w = applyKernel(items, { type: 'disc', radius: 100, kernel: 'bisquare' }).map((it) => it.weight);
+  assert.ok(Math.abs(w[0] - 0.99 ** 2) < 1e-12 && Math.abs(w[1] - 0.19 ** 2) < 1e-12);
+  assert.throws(() => applyKernel(items, { type: 'corridor', radius: 100, kernel: 'gaussian' }));
+});
+
+test('an intensive mean over point members is a mean, not 0', () => {
+  const items = [{ feature: { v: 2 } }, { feature: { v: 4 } }];
+  assert.equal(aggregate(items, { value: (f) => f.v, kind: 'intensive' }), 3);
+});
+
 // ------------------------------------------------- elasticity profile
 
 test('elasticityProfile is ascending in radius and monotone in count', () => {
@@ -769,6 +952,35 @@ test('elasticityProfile reports uniform density as E near 2', () => {
   for (const p of prof) {
     assert.ok(Math.abs(p.elasticity - 1.9) < 0.35, `E = ${p.elasticity} at r = ${p.r}`);
   }
+});
+
+test('the uniform reference is 2 - b for a disc and depends on the shape', () => {
+  assert.ok(Math.abs(uniformElasticity(500, 0.1) - 1.9) < 1e-12);
+  assert.ok(Math.abs(uniformElasticity(500, 0.2) - 1.8) < 1e-12);
+  // An annulus with inner radius 100: (200^2 - 180^2) / (0.1 (200^2 - 100^2)).
+  const annulus = (r) => Math.max(r * r - 100 * 100, 0);
+  assert.ok(Math.abs(uniformElasticity(200, 0.1, annulus) - 7600 / 3000) < 1e-12);
+});
+
+test('elasticityProfile carries the reference, the ratio and a CSR envelope', () => {
+  let seed = 3;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const radius = 1000;
+  const uniform = Array.from({ length: 2000 }, () => radius * Math.sqrt(rand()));
+  const prof = elasticityProfile(uniform, { maxRadius: radius, samples: 21, envelope: 199 })
+    .filter((p) => p.reliable);
+  const inside = prof.filter((p) => p.elasticity >= p.low && p.elasticity <= p.high).length;
+  assert.ok(inside >= prof.length - 2, `uniform data inside the envelope at ${inside} of ${prof.length} radii`);
+  for (const p of prof) {
+    assert.ok(Math.abs(p.reference - 1.9) < 1e-12);
+    assert.ok(Math.abs(p.relative - p.elasticity / 1.9) < 1e-12);
+    assert.ok(p.low <= p.high);
+  }
+  // A ring of places at 600 m lies far outside the envelope where it is crossed.
+  const ringed = [...uniform.filter((d) => d < 550), ...Array(400).fill(600)];
+  const cross = elasticityProfile(ringed, { maxRadius: radius, samples: 41, envelope: 199 })
+    .find((p) => p.r >= 600);
+  assert.ok(cross.elasticity > cross.high, `E ${cross.elasticity} vs high ${cross.high}`);
 });
 
 test('elasticityProfile flags small-count samples as unreliable', () => {

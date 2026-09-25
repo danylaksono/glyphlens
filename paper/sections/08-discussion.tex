@@ -1,0 +1,114 @@
+% ---------------------------------------------------------------------------
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+\paragraph{A mean bearing is not always a direction.} Positioning a
+category's mark at the circular mean of its members is only honest when they
+are concentrated. On the bundled demonstration data (315 places within
+1.2\,km of the centre) the two large categories point the same way as the data
+as a whole: retail at $302^\circ$ ($R=0.51$, $n=135$) and food at $329^\circ$
+($R=0.28$, $n=153$), against $313^\circ$ ($R=0.34$) for all places. Health
+points north-east ($42^\circ$, $n=11$) and civic south ($182^\circ$, $n=16$), but
+civic's resultant length is $0.12$, so its mean bearing is close to arbitrary.
+A bearing-faithful ring therefore separates the large categories by
+concentration rather than by direction, and gives up the composition reading
+the categorical ring gave for free. (An earlier extract recorded in the development log showed all four means within
+about twenty degrees; which data it was is not recorded.) The morph from category
+order to bearing is strongest for spatially segregated categories. Two responses are built: marks are faded
+by their resultant length $R$, and the \emph{cross} binning (bearing
+$\times$ category) gives each category one mark per sector, so that a diffuse
+category shows as a spread of marks rather than one misplaced one. We regard
+the second as the honest multivariate view and the first as a limitation to be
+stated, not a fix.
+
+\paragraph{How multivariate is this?} Most configurations in this paper
+summarise one categorical variable by count. Several variables are supported
+through cross binning, stacked necklaces (one per variable, exact angular
+fidelity at the cost of radial space), and areal measures with declared
+extensive or intensive semantics; but we have not shown that these scale beyond
+a handful of variables, and the glyph literature suggests they will not
+without careful design~\cite{borgo2013glyph,fuchs2017glyph}. The title and
+abstract are therefore narrowed to what every demonstration shows: one
+categorical variable (four classes of place) summarised by count, from points
+or from district tables. A genuinely multivariate case, such as several census
+deprivation domains, is future work, and the claim should widen only with
+it.
+
+\paragraph{Relation to geographically weighted statistics.} A field of
+disc-shaped lenses on a lattice computes, at each centre, local summaries with
+a uniform (hard cut-off) kernel---geographically weighted summary
+statistics~\cite{brunsdon2002gwss} with the simplest kernel. Dykes and Brunsdon
+call the GW mean ``simply a moving spatial window mean smoother'' and note that
+the statistics could be centred on the points of a regular
+grid~\cite{dykes2007gwvis}, and a field drawn as glyphs is what tilemaps of GW
+outputs were proposed to be~\cite{slingsby2018tilemaps}.
+We do not claim the statistics. What the lens adds is (i) keeping the
+within-lens decomposition by bearing and distance, drawn at its true bearing,
+where a GW summary is one scalar per location, and (ii) one model in which the
+single lens and the field are the same object at different settings.
+We turned the equivalence into a check. The selection takes a distance-decay
+kernel (box-car, bi-square, or the Gaussian that Dykes and Brunsdon
+use~\cite{dykes2007gwvis}), and it multiplies each member's weight by $K(d/h)$.
+With categorical binning and share normalisation, a field then computes GW
+proportions. On the bundled extract, at the 241 centres of a hexagonal lattice
+with $h = 600$\,m, it agreed with the direct formula over all 1{,}449 places
+exactly with the box-car kernel and to $5\times10^{-16}$ with the bi-square
+(\texttt{paper/scripts/gw-check.mjs}). A lens has a radius and the Gaussian
+does not have compact support, so the field truncates it: the largest error in a
+proportion was 0.09 at a radius of $2h$, 0.01 at $3h$ and $5\times10^{-4}$ at
+$4h$. The equivalence is a validity check on the implementation, not a
+contribution. It also makes the field a GW visualization with the lens's
+bearing decomposition added.
+\doubt{Brunsdon et al.\ 2002 was read at abstract level; whether it discusses a
+uniform kernel explicitly is unverified. Dykes \& Brunsdon and Slingsby 2018 were
+read in full.}
+
+\paragraph{The continuum has a usable range.} As the lattice densifies each
+ring shrinks, and below roughly ten pixels of ring radius a glyph stops
+carrying multivariate information and the field reads as a density surface with
+texture \doubt{an observation from building the demonstrations, not a measured
+threshold}. This is the trade between spatial and multivariate resolution that
+any glyph map makes; the renderer sheds labels and compass as rings shrink, but
+the threshold itself is a candidate for the study.
+
+\paragraph{Lenses do not tessellate.} Centres on a lattice tessellate the
+plane; the discs they select do not. At touching packing (disc radius half the
+nearest-neighbour spacing) a hexagonal lattice covers
+$\pi/(2\sqrt3)\approx90.7\%$ of the ground, a square lattice
+$\pi/4\approx78.5\%$ and a triangular (honeycomb) lattice
+$\pi/(3\sqrt3)\approx60.5\%$. Any larger disc makes neighbours overlap and
+count some members twice, while on a hexagonal lattice the gaps do not close
+until the disc radius reaches the cell's circumradius, $s/\sqrt3$: between
+$s/2$ and $s/\sqrt3$ a field both misses ground and double-counts it, so no
+disc radius is both gap-free and overlap-free. Drawing only the cell would be
+the comfortable lie, so the field reports coverage and can draw the disc, the
+cell, or both.
+
+\paragraph{Other limitations.} Bearing from a polygon's centroid is ambiguous
+for elongated or concave units, where the population-weighted centroid, the
+geometric centroid and the unit's full angular extent disagree. The baseline
+for the location quotient (complement, region, nation) changes the reading and
+should be visible, not a configuration default. Placement is exact only in the
+common case (\cref{sec:placement}). Density denominators come from metric radii
+and, for polygons, a local equirectangular frame, never from Web Mercator screen
+space, which inflates area by $1/\cos^2\phi$ at latitude $\phi$.
+
+\paragraph{Name.} The library's working name collides with an unrelated
+occlusion-management technique for 3D glyph fields~\cite{tong2017glyphlens};
+it will be renamed before publication.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+A lens that summarises the data under it has to answer two questions that a
+magnifying lens does not: what to summarise, and where to put the summary. We
+split Tominski et al.'s lens function and join into three stages each, and
+showed that in the resulting seven-stage space a category ring, a
+bearing-faithful necklace, a route profile and a gridded glyphmap are points
+reached by changing arguments rather than by writing new techniques. The part
+of the space we find most interesting is where the lens boundary itself carries
+data: a ring whose angle means bearing, whose marks are tied back to the ground
+by leaders when placement or unrolling gives adjacency away, and whose radius
+control shows how fragile the reading is. What we have shown is its use on
+categorical counts; whether it helps anyone is the question the planned study
+exists to answer.
