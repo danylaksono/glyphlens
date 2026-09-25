@@ -354,3 +354,38 @@ test('a field can show where one cell ends and the next begins', () => {
   assert.equal(field.field, before);
   assert.equal(field.options.cells, 'both');
 });
+
+test('a linked view can emphasise a bin, and show its members, without the pointer', () => {
+  const { map } = stubEnvironment();
+  const lens = new LensOverlay(map, {
+    center: [...ORIGIN],
+    selection: { type: 'disc', radius: 600 },
+    data: PLACES,
+    getPosition: (f) => [f.lng, f.lat],
+    binning: { mode: 'angular', bins: 8 },
+  });
+  const frames = [];
+  const draw = lens.renderer.draw.bind(lens.renderer);
+  lens.renderer.draw = (ctx, layout, frame) => {
+    frames.push(frame);
+    return draw(ctx, layout, frame);
+  };
+  const key = lens.state().bins.find((b) => b.count > 0).key;
+
+  lens.highlight(key);
+  assert.equal(frames.at(-1).hovered, key);
+  assert.equal(frames.at(-1).focus, key);
+
+  lens.highlight(key, { members: false });
+  assert.equal(frames.at(-1).hovered, key);
+  assert.equal(frames.at(-1).focus, undefined);
+
+  // Unchanged: no repaint for nothing.
+  const n = frames.length;
+  lens.highlight(key, { members: false });
+  assert.equal(frames.length, n);
+
+  lens.highlight(null);
+  assert.equal(frames.at(-1).hovered, undefined);
+  assert.equal(frames.at(-1).focus, undefined);
+});

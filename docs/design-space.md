@@ -182,6 +182,7 @@ itself is a free axis, and the interesting thing to vary is its **curvature**.
 | `0` | closed ring | bearing as angle; marks point at what they summarise |
 | `0..1` | arc of the same length | the transition, which is the argument |
 | `1` | straight baseline | bearing as position; marks share one baseline |
+| docked | the same baseline, in a panel | adjacency gone entirely; association by linking |
 
 Holding *length* constant rather than radius is what makes this free: the
 solved placement stays valid at every curvature, so unrolling never re-runs the
@@ -222,6 +223,21 @@ And an unrolled lens is a strip, which means several of them stack: the natural
 next step is *n* lenses sharing one baseline, which is the small-multiples cell
 of §5 with a common scale rather than a common shape.
 
+**Docked: the same strip, off the map.** An external chart that updates as the
+lens moves is the last value on this axis rather than a separate category: the
+straight baseline, drawn in a panel. `DockRenderer` scales the reserved
+fractions to the panel's width, so nothing is re-solved. What docking adds is
+what a chart detached from its selection needs and a lens never did — a
+**context** drawn behind each mark (what the lens would read if the study area
+were uniform, or, for counts of categories, the whole study area) and a
+**scale fixed for the instrument**, sampled across the study area at the lens's
+current size, rather than fitted to whatever it is over. A lens scales its marks
+to its own largest value, which is right for a glyph and wrong for a chart
+watched in motion
+([F-37](findings.md#f-37-a-docked-chart-needs-a-scale-that-does-not-know-where-the-lens-is)).
+With `style.showChart: false` the lens on the map keeps only its selection and
+becomes a pure brush.
+
 ### 3.5 Marks
 
 `bar` (radial bar, length ∝ value) · `disc` (area ∝ value — the classic necklace
@@ -257,7 +273,9 @@ the selection they are describing.
 ### 3.6 Association — `hAssoc`
 
 `adjacency` (free, and strengthened by necklace placement) · `leader` lines ·
-`colour` · `brush` (lens as a brush driving linked views).
+`colour` · `brush` (lens as a brush driving linked views — built as the docked
+strip of §3.4b, with `lens.highlight(key)` drawing a bin's members inside the
+selection when its docked bar is hovered).
 
 Adjacency is not an encoding so much as a piece of luck: a mark sitting on a
 ring around its own selection points at what it summarises without anything
@@ -591,9 +609,9 @@ As of v0.1, against the axes above.
 | Binning | `categorical`, `angular`, `radial`, `cross`, `chainage`, `unit` | — |
 | Normalisation | `count`, `density`, `share`, `lq`, `z`, `delta`, confidence; extensive/intensive measures | — |
 | Placement | `necklace`, `block`, `morph`, `stacked`, `strip` (open curves) | — |
-| Anchor | ring, arc, straight axis (`unroll`), straightened corridor, `at: 'auto'` seam | — |
+| Anchor | ring, arc, straight axis (`unroll`), straightened corridor, `at: 'auto'` seam, docked strip (`DockRenderer`) with context and a sampled fixed scale | — |
 | Marks | `bar`, `disc`, `rose`; `orient: normal / up / upright` | `wedge`, `spark`, `stream` |
-| Association | `adjacency`, `leader` (`auto` / always / hover), brush hooks, displacement indicator | `colour` ramps |
+| Association | `adjacency`, `leader` (`auto` / always / hover), brushing a docked strip both ways (`highlight`, members on hover, `showChart: false`), displacement indicator | `colour` ramps |
 | Within-unit | `spread` (angular + lateral), `gradient`, `inclusions`, `profile`, `confidence`, elasticity; `structureFrame` | — |
 | Curves | circle, arc, polyline (open + closed), marks placed on any | — |
 | Routes | GeoJSON import, node editing, simplification to a budget | — |

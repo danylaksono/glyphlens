@@ -1293,6 +1293,85 @@ recorded the gap honestly and buried it: a comment is where a decision goes to
 be agreed with, not where it goes to be reviewed. **When a request is answered
 by something adjacent to it, that belongs in the reply, not in the source.**
 
+### F-37. A docked chart needs a scale that does not know where the lens is
+
+Recorded 2026-09-25, from the question of whether an external chart — a plain
+bar chart beside the map that updates as the lens moves — belonged in this
+design space or in a broader one.
+
+It belongs here, as the next value on the anchor axis. `unroll = 1` already
+draws a bar chart; it just draws it next to the selection. **Docking is the
+same strip, detached**: placement reserved each mark's room as a fraction of the
+curve ([F-27](#f-27-unrolling-the-ring-is-a-change-of-anchor-not-a-re-solve)),
+so a strip of any width accepts the solved layout, and `DockRenderer` scales
+those reservations to its own width rather than re-solving. The seam follows the
+angular axis: at `morph: 0` it falls at the start of the slots, so the strip is
+a sorted legend; at `morph: 1` it falls at south, so north is in the middle as on
+the unrolled lens.
+
+Building it turned up the thing that actually makes it a different reading
+rather than a relocation. **A lens scales its marks to its own largest value.**
+That is right for a glyph, which is read once and whole, and wrong for a chart
+that is watched while the lens moves: every bar changes length on every drag,
+including the bars whose data did not change. So the dock takes its scale from
+`dockDomain`, which places the lens — its current size, shape, binning and
+normalisation — at centres across the study area and takes the 95th percentile
+of what it reads there. The rule is that **scale and context belong to the
+instrument, never the position**: they are recomputed when the radius, data,
+binning or normalisation change, and never when the lens moves. The demo
+debounces the refit on the radius slider and keeps the old scale meanwhile,
+which is the point of having one.
+
+The context layer is drawn behind each mark, slightly wider, so the lens bar
+reads as filling it. Two contexts, and the difference between them is
+[F-21](#f-21-nothing-about-a-number-says-whether-it-can-be-added-up) again:
+
+- **expected if uniform** — what this lens would read if every category sat at
+  its study-area density everywhere. Defined for every normalisation (a sector
+  expects its share of the lens area, a distance band its annulus, an LQ is 1
+  by construction and is drawn as a neutral line instead). Dashed, because it
+  is a model and not an observation.
+- **the whole study area** — the crossfilter reading, where the lens highlights
+  its part of a bar that stands for everything. Defined **only for counts of
+  categories**: a share, a density or a quotient of the whole study area *is*
+  its expectation, since intensive measures do not grow with area, and a bearing
+  sector of the whole study area depends on where the lens is, so there is no
+  whole to be part of. The demo disables the option rather than drawing the
+  expectation under its name.
+
+The whole-study-area reading is the one the "highlighter" metaphor suggests, and
+it is the weaker one here: an 800 m lens holds a few percent of a 4 km extract,
+so its bars are slivers at the foot of their ghosts. It works when the lens is a
+substantial fraction of the study area, and that is worth knowing before
+choosing it as a default.
+
+Three smaller findings:
+
+- **The scale needs the F-17 floor.** Sampled naively, a 300 m lens set a
+  location-quotient scale of 10, because positions holding three or four places
+  produce ratios for arithmetic reasons. Positions with fewer than 30 members
+  now get no say (all of them are used if too few qualify), and the LQ scale is
+  a steady 2.5 at every radius tried.
+- **A fixed scale clips at hot spots, and must say so.** With 24 bearing
+  sectors at the centre of Yogyakarta, two sectors exceed the 95th percentile.
+  They are drawn to the top of the plot with a caret, and the note under the
+  strip says what the caret means. The alternative — a scale that fits whatever
+  the lens is over — is the problem this finding exists to avoid.
+- **Docking spends the last of the association adjacency gave for free**
+  ([F-31](#f-31-the-leader-is-the-residual-of-both-things-that-break-adjacency)).
+  So linking is not optional: hovering a docked bar calls `lens.highlight(key)`,
+  which draws that bin's leader and **its members inside the selection** — the
+  one association still available — and a mark hovered on the map lights its
+  bar. With `style.showChart: false` the lens on the map is reduced to its
+  selection, a pure brush, and the members on hover are then the only link
+  between the chart and the ground.
+
+Known approximations: the expectation uses the whole lens area even where the
+lens overhangs the study area, so it overstates what is expected at the edge;
+the study area defaults to the data's convex hull, which overstates a concave
+dataset; and during an animated transition the dock shows the settled layout
+while the lens is still moving towards it.
+
 ---
 
 ## Open questions
@@ -1425,3 +1504,15 @@ That suggests the default might depend on the route's sinuosity — straight
 enough, draw it in place; convoluted enough, straighten it and keep the ghost.
 Making a default depend on the data is the sort of thing that is helpful once
 and baffling thereafter, so it stays manual until there is evidence.
+
+### Q-11. Does docking lose more association than linking gives back?
+
+The anchor axis now runs ring -> unrolled -> docked, and each step trades
+adjacency for comparability: the unroll needs leaders, the dock needs linking
+([F-37](#f-37-a-docked-chart-needs-a-scale-that-does-not-know-where-the-lens-is)).
+Whether a docked strip with a fixed scale and brushing beats an unrolled lens
+with leaders is the same question as
+[Q-9](#q-9-which-reading-is-the-unroll-actually-better-for), one step further,
+and should be tested in the same study: ring, unrolled, docked-with-glyph and
+docked-as-brush, on a "find where X is unusually high" task, where the fixed
+scale should help most, and a "which way is X" task, where the ring should.

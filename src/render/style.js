@@ -43,6 +43,9 @@ export const DEFAULT_STYLE = {
   dimColor: 'rgba(248,247,244,0.62)',
 
   // Marks
+  // false draws the selection and nothing of the anchor — for when the chart
+  // is docked in a panel and the lens on the map is only a brush.
+  showChart: true,
   barWidth: 13,
   barRadius: 2,
   markOpacity: 0.92,

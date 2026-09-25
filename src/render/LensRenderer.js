@@ -76,6 +76,10 @@ export class LensRenderer {
     // outward normal; the rest trade adjacency for a common baseline direction
     // (docs/design-space.md 3.5).
     const orient = layout.marks?.orient ?? s.orient ?? 'normal';
+    // With the chart docked elsewhere, the lens on the map can be reduced to
+    // its selection: a pure brush. Everything that belongs to the anchor goes;
+    // the selection, and anything drawn inside it, stays.
+    const chart = s.showChart !== false;
 
     ctx.save();
 
@@ -109,11 +113,13 @@ export class LensRenderer {
     }
 
     // The anchor is a fixed-size instrument, so marks never jump on zoom.
-    ctx.beginPath();
-    this._tracePath(ctx, curve, ring, cx, cy);
-    ctx.strokeStyle = s.ringStroke;
-    ctx.lineWidth = s.ringWidth;
-    ctx.stroke();
+    if (chart) {
+      ctx.beginPath();
+      this._tracePath(ctx, curve, ring, cx, cy);
+      ctx.strokeStyle = s.ringStroke;
+      ctx.lineWidth = s.ringWidth;
+      ctx.stroke();
+    }
 
     // With 24+ sectors, labelling every bar is noise. In `auto` mode only bars
     // that carry the reading get a number.
@@ -131,7 +137,7 @@ export class LensRenderer {
     // they cross-fade rather than switch: a rose of ticks inside the ring is
     // unreadable once the ring is nearly straight, and an axis strung along a
     // full circle is just a second ring.
-    if (s.compass && geographic) {
+    if (chart && s.compass && geographic) {
       if (unroll < 0.45) this._drawCompass(ctx, cx, cy, ring, 1 - unroll / 0.45);
       if (unroll > 0.15) {
         this._drawBearingAxis(ctx, curve, Math.min(1, (unroll - 0.15) / 0.35));
@@ -140,7 +146,7 @@ export class LensRenderer {
 
     // One faint guide per concentric track, so a reader can tell which ring a
     // mark belongs to when tracks are close together.
-    if (ringLike) {
+    if (chart && ringLike) {
       const tracks = [...new Set(layout.bins.map((b) => b.ringOffset ?? 0))]
         .filter((t) => t > 0);
       for (const t of tracks) {
@@ -173,12 +179,12 @@ export class LensRenderer {
     // Spread means different things on the two anchors. On a ring it is spread
     // in bearing; on a corridor it is spread *across* the route, which is a
     // reading a disc has no equivalent for (docs/findings.md F-15).
-    if (!ringLike && (structure === 'spread' || structure === 'both')) {
+    if (chart && !ringLike && (structure === 'spread' || structure === 'both')) {
       for (const b of layout.bins) {
         this._drawLateral(ctx, b, layout, structureCurve, frame.corridorHalfWidthPx);
       }
     }
-    if (ringLike && (structure === 'spread' || structure === 'both')) {
+    if (chart && ringLike && (structure === 'spread' || structure === 'both')) {
       // Spread arcs of co-located bins land on top of each other, so with few
       // enough bins each gets its own concentric track. Past that they sit in
       // their own sectors already and staggering would only cost radius.
@@ -188,10 +194,15 @@ export class LensRenderer {
         this._drawSpread(ctx, b, layout, curve, track);
       });
     }
-    if (structure === 'inclusions' || structure === 'both') {
+    // A linked view asking about one bin gets that bin's members and no
+    // others, whatever the structure layer is set to: once the chart is
+    // docked, the members are the only association left
+    // (docs/findings.md F-37).
+    const focus = frame.focus ?? null;
+    if (focus != null || structure === 'inclusions' || structure === 'both') {
       this._drawInclusions(
         ctx, layout, structureCurve, cx, cy, selectionRadiusPx,
-        frame.corridorHalfWidthPx, ringLike,
+        frame.corridorHalfWidthPx, ringLike, focus,
       );
     }
     if (ringLike && (structure === 'gradient' || structure === 'both') && layout.structure) {
@@ -200,12 +211,14 @@ export class LensRenderer {
 
     // Association, under the marks and over the structure: a leader is context
     // for the mark it belongs to, never a reading of its own.
-    const led = this._drawLeaders(ctx, layout, curve, frame, orient, unroll);
+    if (chart) {
+      const led = this._drawLeaders(ctx, layout, curve, frame, orient, unroll);
 
-    for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, orient, led);
+      for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, orient, led);
 
-    if (s.showLabels) {
-      for (const b of layout.bins) this._drawLabel(ctx, b, layout, curve, orient);
+      if (s.showLabels) {
+        for (const b of layout.bins) this._drawLabel(ctx, b, layout, curve, orient);
+      }
     }
 
     // Draggable vertices, drawn last so they sit above the band. The adapter
@@ -582,7 +595,7 @@ export class LensRenderer {
    * a selection defined by geodesic distance that is the truthful frame, and it
    * keeps the renderer free of any map dependency (docs/findings.md F-12).
    */
-  _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx, ringLike = true) {
+  _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx, ringLike = true, only = null) {
     const s = this._s ?? this.style;
     // Members are placed in the lens's own azimuthal frame, which an unrolled
     // ring still has: the selection has not moved, only the chart around it.
@@ -605,8 +618,11 @@ export class LensRenderer {
     for (const bin of layout.bins) {
       const items = bin.items;
       if (!items || items.length === 0) continue;
+      if (only != null && bin.key !== only) continue;
 
-      const relative = (bin.count ?? 0) / peak;
+      // A single focused bin is not competing with denser ones, so it is not
+      // faded for its density.
+      const relative = only != null ? 0 : (bin.count ?? 0) / peak;
       ctx.fillStyle = colorFor(bin, layout, s);
       ctx.globalAlpha = (s.inclusionOpacity ?? 0.55) * (1 - 0.6 * relative);
 
@@ -942,6 +958,8 @@ export class LensRenderer {
 
   /** Which bin, if any, is under a canvas point. */
   hitTest(layout, frame, px, py) {
+    // Nothing drawn, nothing to hit: a brush-only lens has no marks to hover.
+    if (this.style.showChart === false) return null;
     const ring = frame.ringRadius ?? layout.ring.radius;
     const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
     // Match the level of detail the lens was painted at, so hit areas cannot

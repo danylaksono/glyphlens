@@ -64,6 +64,10 @@ export class LensOverlay {
     // unset field would make the first pointer move over empty map count as
     // one.
     this._hovered = null;
+    // A bin emphasised from outside — by a linked view such as a docked strip —
+    // rather than by the pointer on the map. Kept separate from `_hovered`, so
+    // that neither can clear the other.
+    this._linked = null;
     this._transition = null;
 
     this._mount();
@@ -244,6 +248,22 @@ export class LensOverlay {
     return result;
   }
 
+  /**
+   * Emphasise one bin from outside the map, as a linked view hovering its own
+   * mark would: its leader is drawn and, with `members`, its members are shown
+   * inside the selection. Pass null to clear.
+   *
+   * This is the half of linking a docked chart needs most, because docking
+   * spends the last of the association adjacency gave for free
+   * (docs/findings.md F-37).
+   */
+  highlight(key, { members = true } = {}) {
+    const next = key == null ? null : { key, members };
+    if (next?.key === this._linked?.key && next?.members === this._linked?.members) return;
+    this._linked = next;
+    this.repaint();
+  }
+
   state() {
     const settled = this.target ?? this.layout;
     return {
@@ -392,7 +412,12 @@ export class LensOverlay {
   repaint() {
     if (!this.layout || !this._css) return;
     this.ctx.clearRect(0, 0, this._css.w, this._css.h);
-    this.renderer.draw(this.ctx, this.layout, this.frame());
+    const frame = this.frame();
+    if (this._linked) {
+      frame.hovered = this._linked.key;
+      if (this._linked.members) frame.focus = this._linked.key;
+    }
+    this.renderer.draw(this.ctx, this.layout, frame);
   }
 
   _animateTo(next, duration = 320) {

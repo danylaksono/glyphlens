@@ -12,6 +12,8 @@ import { addLens } from '../../src/adapters/maplibre.js';
 import { CATEGORICAL } from '../../src/render/style.js';
 import { select } from '../../src/core/selection.js';
 import { elasticityProfile } from '../../src/core/distribution.js';
+import { studyArea, expectedValues, wholeValues, dockDomain } from '../../src/core/dock.js';
+import { DockRenderer } from '../../src/render/DockRenderer.js';
 
 import { BASEMAPS, DEFAULT_BASEMAP } from './basemaps.js';
 import { mountDisplay } from './display.js';
@@ -68,8 +70,16 @@ map.on('load', async () => {
     placement: { mode: 'morph', morph: 1 },
     marks: { type: 'bar', barWidth: 26, maxLength: 78, reserveLabels: true },
     style: { preset: 'paper', ringRadius: 152 },
-    onChange: (state) => updateReadout(state),
-    onHover: (bin, e) => showTooltip(bin, e),
+    onChange: (state) => {
+      updateReadout(state);
+      updateDock();
+    },
+    onHover: (bin, e) => {
+      showTooltip(bin, e);
+      // Linking runs both ways: a mark hovered on the map lights its bar.
+      dock.hovered = bin?.key ?? null;
+      drawDock();
+    },
   });
 
   renderLegend('categorical');
@@ -236,6 +246,8 @@ function bindControls() {
   });
 
   window.addEventListener('resize', () => drawProfile());
+
+  bindDock();
 
   $('draw').addEventListener('click', () => (drawing ? finishShape() : startDrawing()));
   $('reset-shape').addEventListener('click', backToDisc);
@@ -482,6 +494,166 @@ function drawProfile() {
   ctx.stroke();
 }
 
+// ------------------------------------------------------------ docked strip
+
+// The lens's chart, taken off the map (docs/findings.md F-37). The layout is
+// the lens's own and is never recomputed for the dock; what the dock adds is a
+// context to read it against and a scale that does not move with the lens.
+// Both depend on the instrument — data, size, binning, normalisation — and not
+// on where the lens is, so both are cached against a key that leaves the
+// centre out.
+const dock = {
+  renderer: new DockRenderer({ preset: 'paper' }),
+  mode: 'both',
+  data: null,
+  study: null,
+  domain: null,
+  domainKey: '',
+  timer: 0,
+  hovered: null,
+};
+
+function bindDock() {
+  $('dock-mode').addEventListener('change', (e) => setDockMode(e.target.value));
+  $('dock-context').addEventListener('change', () => updateDock());
+
+  const canvas = $('dock-canvas');
+  canvas.addEventListener('pointermove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const bin = dock.layout
+      && dock.renderer.hitTest(dock.layout, dock.frame, e.clientX - r.left, e.clientY - r.top);
+    const key = bin?.key ?? null;
+    if (key !== dock.hovered) {
+      dock.hovered = key;
+      // The other half of linking, and the half a docked chart needs: its
+      // members, drawn where they are.
+      lens.highlight(key);
+      drawDock();
+    }
+    showTooltip(bin, e);
+  });
+  canvas.addEventListener('pointerleave', () => {
+    dock.hovered = null;
+    lens.highlight(null);
+    showTooltip(null);
+    drawDock();
+  });
+  window.addEventListener('resize', () => drawDock());
+  setDockMode($('dock-mode').value);
+}
+
+function setDockMode(mode) {
+  dock.mode = mode;
+  const on = mode !== 'off';
+  $('dock').hidden = !on;
+  // Keep the lens clear of the dock: the map's centre moves up by its height.
+  map.setPadding({ top: 0, left: 0, right: 0, bottom: on ? $('dock').offsetHeight + 30 : 0 });
+  lens.update({ style: { showChart: mode !== 'brush' } });
+  if (!on) lens.highlight(null);
+  updateDock();
+}
+
+/** Where the strip is cut, and how much of it is bearing rather than category order. */
+function dockAxis(layout) {
+  const p = lens.options.placement ?? {};
+  const anchored = layout.bins.some((b) => b.bearing != null || b.meanBearing != null);
+  let u = 0;
+  if (anchored) u = p.mode === 'morph' ? Number(p.morph ?? 0) : p.mode === 'block' ? 0 : 1;
+  // In category order the seam goes at the start of the slots, so the strip
+  // reads as a sorted legend; in bearing order it goes at south, so north is
+  // in the middle as on the unrolled lens.
+  return { at: 0.5 * (1 - u), bearingAlpha: u };
+}
+
+function updateDock() {
+  if (!lens || dock.mode === 'off') return;
+  const layout = lens.target ?? lens.layout;
+  if (!layout) return;
+  const o = lens.options;
+
+  if (o.data !== dock.data) {
+    dock.data = o.data;
+    dock.study = studyArea({ data: o.data, getPosition: o.getPosition, category: (f) => f.category });
+  }
+
+  // `whole` only exists for counts of categories; say so rather than quietly
+  // drawing the expectation under its name.
+  const whole = wholeValues(layout, dock.study);
+  const option = $('dock-context').querySelector('option[value="whole"]');
+  option.disabled = !whole;
+  const kind = $('dock-context').value === 'whole' && whole ? 'whole' : 'expected';
+  const context = kind === 'whole' ? whole : expectedValues(layout, dock.study);
+  const lq = layout.normalisation.mode === 'lq';
+  $('dock-ghost-key').classList.toggle('solid', kind === 'whole');
+  // A quotient's context is its neutral line, not a bar.
+  $('dock-ghost-key').classList.toggle('line', lq);
+  $('dock-ghost-label').textContent = kind === 'whole'
+    ? 'whole study area'
+    : lq ? 'LQ 1 = like the surroundings' : 'expected if uniform';
+
+  const sel = o.selection;
+  const key = [
+    sel.type, sel.radius, sel.type === 'polygon' ? JSON.stringify(sel.rings) : '',
+    o.normalisation?.mode, o.binning?.mode, kind, o.data.length,
+  ].join('|');
+  if (key !== dock.domainKey) {
+    dock.domainKey = key;
+    const fit = () => {
+      dock.domain = dockDomain(
+        { ...o, center: o.center, ring: { radius: layout.ring.radius } },
+        dock.study,
+        { floor: context },
+      );
+      dock.domain.kind = kind;
+      drawDock();
+    };
+    // The first fit is immediate; later ones wait for a slider to settle,
+    // keeping the old scale meanwhile — which is the point of having one.
+    clearTimeout(dock.timer);
+    if (dock.domain) dock.timer = setTimeout(fit, 140);
+    else fit();
+  }
+
+  dock.layout = layout;
+  dock.context = context;
+  dock.kind = kind;
+  drawDock();
+}
+
+function drawDock() {
+  if (dock.mode === 'off' || !dock.layout || !dock.domain) return;
+  const canvas = $('dock-canvas');
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  dock.frame = {
+    width: w,
+    height: h,
+    domain: dock.domain.max,
+    context: dock.context,
+    contextKind: dock.kind,
+    ...dockAxis(dock.layout),
+    hovered: dock.hovered,
+    categories: CATEGORY_ORDER,
+  };
+  dock.renderer.draw(ctx, dock.layout, dock.frame);
+
+  const d = dock.domain;
+  const clipped = dock.layout.bins.some((b) => b.value > d.max);
+  $('dock-note').textContent = (d.bound === 'context'
+    ? 'Scale fixed to the whole study area, which no lens can exceed.'
+    : `Scale fixed for this lens size: the ${Math.round(d.percentile * 100)}th percentile of its`
+      + ` readings at ${d.samples} positions across the study area.`)
+    + (clipped ? ' ▲ marks a reading above it.' : '');
+}
+
 // ---------------------------------------------------------------- readout
 
 function updateReadout(state) {
@@ -522,7 +694,7 @@ function renderLegend(mode = 'angular') {
 
 function showTooltip(bin, e) {
   const el = $('tooltip');
-  if (!bin || !bin.count) {
+  if (!bin || !bin.count || !e) {
     el.hidden = true;
     return;
   }

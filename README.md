@@ -44,7 +44,7 @@ evidence and open questions is in [docs/findings.md](docs/findings.md).
 
 ```bash
 npm run dev     # -> http://localhost:5180/examples/
-npm test        # node --test (196 tests, no runtime dependencies)
+npm test        # node --test (214 tests, no runtime dependencies)
 npm run build   # -> dist/ browser bundles (rollup, a devDependency)
 ```
 
@@ -116,7 +116,7 @@ Drag the lens centre to move it, or its dashed edge to resize.
 | `marks.structure` | `none` · `spread` · `gradient` · `inclusions` · `both` | within-unit distribution (see below) |
 | `marks.structureFrame` | `unit` · `geographic` | once an anchor is straightened: do the members follow the unit, or stay on the map? |
 | `style.preset` | `paper` · `night` · `minimal` · `structure` · `forensic` | switchable at runtime |
-| `style` toggles | `showLabels` · `showValues` · `compass` · `dimExterior` · `ringRadius` · `labelGap` · `valueGap` | all live-updatable via `lens.update({ style })` |
+| `style` toggles | `showLabels` · `showValues` · `compass` · `dimExterior` · `ringRadius` · `labelGap` · `valueGap` · `showChart` | all live-updatable via `lens.update({ style })` |
 
 ### Unrolling: the same lens on a straight axis
 
@@ -142,6 +142,51 @@ requirement rather than a nicety
 ([F-28](docs/findings.md#f-28-a-straightened-anchor-is-a-cartogram-and-should-say-so)).
 The compass follows the marks across: at high curvature it becomes an axis of
 the same ticks and cardinals strung along the curve.
+
+### Docking: the same strip, off the map
+
+One step further along the same axis, the strip leaves the map for a panel —
+an external bar chart that updates as the lens moves. The layout is the lens's
+own; what the dock adds is a context behind each bar and a scale that belongs to
+the lens size, not to wherever the lens happens to be:
+
+```js
+import { addLens, studyArea, expectedValues, dockDomain, DockRenderer } from 'glyphlens';
+
+const study = studyArea({ data, getPosition, category: (f) => f.category });
+const strip = new DockRenderer();
+const ctx = canvas.getContext('2d');
+let domain; // refit when radius, data, binning or normalisation change, never on move
+let frame;
+
+function drawStrip() {
+  const layout = lens.target ?? lens.layout;
+  const context = expectedValues(layout, study);
+  domain ??= dockDomain(lens.options, study, { floor: context });
+  frame = { width: canvas.width, height: canvas.height, domain: domain.max, context };
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  strip.draw(ctx, layout, frame);
+}
+
+// `let`, not `const`: onChange fires once inside addLens, before `lens` is assigned.
+let lens;
+lens = addLens(map, {
+  ...config,
+  style: { showChart: false },            // optional: the lens on the map becomes a pure brush
+  onChange: () => lens && drawStrip(),
+});
+drawStrip();
+
+// Linking back: hovering a docked bar shows that bin's members on the map.
+canvas.addEventListener('pointermove', (e) => {
+  const bin = strip.hitTest(lens.target ?? lens.layout, frame, e.offsetX, e.offsetY);
+  lens.highlight(bin?.key ?? null);
+});
+```
+
+The [ring lens demo](examples/) has it docked under the map, with a switch
+between the expectation and the whole study area, and a brush-only mode
+([F-37](docs/findings.md#f-37-a-docked-chart-needs-a-scale-that-does-not-know-where-the-lens-is)).
 
 Independently, `marks.orient` says which way a mark grows — `normal` (outward,
 the default), `up` (screen vertical, one shared baseline) or `upright`

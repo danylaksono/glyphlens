@@ -82,6 +82,13 @@ export {
 } from './core/binning.js';
 export { normalise, profileOf, confidence } from './core/normalise.js';
 export {
+  studyArea,
+  expectedValues,
+  wholeValues,
+  dockDomain,
+  niceCeil,
+} from './core/dock.js';
+export {
   arealSelect,
   areaFractionInside,
   aggregate,
@@ -129,6 +136,7 @@ export {
   arcBasis,
   sampleCurve,
 } from './render/LensRenderer.js';
+export { DockRenderer } from './render/DockRenderer.js';
 export {
   DEFAULT_STYLE,
   PRESETS,

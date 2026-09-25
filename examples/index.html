@@ -119,6 +119,18 @@
          sitting just outside the rim.</p>
     </label>
 
+    <label class="field">
+      <span>Docked chart</span>
+      <select id="dock-mode">
+        <option value="both" selected>Docked, and on the lens</option>
+        <option value="brush">Docked; the lens is only a brush</option>
+        <option value="off">Off</option>
+      </select>
+      <p class="hint">The same bars, taken off the map. Their scale is fixed for
+         this lens size, so moving the lens changes the data under the bars
+         and nothing else. Hover a bar to see its members on the map.</p>
+    </label>
+
     <details class="field group" id="display" open></details>
 
     <div class="readout">
@@ -140,6 +152,20 @@
        Drag the lens centre to move it, or its dashed edge to resize.
        Data © OpenStreetMap contributors via Overpass.</p>
   </aside>
+
+  <section id="dock" class="dock" aria-label="Docked chart of the lens">
+    <header>
+      <strong>In the lens</strong>
+      <span class="dock-key"><i class="key-bar"></i>here</span>
+      <span class="dock-key"><i class="key-ghost" id="dock-ghost-key"></i><em id="dock-ghost-label">expected if uniform</em></span>
+      <select id="dock-context" aria-label="What the bars are read against">
+        <option value="expected" selected>vs. expected if uniform</option>
+        <option value="whole">vs. the whole study area</option>
+      </select>
+    </header>
+    <canvas id="dock-canvas"></canvas>
+    <p class="dock-note" id="dock-note"></p>
+  </section>
 
   <div id="tooltip" class="tooltip" hidden></div>
 

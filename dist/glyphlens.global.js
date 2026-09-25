@@ -333,7 +333,7 @@ var glyphlens = (function (exports) {
    */
 
 
-  const defaultGetPosition = (f) =>
+  const defaultGetPosition$1 = (f) =>
     Array.isArray(f) ? f : f.position ?? f.coordinates ?? [f.lng ?? f.lon ?? f.x, f.lat ?? f.y];
 
   /**
@@ -341,7 +341,7 @@ var glyphlens = (function (exports) {
    * @param {[number, number]} selection.center  [lng, lat]
    * @returns {(features: any[], opts?: object) => { items: any[], area: number }}
    */
-  function select(features, selection, { getPosition = defaultGetPosition } = {}) {
+  function select(features, selection, { getPosition = defaultGetPosition$1 } = {}) {
     if (selection.type === 'corridor') return selectCorridor(features, selection, { getPosition });
     if (selection.type === 'polygon') return selectPolygon(features, selection, { getPosition });
 
@@ -370,7 +370,7 @@ var glyphlens = (function (exports) {
    * `bearing` is the direction of travel at the closest point, so a corridor can
    * still drive the angular modes if a caller wants them.
    */
-  function selectCorridor(features, selection, { getPosition = defaultGetPosition } = {}) {
+  function selectCorridor(features, selection, { getPosition = defaultGetPosition$1 } = {}) {
     const { path, width = 400 } = selection;
     if (!path || path.length < 2) return { items: [], area: 0 };
 
@@ -407,7 +407,7 @@ var glyphlens = (function (exports) {
    * reading: bearings are relative to it, so a caller with a better anchor — the
    * point an isochrone was generated from, say — should pass it.
    */
-  function selectPolygon(features, selection, { getPosition = defaultGetPosition } = {}) {
+  function selectPolygon(features, selection, { getPosition = defaultGetPosition$1 } = {}) {
     const rings = normaliseRings(selection);
     if (!rings.length) return { items: [], area: 0 };
 
@@ -504,7 +504,7 @@ var glyphlens = (function (exports) {
    * See docs/design-space.md 3.7.
    */
   function selectComplement(features, selection, options = {}) {
-    const { getPosition = defaultGetPosition, contextRadius = Infinity } = options;
+    const { getPosition = defaultGetPosition$1, contextRadius = Infinity } = options;
     const { center } = selection;
     const items = [];
     const rings = selection.type === 'polygon' ? normaliseRings(selection) : null;
@@ -3495,6 +3495,9 @@ var glyphlens = (function (exports) {
     dimColor: 'rgba(248,247,244,0.62)',
 
     // Marks
+    // false draws the selection and nothing of the anchor — for when the chart
+    // is docked in a panel and the lens on the map is only a brush.
+    showChart: true,
     barWidth: 13,
     barRadius: 2,
     markOpacity: 0.92,
@@ -3785,6 +3788,10 @@ var glyphlens = (function (exports) {
       // outward normal; the rest trade adjacency for a common baseline direction
       // (docs/design-space.md 3.5).
       const orient = layout.marks?.orient ?? s.orient ?? 'normal';
+      // With the chart docked elsewhere, the lens on the map can be reduced to
+      // its selection: a pure brush. Everything that belongs to the anchor goes;
+      // the selection, and anything drawn inside it, stays.
+      const chart = s.showChart !== false;
 
       ctx.save();
 
@@ -3818,11 +3825,13 @@ var glyphlens = (function (exports) {
       }
 
       // The anchor is a fixed-size instrument, so marks never jump on zoom.
-      ctx.beginPath();
-      this._tracePath(ctx, curve, ring, cx, cy);
-      ctx.strokeStyle = s.ringStroke;
-      ctx.lineWidth = s.ringWidth;
-      ctx.stroke();
+      if (chart) {
+        ctx.beginPath();
+        this._tracePath(ctx, curve, ring, cx, cy);
+        ctx.strokeStyle = s.ringStroke;
+        ctx.lineWidth = s.ringWidth;
+        ctx.stroke();
+      }
 
       // With 24+ sectors, labelling every bar is noise. In `auto` mode only bars
       // that carry the reading get a number.
@@ -3840,7 +3849,7 @@ var glyphlens = (function (exports) {
       // they cross-fade rather than switch: a rose of ticks inside the ring is
       // unreadable once the ring is nearly straight, and an axis strung along a
       // full circle is just a second ring.
-      if (s.compass && geographic) {
+      if (chart && s.compass && geographic) {
         if (unroll < 0.45) this._drawCompass(ctx, cx, cy, ring, 1 - unroll / 0.45);
         if (unroll > 0.15) {
           this._drawBearingAxis(ctx, curve, Math.min(1, (unroll - 0.15) / 0.35));
@@ -3849,7 +3858,7 @@ var glyphlens = (function (exports) {
 
       // One faint guide per concentric track, so a reader can tell which ring a
       // mark belongs to when tracks are close together.
-      if (ringLike) {
+      if (chart && ringLike) {
         const tracks = [...new Set(layout.bins.map((b) => b.ringOffset ?? 0))]
           .filter((t) => t > 0);
         for (const t of tracks) {
@@ -3882,12 +3891,12 @@ var glyphlens = (function (exports) {
       // Spread means different things on the two anchors. On a ring it is spread
       // in bearing; on a corridor it is spread *across* the route, which is a
       // reading a disc has no equivalent for (docs/findings.md F-15).
-      if (!ringLike && (structure === 'spread' || structure === 'both')) {
+      if (chart && !ringLike && (structure === 'spread' || structure === 'both')) {
         for (const b of layout.bins) {
           this._drawLateral(ctx, b, layout, structureCurve, frame.corridorHalfWidthPx);
         }
       }
-      if (ringLike && (structure === 'spread' || structure === 'both')) {
+      if (chart && ringLike && (structure === 'spread' || structure === 'both')) {
         // Spread arcs of co-located bins land on top of each other, so with few
         // enough bins each gets its own concentric track. Past that they sit in
         // their own sectors already and staggering would only cost radius.
@@ -3897,10 +3906,15 @@ var glyphlens = (function (exports) {
           this._drawSpread(ctx, b, layout, curve, track);
         });
       }
-      if (structure === 'inclusions' || structure === 'both') {
+      // A linked view asking about one bin gets that bin's members and no
+      // others, whatever the structure layer is set to: once the chart is
+      // docked, the members are the only association left
+      // (docs/findings.md F-37).
+      const focus = frame.focus ?? null;
+      if (focus != null || structure === 'inclusions' || structure === 'both') {
         this._drawInclusions(
           ctx, layout, structureCurve, cx, cy, selectionRadiusPx,
-          frame.corridorHalfWidthPx, ringLike,
+          frame.corridorHalfWidthPx, ringLike, focus,
         );
       }
       if (ringLike && (structure === 'gradient' || structure === 'both') && layout.structure) {
@@ -3909,12 +3923,14 @@ var glyphlens = (function (exports) {
 
       // Association, under the marks and over the structure: a leader is context
       // for the mark it belongs to, never a reading of its own.
-      const led = this._drawLeaders(ctx, layout, curve, frame, orient, unroll);
+      if (chart) {
+        const led = this._drawLeaders(ctx, layout, curve, frame, orient, unroll);
 
-      for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, orient, led);
+        for (const b of layout.bins) this._drawMark(ctx, b, layout, curve, orient, led);
 
-      if (s.showLabels) {
-        for (const b of layout.bins) this._drawLabel(ctx, b, layout, curve, orient);
+        if (s.showLabels) {
+          for (const b of layout.bins) this._drawLabel(ctx, b, layout, curve, orient);
+        }
       }
 
       // Draggable vertices, drawn last so they sit above the band. The adapter
@@ -4291,7 +4307,7 @@ var glyphlens = (function (exports) {
      * a selection defined by geodesic distance that is the truthful frame, and it
      * keeps the renderer free of any map dependency (docs/findings.md F-12).
      */
-    _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx, ringLike = true) {
+    _drawInclusions(ctx, layout, curve, cx, cy, selectionRadiusPx, halfWidthPx, ringLike = true, only = null) {
       const s = this._s ?? this.style;
       // Members are placed in the lens's own azimuthal frame, which an unrolled
       // ring still has: the selection has not moved, only the chart around it.
@@ -4314,8 +4330,11 @@ var glyphlens = (function (exports) {
       for (const bin of layout.bins) {
         const items = bin.items;
         if (!items || items.length === 0) continue;
+        if (only != null && bin.key !== only) continue;
 
-        const relative = (bin.count ?? 0) / peak;
+        // A single focused bin is not competing with denser ones, so it is not
+        // faded for its density.
+        const relative = only != null ? 0 : (bin.count ?? 0) / peak;
         ctx.fillStyle = colorFor(bin, layout, s);
         ctx.globalAlpha = (s.inclusionOpacity ?? 0.55) * (1 - 0.6 * relative);
 
@@ -4645,12 +4664,14 @@ var glyphlens = (function (exports) {
       ctx.fillStyle = s.valueColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(formatValue(bin), x, y);
+      ctx.fillText(formatValue$1(bin), x, y);
       ctx.restore();
     }
 
     /** Which bin, if any, is under a canvas point. */
     hitTest(layout, frame, px, py) {
+      // Nothing drawn, nothing to hit: a brush-only lens has no marks to hover.
+      if (this.style.showChart === false) return null;
       const ring = frame.ringRadius ?? layout.ring.radius;
       const curve = frame.curve ?? circleCurve(frame.cx, frame.cy, ring);
       // Match the level of detail the lens was painted at, so hit areas cannot
@@ -4894,7 +4915,7 @@ var glyphlens = (function (exports) {
     ctx.restore();
   }
 
-  function formatValue(bin) {
+  function formatValue$1(bin) {
     const v = bin.value;
     if (!Number.isFinite(v)) return '–';
     if (bin.unit === 'LQ') return v.toFixed(1);
@@ -5159,6 +5180,10 @@ var glyphlens = (function (exports) {
       // unset field would make the first pointer move over empty map count as
       // one.
       this._hovered = null;
+      // A bin emphasised from outside — by a linked view such as a docked strip —
+      // rather than by the pointer on the map. Kept separate from `_hovered`, so
+      // that neither can clear the other.
+      this._linked = null;
       this._transition = null;
 
       this._mount();
@@ -5339,6 +5364,22 @@ var glyphlens = (function (exports) {
       return result;
     }
 
+    /**
+     * Emphasise one bin from outside the map, as a linked view hovering its own
+     * mark would: its leader is drawn and, with `members`, its members are shown
+     * inside the selection. Pass null to clear.
+     *
+     * This is the half of linking a docked chart needs most, because docking
+     * spends the last of the association adjacency gave for free
+     * (docs/findings.md F-37).
+     */
+    highlight(key, { members = true } = {}) {
+      const next = key == null ? null : { key, members };
+      if (next?.key === this._linked?.key && next?.members === this._linked?.members) return;
+      this._linked = next;
+      this.repaint();
+    }
+
     state() {
       const settled = this.target ?? this.layout;
       return {
@@ -5487,7 +5528,12 @@ var glyphlens = (function (exports) {
     repaint() {
       if (!this.layout || !this._css) return;
       this.ctx.clearRect(0, 0, this._css.w, this._css.h);
-      this.renderer.draw(this.ctx, this.layout, this.frame());
+      const frame = this.frame();
+      if (this._linked) {
+        frame.hovered = this._linked.key;
+        if (this._linked.members) frame.focus = this._linked.key;
+      }
+      this.renderer.draw(this.ctx, this.layout, frame);
     }
 
     _animateTo(next, duration = 320) {
@@ -5977,9 +6023,531 @@ var glyphlens = (function (exports) {
     return new FieldOverlay(map, options);
   }
 
+  /**
+   * The docked anchor: the lens's chart, taken off the map.
+   *
+   * The anchor axis runs ring -> arc -> straight baseline (docs/design-space.md
+   * §3.4b). Docking is the next step along it: the same straight strip, drawn in
+   * a panel instead of beside the selection. Nothing upstream changes: placement
+   * reserves each mark's room as a fraction of the curve, so a strip of any
+   * length accepts the solved layout, exactly as an unrolled ring does.
+   *
+   * What does change is what the chart can be read against. On the map a lens is
+   * read against the map around it. Docked, it has lost that, and it needs two
+   * things a lens beside its own selection never did:
+   *
+   *   - a **context**: what this lens would read if the study area were
+   *     uniform, drawn behind each mark, so moving the lens is a scan for
+   *     deviation rather than a chart that keeps rewriting itself;
+   *   - a **fixed scale**: the lens's own marks are scaled to the largest
+   *     value *in that lens*, which is right for a glyph and wrong for a chart
+   *     whose bars are meant to be compared from one position to the next.
+   *
+   * Both are properties of the instrument (the data, the selection's size and
+   * shape, the binning, the normalisation) and never of where the lens is. That
+   * is the rule this module keeps: everything here is computed once per
+   * instrument and reused as the lens moves (docs/findings.md F-37).
+   */
+
+
+  const defaultGetPosition = (f) => [f.lng ?? f.lon, f.lat];
+
+  /**
+   * The study area a dataset implies, and how its members are distributed
+   * across categories.
+   *
+   * With no boundary supplied, the study area is the convex hull of the data —
+   * the same answer the relaxed lattice gives when nobody has drawn one
+   * (docs/findings.md F-35). A hull overstates the area of a concave dataset, so
+   * pass `boundary` where there is a real one.
+   *
+   * @param {object} config
+   * @param {any[]} config.data
+   * @param {(f) => [number, number]} [config.getPosition]
+   * @param {(f) => string} [config.category]
+   * @param {Array<Array<[number, number]>>} [config.boundary]  rings, if known
+   */
+  function studyArea({ data = [], getPosition = defaultGetPosition, category, boundary } = {}) {
+    const positions = [];
+    const byCategory = {};
+    for (const f of data) {
+      const p = getPosition(f);
+      if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) continue;
+      positions.push(p);
+      if (category) {
+        const c = String(category(f));
+        byCategory[c] = (byCategory[c] ?? 0) + 1;
+      }
+    }
+    const rings = boundary ?? (positions.length >= 3 ? [hullOf(positions)] : []);
+    const areaKm2 = rings.length ? polygonArea(rings) : 0;
+    return {
+      rings,
+      areaKm2,
+      count: positions.length,
+      byCategory,
+      centroid: rings.length ? polygonCentroid(rings) : null,
+    };
+  }
+
+  /**
+   * The area a bin covers, in km².
+   *
+   * A distance band states its own; a bearing sector is its share of the lens;
+   * a category occupies the whole lens, since its members can be anywhere in it.
+   */
+  function binArea(bin, layout) {
+    if (Number.isFinite(bin.areaKm2)) return bin.areaKm2;
+    const lens = layout.stats?.areaKm2 ?? 0;
+    const mode = layout.binning?.mode;
+    if (mode === 'angular' || mode === 'cross') return lens / (layout.binning.bins ?? 24);
+    return lens;
+  }
+
+  /**
+   * What each bin would read if the study area were uniform — every category at
+   * its study-area density, everywhere.
+   *
+   * Depends on the size and shape of the selection and not on its position,
+   * which is what lets it sit still behind marks that move. Keyed by bin key.
+   *
+   * For an intensive reading (share, density, lq) this is also the reading of
+   * the study area as a whole. Only a count differs, because a count is the one
+   * measure that scales with the area it is taken over (docs/findings.md F-21) —
+   * which is why `wholeValues` exists alongside this and only for counts.
+   *
+   * Returns null where the null model says nothing useful (`z`, `delta`).
+   */
+  function expectedValues(layout, study) {
+    const mode = layout?.normalisation?.mode ?? 'count';
+    const out = new Map();
+    if (!layout?.bins || !(study?.areaKm2 > 0)) return null;
+    if (mode === 'z' || mode === 'delta') return null;
+
+    const densityOf = (b) =>
+      (b.category != null && study.byCategory[b.category] != null
+        ? study.byCategory[b.category]
+        : b.category != null ? 0 : study.count) / study.areaKm2;
+
+    if (mode === 'lq') {
+      // A location quotient is 1 by construction wherever the mix is the study
+      // area's own.
+      for (const b of layout.bins) out.set(b.key, 1);
+      return out;
+    }
+    if (mode === 'density') {
+      for (const b of layout.bins) out.set(b.key, densityOf(b));
+      return out;
+    }
+
+    const raw = layout.bins.map((b) => densityOf(b) * binArea(b, layout));
+    const total = raw.reduce((s, v) => s + v, 0);
+    layout.bins.forEach((b, i) => {
+      out.set(b.key, mode === 'share' ? (total > 0 ? raw[i] / total : 0) : raw[i]);
+    });
+    return out;
+  }
+
+  /**
+   * The whole study area's count for each bin: the crossfilter reading, where
+   * the lens highlights its part of a bar that stands for everything.
+   *
+   * Only defined for counts of categories. A share, a density or a quotient of
+   * the whole study area is the same number as its expectation, and a bearing
+   * sector of the whole study area depends on where the lens is — so there is
+   * no whole to be a part of.
+   */
+  function wholeValues(layout, study) {
+    if ((layout?.normalisation?.mode ?? 'count') !== 'count') return null;
+    if (!layout?.bins?.length || layout.binning?.mode !== 'categorical') return null;
+    const out = new Map();
+    for (const b of layout.bins) out.set(b.key, study.byCategory[b.category] ?? 0);
+    return out;
+  }
+
+  /**
+   * A fixed value scale for a docked strip.
+   *
+   * Sampled, not derived: the lens is placed at centres across the study area
+   * with its current size, shape, binning and normalisation, and the scale is
+   * the `percentile` of the readings it gets there. It is therefore the range
+   * this instrument can actually reach, which a scale fitted to one position
+   * cannot know and a scale fitted to the study area as a whole overstates for a
+   * count by the ratio of the two areas.
+   *
+   * Readings above it are clipped, and a strip should say so. A percentile below
+   * 1 is deliberate: one freak position should not flatten every other. Nor
+   * does a position holding fewer than `minCount` members get a say, for the
+   * reason F-17 gives: a share or a quotient of three places is arithmetic, not
+   * geography, and a small lens sampled at its emptiest would set the scale by
+   * its noise. If too few positions qualify, all of them are used.
+   *
+   * @param {object} config        the lens config, as `computeLens` takes it
+   * @param {object} study         from `studyArea`
+   * @param {object} [options]
+   * @param {number} [options.percentile=0.95]
+   * @param {number} [options.maxSamples=160]  caps cost when the lens is small
+   * @param {number} [options.minCount=30]     members a position needs to count
+   * @param {Map}    [options.floor]           values the scale must include, e.g.
+   *   the context; without it a ghost bar can be taller than the chart
+   * @returns {{ max: number, samples: number, percentile: number, bound: 'samples'|'context' }}
+   *   `bound` says which set the scale: the sampled readings, or the floor —
+   *   the whole study area's counts always outgrow any one lens's.
+   */
+  function dockDomain(config, study, {
+    percentile = 0.95, maxSamples = 160, minCount = 30, floor,
+  } = {}) {
+    const floorMax = floor ? Math.max(0, ...[...floor.values()].filter(Number.isFinite)) : 0;
+    const fallback = { max: niceCeil(floorMax || 1), samples: 0, percentile, bound: 'context' };
+    if (!study?.rings?.length || !(study.areaKm2 > 0)) return fallback;
+
+    const outer = study.rings[0];
+    const centroid = study.centroid;
+    const reach = Math.max(...outer.map((p) => distance(centroid, p)));
+
+    // The lens's own linear size sets the natural spacing. Below it the samples
+    // overlap so heavily they add nothing but cost.
+    const selection = config.selection ?? { type: 'disc', radius: 800 };
+    const polygon = selection.type === 'polygon' ? normaliseRings(selection) : null;
+    const size = polygon
+      ? Math.sqrt(Math.max(selectionArea(selection), 1e-6)) * 1000
+      : selection.radius ?? 800;
+    const floorSpacing = Math.sqrt((study.areaKm2 * 1e6) / (maxSamples * 0.866));
+    const spacing = Math.max(size, floorSpacing);
+
+    const centres = lattice({ kind: 'hex', center: centroid, radius: reach, spacing })
+      .centres.filter((c) => pointInPolygon(c, study.rings));
+    if (centres.length === 0) return fallback;
+
+    const origin = polygon ? polygonCentroid(polygon) : null;
+    const readings = [];
+    for (const c of centres) {
+      const sel = polygon
+        ? { type: 'polygon', rings: polygon.map((ring) => ring.map(([x, y]) => [x + c[0] - origin[0], y + c[1] - origin[1]])) }
+        : selection;
+      const layout = computeLens({
+        ...config,
+        center: polygon ? undefined : c,
+        selection: sel,
+        // Only values are wanted; the cheapest placement will do.
+        placement: { mode: 'block' },
+        ring: config.ring ?? { radius: 100 },
+      });
+      readings.push(layout);
+    }
+
+    const qualified = readings.filter((l) => l.stats.count >= minCount);
+    const used = qualified.length >= 5 ? qualified : readings;
+    const perKey = new Map();
+    for (const layout of used) {
+      for (const b of layout.bins) {
+        if (!Number.isFinite(b.value)) continue;
+        if (!perKey.has(b.key)) perKey.set(b.key, []);
+        perKey.get(b.key).push(b.value);
+      }
+    }
+
+    let sampled = 0;
+    for (const values of perKey.values()) {
+      values.sort((a, b) => a - b);
+      const i = Math.min(values.length - 1, Math.floor(percentile * (values.length - 1)));
+      sampled = Math.max(sampled, values[i]);
+    }
+    return {
+      max: niceCeil(Math.max(sampled, floorMax) || 1),
+      samples: used.length,
+      percentile,
+      bound: floorMax > sampled ? 'context' : 'samples',
+    };
+  }
+
+  /** Round up to 1, 2, 2.5 or 5 times a power of ten, so gridlines land on round numbers. */
+  function niceCeil(v) {
+    if (!(v > 0)) return 1;
+    const p = 10 ** Math.floor(Math.log10(v));
+    for (const m of [1, 2, 2.5, 5, 10]) {
+      if (v <= m * p * (1 + 1e-9)) return m * p;
+    }
+    return 10 * p;
+  }
+
+  /**
+   * Canvas renderer for a docked strip — a lens layout drawn off the map.
+   *
+   * This is the unrolled anchor of docs/design-space.md §3.4b, taken one step
+   * further: a straight baseline, as `unroll = 1` draws, but in a panel rather
+   * than beside the selection. The layout is not recomputed. Placement reserved
+   * each mark's room as a fraction of the curve, so the strip scales those
+   * fractions to its own width and the marks cannot overlap here if they did not
+   * overlap on the ring.
+   *
+   * Two things differ from the lens renderer, deliberately:
+   *
+   *   - **The scale is supplied, not derived.** A lens scales its marks to its
+   *     own largest value, which is right for a glyph and wrong for a chart
+   *     that is watched while the lens moves — every bar would change length
+   *     for reasons that have nothing to do with the data under it. The caller
+   *     passes `domain`, which should depend on the instrument and not on the
+   *     position (see `dockDomain` in core/dock.js).
+   *   - **Colour is by category, never by value.** The lens uses a diverging
+   *     ramp for quotients, fitted to the lens; fitted colour has the same
+   *     problem as a fitted scale.
+   *
+   * Like `LensRenderer` it holds no state: give it a layout and a frame, it
+   * paints.
+   */
+
+
+  class DockRenderer {
+    constructor(style = {}) {
+      this.style = resolveStyle(style);
+    }
+
+    setStyle(style) {
+      this.style = resolveStyle({ ...this.style, ...style });
+    }
+
+    /**
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {object} layout  from `computeLens`
+     * @param {object} frame
+     * @param {number} frame.width            canvas CSS px
+     * @param {number} frame.height
+     * @param {number} frame.domain           the value at the top of the plot
+     * @param {Map}    [frame.context]        key -> context value, drawn behind each mark
+     * @param {'expected'|'whole'} [frame.contextKind]  a model is outlined dashed, data solid
+     * @param {number} [frame.at=0]           the parameter held fixed; the seam is opposite
+     * @param {number} [frame.bearingAlpha=0] how visible the compass axis is
+     * @param {string} [frame.hovered]        key of the emphasised mark
+     * @param {string[]} [frame.categories]   fixes colour order
+     */
+    draw(ctx, layout, frame) {
+      const s = this.style;
+      const g = geometry(frame);
+      const domain = frame.domain > 0 ? frame.domain : 1;
+      const yOf = (v) => g.base - Math.min(1, Math.max(0, v / domain)) * g.plotH;
+      const bins = layout?.bins ?? [];
+      const labelled = bins.length <= (s.maxLabels ?? 12);
+      const anyHover = frame.hovered != null && bins.some((b) => b.key === frame.hovered);
+
+      ctx.save();
+      ctx.font = s.font;
+
+      // Gridlines at round fractions of a fixed domain. They are the evidence
+      // that the scale is not moving, so they are always drawn.
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (const u of [0, 0.5, 1]) {
+        const y = g.base - u * g.plotH;
+        ctx.beginPath();
+        ctx.moveTo(g.x0, y);
+        ctx.lineTo(g.x1, y);
+        ctx.strokeStyle = u === 0 ? s.ringStroke : 'rgba(20,20,25,0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(20,20,25,0.5)';
+        ctx.fillText(formatTick(u * domain), g.x0 - 6, y);
+      }
+
+      // A quotient's neutral value is a reading in its own right.
+      const neutral = layout?.scale?.neutral;
+      if (neutral > 0 && neutral < domain) {
+        const y = yOf(neutral);
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(g.x0, y);
+        ctx.lineTo(g.x1, y);
+        ctx.strokeStyle = 'rgba(20,20,25,0.45)';
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Everything on the strip is clipped to it: a mark straddling the seam is
+      // drawn at both ends, as the unrolled ring would cut it.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(g.x0, 0, g.plotW, frame.height);
+      ctx.clip();
+
+      for (const b of bins) {
+        const colour = colourOf(b, frame, s);
+        const w = markWidth(b, g);
+        const faded = anyHover && b.key !== frame.hovered;
+        const ctxValue = frame.context?.get(b.key);
+        const top = yOf(b.value);
+        const clipped = Number.isFinite(b.value) ? b.value > domain : b.value === Infinity;
+
+        for (const x of copies(b, frame, g)) {
+          // Context behind the mark, a little wider, so the mark reads as filling
+          // it — the highlighter reading.
+          if (Number.isFinite(ctxValue) && !(neutral > 0 && ctxValue === neutral)) {
+            const cy = yOf(ctxValue);
+            ctx.save();
+            ctx.globalAlpha = faded ? 0.4 : 1;
+            ctx.fillStyle = 'rgba(20,20,25,0.06)';
+            ctx.fillRect(x - w / 2 - 3, cy, w + 6, g.base - cy);
+            ctx.strokeStyle = 'rgba(20,20,25,0.45)';
+            ctx.lineWidth = 1;
+            // A model is not an observation, and should not be drawn as one.
+            if (frame.contextKind !== 'whole') ctx.setLineDash([3, 2]);
+            ctx.strokeRect(x - w / 2 - 3 + 0.5, cy + 0.5, w + 5, g.base - cy);
+            ctx.restore();
+          }
+
+          if (b.value > 0 || b.value === Infinity) {
+            ctx.globalAlpha = faded ? 0.3 : s.markOpacity;
+            ctx.fillStyle = colour;
+            ctx.fillRect(x - w / 2, top, w, g.base - top);
+            ctx.globalAlpha = 1;
+            if (clipped) {
+              // Off the top of a fixed scale: say so rather than pretend it fits.
+              ctx.beginPath();
+              ctx.moveTo(x - 4, g.top + 2);
+              ctx.lineTo(x + 4, g.top + 2);
+              ctx.lineTo(x, g.top - 4);
+              ctx.closePath();
+              ctx.fillStyle = s.valueColor;
+              ctx.fill();
+            }
+          }
+
+          const hot = b.key === frame.hovered;
+          if (labelled || hot) {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.font = s.valueFont;
+            ctx.fillStyle = s.valueColor;
+            ctx.globalAlpha = faded ? 0.35 : 1;
+            const label = formatValue(b);
+            ctx.fillText(label, x, Math.max(g.top + 10, (clipped ? g.top : top) - 3));
+            ctx.font = s.font;
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = s.labelColor;
+            ctx.fillText(String(b.label ?? b.key), x, g.base + 4);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+      ctx.restore();
+
+      // The compass as an axis — the same legend the unrolled lens strings along
+      // its baseline (docs/findings.md F-30), faded to nothing where the strip is
+      // in category order and bearing means nothing.
+      const alpha = frame.bearingAlpha ?? 0;
+      if (alpha > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = s.compassColor;
+        ctx.fillStyle = 'rgba(20,20,25,0.55)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const names = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' };
+        for (let deg = 0; deg < 360; deg += 45) {
+          const f = wrap01(deg / 360 - seamOf(frame));
+          const xs = [g.x0 + f * g.plotW];
+          if (f < 1e-6) xs.push(g.x1); // the seam: both ends are the same bearing
+          for (const x of xs) {
+            ctx.beginPath();
+            ctx.moveTo(x, g.base);
+            ctx.lineTo(x, g.base + (names[deg] ? 6 : 3));
+            ctx.stroke();
+            if (names[deg]) ctx.fillText(names[deg], x, g.base + 19);
+          }
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    /** The bin whose mark (or the column above its label) is under the point. */
+    hitTest(layout, frame, px, py) {
+      const g = geometry(frame);
+      if (px < g.x0 || px > g.x1 || py < 0 || py > g.base + 18) return null;
+      let best = null;
+      let bestD = Infinity;
+      for (const b of layout?.bins ?? []) {
+        const reach = markWidth(b, g) / 2 + 4;
+        for (const x of copies(b, frame, g)) {
+          const d = Math.abs(px - x);
+          if (d <= reach && d < bestD) {
+            best = b;
+            bestD = d;
+          }
+        }
+      }
+      return best;
+    }
+  }
+
+  // ------------------------------------------------------------------ helpers
+
+  function geometry(frame) {
+    const left = 40;
+    const right = 12;
+    const top = 18;
+    const bottom = (frame.bearingAlpha ?? 0) > 0.01 ? 36 : 22;
+    const x0 = left;
+    const x1 = Math.max(left + 1, frame.width - right);
+    const base = Math.max(top + 1, frame.height - bottom);
+    return { x0, x1, plotW: x1 - x0, top, base, plotH: base - top };
+  }
+
+  /** Where the strip is cut: opposite the parameter held fixed, as `arcCurve` does. */
+  const seamOf = (frame) => wrap01((frame.at ?? 0) + 0.5);
+
+  /**
+   * A mark is as wide as the room placement reserved for it, less a margin.
+   *
+   * On the ring that room holds a label beside the bar; on the strip the label
+   * goes underneath, so the room is free for the bar itself. Scaling the
+   * reservation, rather than the bar's own pixel width, is what keeps the
+   * non-overlap guarantee on a strip of a different length.
+   */
+  function markWidth(bin, g) {
+    const reserved = 2 * (bin.halfWidth ?? 0.01) * g.plotW;
+    return Math.max(3, Math.min(64, reserved * 0.72));
+  }
+
+  /** The x positions a mark is drawn at: once, or twice if it straddles the seam. */
+  function copies(bin, frame, g) {
+    const f = wrap01((bin.t ?? 0) - seamOf(frame));
+    const x = g.x0 + f * g.plotW;
+    const half = markWidth(bin, g) / 2 + 3;
+    const out = [x];
+    if (x - half < g.x0) out.push(x + g.plotW);
+    if (x + half > g.x1) out.push(x - g.plotW);
+    return out;
+  }
+
+  function colourOf(bin, frame, s) {
+    if (bin.color) return bin.color;
+    if (bin.category == null) return s.markColor ?? s.palette[0];
+    const i = frame.categories?.indexOf(bin.category) ?? -1;
+    return s.palette[(i < 0 ? 0 : i) % s.palette.length];
+  }
+
+  function formatTick(v) {
+    if (v === 0) return '0';
+    if (v >= 100) return Math.round(v).toLocaleString();
+    return String(Number(v.toPrecision(3)));
+  }
+
+  function formatValue(bin) {
+    const v = bin.value;
+    if (v === Infinity) return '∞';
+    if (!Number.isFinite(v)) return '–';
+    const unit = bin.unit;
+    if (unit === 'share') return `${Math.round(v * 100)}%`;
+    if (unit === 'count') return Math.round(v).toLocaleString();
+    return v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(v >= 10 ? 0 : v >= 1 ? 1 : 2);
+  }
+
   exports.CATEGORICAL = CATEGORICAL;
   exports.DEFAULT_STYLE = DEFAULT_STYLE;
   exports.DIVERGING = DIVERGING;
+  exports.DockRenderer = DockRenderer;
   exports.FieldOverlay = FieldOverlay;
   exports.LATTICES = LATTICES;
   exports.LensOverlay = LensOverlay;
@@ -6017,9 +6585,11 @@ var glyphlens = (function (exports) {
   exports.delaunay = delaunay;
   exports.describeBins = describeBins;
   exports.describeDistribution = describeDistribution;
+  exports.dockDomain = dockDomain;
   exports.drawArcText = drawArcText;
   exports.elasticity = elasticity;
   exports.elasticityProfile = elasticityProfile;
+  exports.expectedValues = expectedValues;
   exports.fieldBaseline = fieldBaseline;
   exports.fitNecklaceScale = fitNecklaceScale;
   exports.fitNodeBudget = fitNodeBudget;
@@ -6039,6 +6609,7 @@ var glyphlens = (function (exports) {
   exports.markAxes = markAxes;
   exports.nearestSite = nearestSite;
   exports.nearestSpacing = nearestSpacing;
+  exports.niceCeil = niceCeil;
   exports.normalise = normalise;
   exports.normaliseRings = normaliseRings;
   exports.pathFromGeoJSON = pathFromGeoJSON;
@@ -6061,9 +6632,11 @@ var glyphlens = (function (exports) {
   exports.spacingForCount = spacingForCount;
   exports.spatialIndex = spatialIndex;
   exports.straightenPath = straightenPath;
+  exports.studyArea = studyArea;
   exports.touchingRadius = touchingRadius;
   exports.voronoiCells = voronoiCells;
   exports.voronoiFromDelaunay = voronoiFromDelaunay;
+  exports.wholeValues = wholeValues;
   exports.wrap01 = wrap01;
 
   return exports;
