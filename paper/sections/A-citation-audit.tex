@@ -3,7 +3,7 @@
 \section*{Appendix: citation audit (remove before submission)}
 \label{sec:audit}
 
-Every entry in the bibliography was checked on 2026-09-23 against its registry
+Every entry in the bibliography was checked on 2026-09-23 and 2026-09-25 against its registry
 record---Crossref, or DataCite for the Eurographics (10.2312), Dagstuhl
 (10.4230) and arXiv (10.48550) DOIs---or, where there is no DOI, against the
 page at its URL. The table records, for each source, the evidence behind what
@@ -11,7 +11,7 @@ this draft says about it: \textbf{F} read in full (``pre'' marks a preprint or
 author copy rather than the version of record), \textbf{A} abstract only,
 \textbf{M} bibliographic record only, \textbf{W} web pages. Verbatim quotes with
 page references are in \texttt{paper/citation-audit.md}.
-\texttt{paper/scripts/check-bib.mjs --online} repeats the registry check.
+\texttt{paper/scripts/check-bib.mjs -{}-online} repeats the registry check; on 2026-09-25 all 67 DOIs resolved and every registered title matched.
 
 \begingroup
 \small
@@ -87,6 +87,18 @@ Source & Ev. & Used for & Caveat \\
 \src{yamu2016fractal} & F & radial (mass--radius) analysis & a planning-theory paper; a methods citation would be better \\
 \src{willett2007scented} & F & scented widgets & credits histogram sliders to earlier work \\
 \src{mardia1999directional} & M & circular mean, resultant length, circular SD & book not accessed; definitions are standard but the equation numbers are unverified \\
-%%AUDIT-D%%
+\multicolumn{4}{@{}l}{\emph{Off-screen indicators, necklace maps, ring maps}}\\
+\src{speckmann2010necklace} & F pre & regions projected onto intervals; symbols without overlap; multiple necklaces; max scale then centring; ``do not need leaders'' & --- \\
+\src{speckmann2015algorithms} & F pre & fixed order $O(n\log n)$; any order NP-hard (wedge intervals); bearing order not always optimal for max scale & accepted manuscript; objective differs from ours \\
+\src{stewart2011ringmaps} & F & evenly spaced spokes, one per unit; a leader for every spoke & ordering rule of spokes not verified \\
+\src{tominski2016comparing} & F pre & ring slots with arcs toward originals; direction-ordered slots only suggested & --- \\
+\src{jackle2017topology} & F pre & $n=18$; 94.4\% orthographic; radial familiar with a point of interest & arXiv v1 only; rectangular border \\
+\src{baudisch2003halo} & M & off-screen proxy (via Jäckle et al.'s classification) & own text not read \\
+\src{zellweger2003citylights} & M & off-screen proxy (via Jäckle et al.) & own text not read \\
+\src{gustafson2007edgeradar} & M & border region (via Jäckle et al.) & own text not read \\
+\src{gustafson2008wedge} & M & off-screen proxy (via Jäckle et al.) & own text not read \\
+\src{jackle2015ambient} & M & aggregated border grid (via Jäckle et al.) & own text not read \\
+\src{danyluk2026ringmaps} & A (partial) & AR ring maps for pedestrian navigation & how landmarks are placed is unverified \\
+\src{draper2009radial} & M & survey of radial methods (its title) & --- \\
 \end{longtable}
 \endgroup

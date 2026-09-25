@@ -113,11 +113,63 @@ resulting gap is large enough to mislead---so the leader's length is the
 residual. We did not find a labelling technique that draws leaders conditionally
 on displacement.
 
-%%RELATED-OFFSCREEN%%
+\paragraph{Off-screen indicators.} The same geometry appears at the edge of the
+viewport. Off-screen techniques such as Halo, City Lights, EdgeRadar, Wedge and
+Ambient Grids draw proxies at or near the viewport border for objects beyond it,
+and all of them encode those objects' direction; EdgeRadar and Ambient Grids
+compress the off-screen space into a dedicated border region, and Ambient Grids
+aggregates it into grid cells~\cite{baudisch2003halo,zellweger2003citylights,
+gustafson2007edgeradar,gustafson2008wedge,jackle2015ambient,jackle2017topology}.
+How a proxy's position should relate to its object is not settled. In a study
+with 18 participants on a rectangular border, 94.4\% of localisation judgements
+assumed an orthographic rather than a radial projection, with lower error for
+orthographic~\cite{jackle2017topology}; the authors note that radial projection is
+the familiar one when there is a point of interest, as in car navigation. A lens
+boundary is circular and its centre is exactly such a point, so the result
+transfers only in part; we return to it in \cref{sec:evaluation}.
+\doubt{The off-screen techniques other than Jäckle et al.\ 2017 are cited from
+their registry records and from Jäckle et al.'s classification, not from their
+own texts.}
+
+CompaRing copies a handful of objects into the slots of a ring for comparison and
+gives each slot an arc that points towards the object's original location, wider
+for objects further away~\cite{tominski2016comparing}; laying the slots out by
+the objects' directions was suggested by the experts it was shown to, but not
+built. Ring-shaped maps have also been proposed for egocentric navigation in
+augmented reality~\cite{danyluk2026ringmaps}.
 
 \subsection{Radial and necklace cartography}
 
-%%RELATED-RADIAL%%
+Radial layouts are surveyed by Draper et al.~\cite{draper2009radial}. The
+direct ancestor of bearing-faithful placement is the \emph{necklace map}: the
+regions of a map are projected onto intervals of a curve that surrounds them,
+and proportional symbols are placed without overlap inside their
+intervals~\cite{speckmann2010necklace}. The curve may be any star-shaped curve;
+a region's interval can be a fixed-width window around the bearing of its
+centroid or the wedge it subtends from the centre; and several nested or
+disjoint necklaces may share a map. The objective is to maximise a common symbol
+scale, after which symbols are pushed towards the middle of their intervals by a
+force-based step. For a fixed order this is solvable in $O(n\log n)$; with
+arbitrary order it is NP-hard for wedge intervals, and ordering symbols by the
+bearing of their regions is \emph{not} always optimal for that
+objective~\cite{speckmann2015algorithms}. Necklace maps explicitly do without
+leaders, relying on proximity and colour, and acknowledge that the association
+between a symbol and its region is weaker than on other maps---``Interactivity
+can help to strengthen this association''~\cite{speckmann2010necklace}.
+
+\emph{Ring maps} arrange evenly spaced ``spokes'', one per areal unit, in rings
+of attributes around a base map, and tie every spoke to its unit with a leader
+line; their authors name the limited representation of spatial topology in the
+rings as the main limitation and point to interactive ring maps as the
+remedy~\cite{stewart2011ringmaps}.
+
+A necklace lens differs from both in three ways. It is interactive and local---a
+movable selection rather than a whole map. Its placement minimises squared
+displacement from each mark's preferred bearing at a mark size fixed by the ring,
+rather than maximising a common scale within intervals. And its leaders are
+conditional: drawn where the gap between mark and data is large, absent where
+adjacency suffices---a middle course between the necklace map's no leaders and
+the ring map's leader for every spoke.
 
 \subsection{Glyph maps, within-cell structure and local statistics}
 
@@ -177,8 +229,8 @@ log--log slope of mass within distance of a chosen centre is also the mass--radi
 dimension of fractal urban analysis~\cite{yamu2016fractal}.
 \doubt{Getis \& Franklin and Wiegand \& Moloney were read at abstract level only;
 a more canonical citation for radial (mass--radius) analysis should replace or
-join Yamu et al., whose main subject is planning theory. The box-car kernel
-reading of Brunsdon et al.\ 2002 is still being checked.}
+join Yamu et al., whose main subject is planning theory. Brunsdon et al.\ 2002 was read at abstract level; whether it discusses a
+uniform kernel is unverified.}
 
 These are the statistics a summarising lens computes, and we claim none of
 them. Directed GW weighting in particular is a statistical precedent for

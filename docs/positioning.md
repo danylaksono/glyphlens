@@ -106,12 +106,16 @@ draws a leader only when the label is displaced.
 
 ### 3.2 Off-screen indicators — the same idea at the viewport edge
 
-Pending group D of the audit: Halo, City Lights, EdgeRadar, Wedge, Ambient Grids,
-Star Glyph Insets (Jäckle, Fuchs & Keim 2016 — multivariate glyphs placed on the
-viewport border along the ray from the centre), Jäckle, Fuchs & Reiterer 2017
-(⚠︎ reported: orthographic beats radial projection onto the border — evidence
-*against* direction-preserving placement in a related setting; must be tested,
-not ignored), CompaRing (Tominski 2016), AR ring maps (Danyluk et al. 2026).
+| Work | What it already does | What it means for glyphlens | Ev. |
+| --- | --- | --- | --- |
+| Halo (Baudisch & Rosenholtz 2003), City Lights (Zellweger et al. 2003), EdgeRadar (Gustafson & Irani 2007), Wedge (Gustafson et al. 2008), Ambient Grids (Jäckle et al. 2015) | proxies at the viewport border that encode the **direction** of off-screen objects; EdgeRadar and Ambient Grids use a dedicated border region; Ambient Grids **aggregates** into border grid cells | the bearing-on-a-boundary idea at the viewport scale; cite as a group | M (+ Jäckle 2017's classification, which is F) |
+| **Jäckle, Fuchs & Reiterer 2017**, *Topology-Preserving Off-screen Visualization* (arXiv) | 18 participants, rectangular border: localisation judgements nearer the **orthographic** back-projection in 94.4 % of cases (error 78 px vs 183 px), 17/18 found it more intuitive; *but* the authors note radial projection is the familiar one when there is a point of interest (navigation) | the closest evidence **against** direction-preserving placement. Transfer is partial: on a circle, radial *is* the boundary normal, and a lens centre is a point of interest. The study (§6) is the test | F (arXiv v1; no published version found) |
+| **Tominski 2016**, *CompaRing* (EuroVis short) | a ring of < 10 slots holding copies of objects; each slot's **arc points towards the original**, wider for further; experts *suggested* laying slots out by direction — not built | the nearest "ring with direction cues" in vis; its unbuilt suggestion is glyphlens's default | F |
+| Danyluk, Jenny, Ens & Willett 2026, *Ring maps* for AR navigation (CaGIS) | ring-shaped egocentric maps for pedestrian AR navigation | how landmarks are placed is unverified | A (partial) |
+
+Checked and left out: Jäckle, Fuchs & Keim 2016 (Star Glyph Insets). The
+"placed along the ray from the viewport centre" claim could not be checked in
+the text, so it is not used.
 
 ### 3.3 Map lenses and probes that aggregate
 
@@ -132,9 +136,16 @@ not ignored), CompaRing (Tominski 2016), AR ring maps (Danyluk et al. 2026).
 
 ### 3.4 Radial and necklace maps
 
-Pending group D: Speckmann & Verbeek 2010, 2015; ring maps (Stewart et al. 2011;
-Battersby et al. 2011); ringmaps (Zhao, Forer & Harvey 2008); radial survey
-(Draper et al. 2009).
+| Work | What it already does | What is left for glyphlens | Ev. |
+| --- | --- | --- | --- |
+| **Speckmann & Verbeek 2010**, *Necklace Maps* (TVCG) | regions projected onto **intervals** of a star-shaped curve around the map; proportional symbols without overlap inside their intervals; centroid, wedge and density-dependent intervals; nested/disjoint necklaces; **maximise a common scale**, then centre by forces. "necklace maps do not need leaders"; association "is weaker … Interactivity can help" | glyphlens is the interactive, local version with a different objective: minimise squared displacement at fixed mark size, and **conditional** leaders | F (author PDF) |
+| **Speckmann & Verbeek 2015**, *Algorithms for Necklace Maps* (IJCGA) | fixed order O(n log n); any order NP-hard for wedge intervals; FPT in interval thickness; **ordering by region bearing is not generally optimal** for max scale (tight ½-approximation) | a warning for glyphlens's sorted-order assumption (different objective, so not a counterexample) | F (accepted manuscript) |
+| Stewart et al. 2011, *ring maps* (IJHG) | evenly spaced spokes, one per county, in attribute rings around a base map; **a leader for every spoke**; name "limited representation of spatial topology in rings" as the main limitation, and interactive ring maps as the remedy | glyphlens's conditional leaders sit between necklace maps (none) and ring maps (all) | F |
+| Draper, Livnat & Riesenfeld 2009 (TVCG) | survey of radial methods | background | M |
+
+Checked and left out: Battersby et al. 2011 (J. Maps), whose PDF would not
+fetch, and Zhao, Forer & Harvey 2008, for which only secondary mentions were
+seen.
 
 ### 3.5 Glyph maps, within-cell encodings, glyph theory
 
@@ -206,8 +217,9 @@ Battersby et al. 2011); ringmaps (Zhao, Forer & Harvey 2008); radial survey
    shape-dependent (report E / (d ln A / d ln r), which is 1 under uniformity for
    every shape).
 4. **"Does bearing on the ring help anyone?"** — Unknown; that is the study
-   (§6). Off-screen evidence (Jäckle 2017, pending group D) may suggest it does
-   not, which is a reason to run it, not to avoid it.
+   (§6). The closest evidence (Jäckle 2017: orthographic beat radial on a
+   rectangular border) cuts the other way. It transfers only partly to a circular
+   lens, which is a reason to run the study, not to avoid it.
 5. **"Multivariate?"** — Most demos summarise one categorical variable by count.
    Either show a genuinely multivariate census case or narrow the title.
 6. **"Why these seven stages?"** — Because they are a factorisation of an

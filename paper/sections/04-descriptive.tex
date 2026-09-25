@@ -14,12 +14,13 @@ category ring all select a disc; they differ in what they put around it and
 where. Without $\Plc$ and $\Anc$ as separate stages they would collapse into
 ``a lens with labels (or charts) around it''.
 
-\emph{Almost nothing places aggregates by bearing.} Labelling techniques tie
-individual labels to bearing and resolve conflicts by dropping them; rings that
-aggregate order their marks by category or time. The cells in which binning is
-by bearing \emph{and} placement honours that bearing \emph{and} marks are
-aggregates are, among the techniques coded, occupied only by this work and, for
-whole-map necklaces, by necklace maps themselves.
+\emph{Almost nothing places aggregates by bearing on a movable lens.} Labelling
+techniques tie individual labels to bearing and resolve conflicts by dropping
+them; rings that aggregate order their marks by category or time, or space them
+evenly; necklace maps place one symbol per region by bearing, but around a whole
+map and without leaders. Among the techniques coded, the cells in which binning
+is by bearing \emph{and} placement honours that bearing \emph{and} the selection
+is a movable lens are occupied only by this work.
 
 \emph{The tessellated techniques leave the join empty.} GW maps, gridded
 glyphmaps, Honeycomb Plots and HexTiles draw each summary \emph{in place}; they
@@ -61,6 +62,10 @@ inferred rather than stated in the source; see the citation audit.}
     VisQuill lens \cite{visquill} & disc & categorical & count$^{?}$ & evenly spaced, category order$^{?}$ & ring & radial bars & adjacency \\
     Route detail lenses \cite{karnick2010route} & route neighbourhoods & one per point of interest & --- & border slots, route order, direction-coherence cost & map frame & magnified views & first/last leaders, arrows \\
     ClusterLens \cite{zhang2020clusterlens} & lens & clusters or grid at finer resolution & count & in place & interior & heatmap, circles, grid & co-location \\
+    Necklace map \cite{speckmann2010necklace} & whole map (regions) & one per region & value & max common scale in intervals, then centring & star-shaped curve around the map & scaled discs & proximity, colour; no leaders \\
+    Ring map \cite{stewart2011ringmaps} & whole map (units) & one spoke per unit & attribute classes & evenly spaced spokes & concentric rings around the map & coloured spoke segments & leader for every spoke \\
+    CompaRing \cite{tominski2016comparing} & user-chosen objects ($<10$) & one per object & --- & ring slots (not by direction) & ring & object copies & arc toward the original, width $\propto$ distance \\
+    Ambient Grids \cite{jackle2015ambient,jackle2017topology} & off-screen space & border grid cells & count or density$^{?}$ & orthographic$^{?}$ & viewport border & heatmap cells & position \\
     VectorLens \cite{dumas2015vectorlens} & disc + direction range & (selection only) & --- & --- & ring as control & selected angular ranges & --- \\
     GW summary statistics \cite{brunsdon2002gwss,dykes2007gwvis} & kernel at each location; directed kernel at clock points & --- (or by direction) & weighted mean, SD, quantiles & in place & --- & colour & co-location \\
     Gridded glyphmap \cite{slingsby2023gridded,laksono2024gridded} & screen-space grid cell & variables & per variable & cell centre & --- & glyph & position \\

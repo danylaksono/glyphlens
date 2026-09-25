@@ -150,10 +150,11 @@ Let mark $k$ need half-width $h_k$ on the curve (its own width plus any room
 reserved for its label, in units of the curve parameter), and let
 $\delta(x,y)$ be the cyclic difference on $[0,1)$. Placement solves
 \begin{equation}
-  \min_{x}\; \sum_{k} w_k\, \delta(x_k,p_k)^2
-  \quad\text{s.t.}\quad
-  \text{the arcs } [x_k-h_k,\,x_k+h_k] \text{ are disjoint},\;
-  x_k\in I_k ,
+  \begin{aligned}
+    &\min_{x}\; \sum_{k} w_k\, \delta(x_k,p_k)^2 \\
+    &\text{s.t. the arcs } [x_k-h_k,\,x_k+h_k] \text{ are disjoint},\;
+    x_k\in I_k ,
+  \end{aligned}
   \label{eq:placement}
 \end{equation}
 the necklace-map placement problem of Speckmann and Verbeek
@@ -164,12 +165,14 @@ non-overlap into monotonicity of $y$, so the optimum is a weighted isotonic
 regression, solved exactly in $O(K)$ by pool-adjacent-violators. The implementation
 orders marks by preferred position, tries each of the $K$ places to cut the
 cycle, and keeps the cheapest, for $O(K^2)$ overall.
-\doubt{The claim that the order by preferred position is optimal (``any
-crossing solution can be uncrossed without increasing cost'') is asserted in
-the code but not proven here; it is standard for equal widths, and needs either
-a proof for unequal $h_k$ and $w_k$ or a counterexample search. Speckmann and
-Verbeek report that the \emph{any-order} problem is NP-hard (with intervals), so
-the argument must lean on the absence of intervals.}
+\doubt{The implementation assumes that ordering marks by preferred position is
+optimal (``any crossing solution can be uncrossed without increasing cost''). That
+is standard for equal widths but unproven here for unequal $h_k$ and $w_k$. For
+the related max-scale necklace problem with centroid intervals, Speckmann and
+Verbeek show that the order by region bearing is \emph{not} generally optimal
+(it is a tight $\frac12$-approximation)~\cite{speckmann2015algorithms}; their
+objective and constraints differ from \cref{eq:placement}, so this is a warning,
+not a counterexample. A proof or a counterexample search is needed.}
 
 Two parts of the solver are approximate, and we say so rather than hide it.
 When the marks nearly fill the cycle, the wrap-around constraint is enforced by
